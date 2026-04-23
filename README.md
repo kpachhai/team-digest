@@ -11,7 +11,8 @@ team-digest/
 ├── config.template.json   # Committed template with empty Notion IDs
 ├── config.json            # Your Notion IDs (gitignored, created by setup.sh)
 ├── .gitignore
-├── setup.sh               # Install script - copies skills, creates config, verifies prereqs
+├── setup.sh               # First-time setup: creates config, checks prereqs, installs skills
+├── update.sh              # After git pull: syncs skills and config, flags new template keys
 ├── skills/                # One skill per team/digest type
 │   ├── da-digest/         # Developer Advocacy daily digest (ships today)
 │   └── <team>-digest/     # Future: engineering, product, etc.
@@ -66,6 +67,22 @@ The setup script verifies prerequisites, installs the `/da-digest` skill to `~/.
 Open Claude Code in any directory and type the command above. The output lands in your Notion digest database (configured in `config.json`).
 
 **Automate it:** See [docs/scheduling.md](docs/scheduling.md) for daily automation options.
+
+### Updating After Git Pull
+
+When the repo is updated with new skills or changes:
+
+```bash
+git pull
+./update.sh
+```
+
+`update.sh` syncs all skills to `~/.claude/skills/`, updates your global config, and flags any new digest keys in the template that you need to add to your `config.json`. Restart Claude Code if a session is already open.
+
+| Script | When to Use |
+|--------|-------------|
+| `setup.sh` | First time setup (creates config, checks prereqs, installs skills) |
+| `update.sh` | After `git pull` (syncs skills and config, flags new template keys) |
 
 ### Customization
 
