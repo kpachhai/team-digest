@@ -9,6 +9,8 @@ CONFIG_FILE="$SCRIPT_DIR/config.json"
 TEMPLATE_FILE="$SCRIPT_DIR/config.template.json"
 GLOBAL_CONFIG_DIR="$HOME/.config/team-digest"
 GLOBAL_CONFIG_FILE="$GLOBAL_CONFIG_DIR/config.json"
+PROFILES_DIR="$SCRIPT_DIR/profiles"
+GLOBAL_PROFILES_DIR="$GLOBAL_CONFIG_DIR/profiles"
 
 echo "=== team-digest Setup ==="
 echo ""
@@ -82,6 +84,31 @@ fi
 mkdir -p "$GLOBAL_CONFIG_DIR"
 cp "$CONFIG_FILE" "$GLOBAL_CONFIG_FILE"
 echo "[OK] Config synced to $GLOBAL_CONFIG_FILE"
+
+# -------------------------------------------------------------------
+# 4b. Install team profiles (templates -> personalized copies, then sync globally)
+# -------------------------------------------------------------------
+if [ -d "$PROFILES_DIR" ]; then
+  mkdir -p "$GLOBAL_PROFILES_DIR"
+  for template_file in "$PROFILES_DIR"/*.template.md; do
+    [ -f "$template_file" ] || continue
+    template_name=$(basename "$template_file" .template.md)
+    local_profile="$PROFILES_DIR/$template_name.md"
+    global_profile="$GLOBAL_PROFILES_DIR/$template_name.md"
+
+    # Copy template -> local profile on first run only (don't overwrite personalized version)
+    if [ ! -f "$local_profile" ]; then
+      cp "$template_file" "$local_profile"
+      echo "[CREATED] Profile: profiles/$template_name.md (from template - personalize it)"
+    else
+      echo "[OK] Profile exists: profiles/$template_name.md"
+    fi
+
+    # Always sync local profile to global location (skills read from here)
+    cp "$local_profile" "$global_profile"
+    echo "[OK] Profile synced to $global_profile"
+  done
+fi
 
 # -------------------------------------------------------------------
 # 5. Validate config has Notion IDs filled in
@@ -174,5 +201,6 @@ echo "  1. Ensure config.json has all Notion IDs filled in"
 echo "  2. Open Claude Code and type /da-digest to run your first digest"
 echo "  3. Check your Notion database for the output"
 echo ""
-echo "To customize: Edit your Notion config page (see docs/configuration.md)"
-echo "To automate:  See docs/scheduling.md"
+echo "To personalize: Edit profiles/da-digest.md to describe your role and priorities"
+echo "To customize:   Edit your Notion config page (see docs/configuration.md)"
+echo "To automate:    See docs/scheduling.md"
