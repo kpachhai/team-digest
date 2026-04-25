@@ -82,7 +82,7 @@ For backfill runs, include a note in the digest footer indicating that Notion se
 
 ### Step 0: Load Local Config
 
-Read the config file at `~/.config/team-digest/config.json` using the Read tool. Parse the `da-digest` key to get:
+Read the config file at `~/.config/team-digest/config.json` using the Read tool. Parse the `da-digest` key to get (convention: the config key matches the skill directory name - a copied skill named `my-team-digest` reads the `my-team-digest` key):
 - `notion.config_page_id` - the Notion configuration page ID
 - `notion.database_id` - the Notion database ID for digest output
 - `github.orgs` - array of GitHub organizations to scan, each with:
@@ -149,8 +149,8 @@ Scan **each org** from `config.github.orgs` for activity during the target date.
 **Output structure - organize by org, then by priority:**
 
 For each org in `config.github.orgs`:
-- **Priority repos** (listed in `priority_repos`): Write rich narrative summaries explaining what happened and why it matters. Include GitHub links on every PR and issue. Read PR descriptions to understand context - do not just list PR titles.
-- **Other repos** (if `scan_all` is true): Create a summary table with repo name and a brief prose description of notable activity.
+- **Priority repos** (listed in `priority_repos`): Write synthesized narrative summaries - NOT bulleted PR lists. Group related PRs by theme and describe the collective work in 2-4 paragraphs. Only reference a specific PR by number/link when it is individually significant (breaking change, major feature, hotfix). After the narrative, add a **DA Relevance:** paragraph: does this affect developer-facing APIs or SDKs? Is it worth a docs update, blog post, or tutorial change? Does it affect EVM compatibility? Is there a breaking change developers should know about? Could it be showcased in a demo? If the activity represents an architectural change (component split/merge, service restructuring, data flow change, before/after pattern), add a Mermaid diagram after the narrative - use `graph TD` with `direction LR` subgraphs for a square layout; keep all node labels on a single line (no `\n` in labels). One diagram per repo maximum; skip if nothing structural happened.
+- **Other repos** (if `scan_all` is true): Create a summary table with repo name and a brief one-line description of notable activity.
 - **Orgs with no priority repos** (e.g., `your-org`): Show all repos in a summary table; no narrative section.
 
 The digest should group output under org-level headers:
@@ -244,21 +244,35 @@ Create a new page in the DA Daily Digest database using the `notion-create-pages
 
 ```
 <callout icon="📊" color="blue_bg">
-**DA Daily Digest - your-org** | <DATE_LABEL>
+**DA Daily Digest** | <DATE_LABEL>
 <N> repos active | <N> PRs updated | <N> issues updated | <N> releases
 Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 </callout>
 
 ---
 
-# Priority Repos
+# <org-name> (e.g. your-org)
 
-## <repo-name>
-<narrative summary with GitHub links>
+## Priority Repos
+
+### <repo-name>
+<2-4 paragraph synthesized narrative - describes themes and collective work, not a PR list>
+<Mermaid diagram if architectural change occurred>
+
+**DA Relevance:** <why this matters to Developer Advocacy - docs, blog, demo, SDK impact, breaking change>
 
 ---
 
-(repeat for each priority repo)
+(repeat for each priority repo with activity)
+
+## Other Active Repos
+
+<summary table>
+
+---
+
+(repeat org section for each org)
+
 
 # Other Active Repos
 
@@ -289,10 +303,11 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ## Style Rules
 
-- Write rich, human-readable narrative summaries - not raw PR/issue lists
-- Include GitHub links on every PR, issue, and repo reference
+- **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is decomposing the monolithic operations facet into single-responsibility components" beats listing 14 PRs.
+- Only link a specific PR when it is individually significant (breaking change, major feature, hotfix). For a batch of related PRs, link to the repo instead.
+- After each priority repo narrative, add a **DA Relevance:** paragraph explaining impact on Developer Advocacy.
+- Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. Keep labels on single lines. Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
 - Surface cross-repo connections when relevant (e.g., a Solo bug that also affects relay)
-- Highlight items that matter to Developer Advocacy specifically
 - Keep the digest scannable in under 3 minutes
 - Use hyphens (-) or semicolons (;) instead of em-dashes
 - If any section fails, produce a partial digest with a clear failure indicator rather than failing entirely

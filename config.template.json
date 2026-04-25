@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy this file to config.json and fill in your Notion IDs. See docs/configuration.md for details.",
+  "_comment": "Copy this file to config.json and fill in your Notion IDs. See docs/configuration.md for details. To add a new team digest, add a new top-level key (e.g. 'my-team-digest') with the same structure.",
   "da-digest": {
     "notion": {
       "config_page_id": "",
@@ -24,7 +24,7 @@
             "hiero-mirror-node-explorer"
           ],
           "priority_repos_help": "Repos that get full narrative summaries. Empty list means no priority repos.",
-          "scan_all": true,
+          "scan_all": false,
           "scan_all_help": "true = scan all repos in the org; false = only scan priority repos"
         },
         {
@@ -38,7 +38,7 @@
             "asset-tokenization-studio",
             "guardian"
           ],
-          "scan_all": true
+          "scan_all": false
         },
         {
           "name": "your-org",
