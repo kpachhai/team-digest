@@ -9,6 +9,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/config.json"
 GLOBAL_CONFIG_DIR="$HOME/.config/team-digest"
 GLOBAL_CONFIG_FILE="$GLOBAL_CONFIG_DIR/config.json"
+PROFILES_DIR="$SCRIPT_DIR/profiles"
+GLOBAL_PROFILES_DIR="$GLOBAL_CONFIG_DIR/profiles"
 
 echo "=== team-digest Update ==="
 echo ""
@@ -51,6 +53,27 @@ fi
 mkdir -p "$GLOBAL_CONFIG_DIR"
 cp "$CONFIG_FILE" "$GLOBAL_CONFIG_FILE"
 echo "[OK] Config synced to $GLOBAL_CONFIG_FILE"
+
+# -------------------------------------------------------------------
+# 3b. Sync profiles (new templates -> local copies if missing; sync all to global)
+# -------------------------------------------------------------------
+if [ -d "$PROFILES_DIR" ]; then
+  mkdir -p "$GLOBAL_PROFILES_DIR"
+  for template_file in "$PROFILES_DIR"/*.template.md; do
+    [ -f "$template_file" ] || continue
+    template_name=$(basename "$template_file" .template.md)
+    local_profile="$PROFILES_DIR/$template_name.md"
+    global_profile="$GLOBAL_PROFILES_DIR/$template_name.md"
+
+    if [ ! -f "$local_profile" ]; then
+      cp "$template_file" "$local_profile"
+      echo "[NEW] Profile added: profiles/$template_name.md - personalize it for your role"
+    fi
+
+    cp "$local_profile" "$global_profile"
+    echo "[OK] Profile synced: $template_name"
+  done
+fi
 
 # -------------------------------------------------------------------
 # 4. Install/update all skills
