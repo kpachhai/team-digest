@@ -67,7 +67,7 @@ The digest is designed to produce partial output on failure. If a section shows 
 
 ### Duplicate digest pages
 
-If the automation ran and you also ran `/da-digest` manually, you will get two digest pages for the same day. The database has a "Status" property - automated runs are "Auto", which you can use to filter.
+If the automation ran and you also ran `/sa-digest` manually, you will get two digest pages for the same day. The database has a "Status" property - automated runs are "Auto", which you can use to filter.
 
 To avoid duplicates, check the database before running manually:
 1. Open your digest database in Notion (the `database_id` from your `config.json`)

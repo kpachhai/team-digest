@@ -77,4 +77,4 @@ When you see activity in the digest, check: does this require...
 - Node operators running the network
 - Exchange integrators using mirror node APIs
 - SDK developers tracking protocol changes
-- DA team consuming our APIs in their demos
+- SA team consuming our APIs in their demos and partner integrations

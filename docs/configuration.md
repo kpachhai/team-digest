@@ -15,7 +15,7 @@ The config file lives at the repo root as `config.json` (gitignored). It is also
 
 ```json
 {
-  "da-digest": {
+  "sa-digest": {
     "notion": {
       "config_page_id": "<32-char hex from config page URL>",
       "database_id": "<32-char hex from database URL>"
@@ -88,7 +88,7 @@ If the Notion config page is unreachable (MCP not connected, permissions issue),
 3. Add a new key to `config.json` and `config.template.json`:
    ```json
    {
-     "da-digest": { ... },
+     "sa-digest": { ... },
      "eng-digest": {
        "notion": {
          "config_page_id": "<new config page ID>",
@@ -101,6 +101,6 @@ If the Notion config page is unreachable (MCP not connected, permissions issue),
      }
    }
    ```
-4. Copy `skills/da-digest/SKILL.md` to `skills/eng-digest/SKILL.md`
+4. Copy `skills/sa-digest/SKILL.md` to `skills/eng-digest/SKILL.md`
 5. Update the skill name and description; change it to read the `eng-digest` key from config
 6. Run `./setup.sh` to install all skills
