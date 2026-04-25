@@ -1,0 +1,127 @@
+# Team Daily Digest - Quick Start Guide
+
+A daily digest that scans GitHub activity, Notion keywords, and partner conversations across the Hedera/Hiero ecosystem, then writes a structured summary to a shared Notion database.
+
+## Prerequisites
+
+- [Claude Code](https://claude.ai/code) installed and authenticated
+- [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`)
+- Notion MCP server connected in Claude Code (Settings > MCP Servers > Notion)
+
+## Install
+
+Copy the `SKILL.md` file to your Claude Code skills directory:
+
+```bash
+mkdir -p ~/.claude/skills/team-digest
+cp SKILL.md ~/.claude/skills/team-digest/SKILL.md
+```
+
+Restart Claude Code if a session is already open.
+
+## First Run
+
+```
+/team-digest
+```
+
+On first run, the skill will ask you for two Notion IDs:
+
+1. **Config page ID** - the Notion page with keywords and partner patterns
+2. **Database ID** - the Notion database where digest pages are written
+
+Both are the 32-char hex string from the Notion page URL: `notion.so/<this-id>`. Ask your team lead for these if you don't have them.
+
+The skill saves your config to `~/.config/team-digest/config.json` and pre-fills GitHub orgs and default keywords. Run `/team-digest` again to produce your first digest.
+
+## Commands
+
+| Command | What it does |
+|---------|-------------|
+| `/team-digest` | Digest for the previous calendar day |
+| `/team-digest 2026-04-20` | Digest for a specific date (backfill) |
+| `/team-digest setup` | Create or update your Notion IDs |
+| `/team-digest config` | Show your current configuration |
+
+## Personalize with a Team Profile (Optional)
+
+Create a profile file to customize the "Relevance" sections in each digest:
+
+```bash
+mkdir -p ~/.config/team-digest/profiles
+```
+
+Create `~/.config/team-digest/profiles/team-digest.md` with your team's role and priorities. Example structure:
+
+```markdown
+# Team Profile: team
+
+## Role and Responsibilities
+We are the team. Our job is to...
+
+## What "Relevant" Means for Us
+
+### High Priority - Always Surface
+- SDK breaking changes - we support partners using these SDKs...
+- New APIs or features - these open new integration patterns...
+
+### Medium Priority - Worth Noting
+- Performance improvements...
+- Partner conversations about friction...
+
+## Our Key Repos and Why They Matter
+| Repo | Why We Care |
+|------|-------------|
+| hiero-sdk-js | JS/TS SDK used in partner integrations |
+```
+
+The more specific you are, the more useful the Relevance sections become. Without a profile, the skill falls back to generic heuristics.
+
+## Automate It
+
+### Option 1: Claude Code Routine (Recommended)
+
+1. Open Claude Code Desktop or claude.ai/code
+2. Create a new Routine
+3. Paste the full content of `SKILL.md` as the trigger prompt
+4. Set schedule: Weekdays at 7:00 AM (or your preferred time)
+5. Enable MCP connectors: Notion
+6. Save
+
+### Option 2: Session-Local Cron
+
+```
+/schedule team-digest every weekday at 7am
+```
+
+Dies when the session ends. Good for testing before committing to a routine.
+
+## Add a New Team Digest
+
+To create a digest for another team (e.g., engineering):
+
+1. Copy `SKILL.md` to a new skill directory:
+   ```bash
+   mkdir -p ~/.claude/skills/my-team-digest
+   cp ~/.claude/skills/team-digest/SKILL.md ~/.claude/skills/my-team-digest/SKILL.md
+   ```
+
+2. In the copied skill, replace all `team-digest` with `my-team-digest` and all `SA` references with `Eng` (skill name, config key, callout titles, relevance section names).
+
+3. Create a separate Notion config page and database for the new team.
+
+4. Run `/my-team-digest` - the first-run setup will ask for the new team's Notion IDs.
+
+5. Optionally create a profile at `~/.config/team-digest/profiles/my-team-digest.md` describing the engineering team's priorities.
+
+Each team's config key matches its skill directory name. Multiple digests coexist in the same config file without conflict.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| "config not found" on first run | The skill should prompt you automatically. If not, run `/team-digest setup` |
+| Notion sections empty | Check Notion MCP is connected (Settings > MCP Servers). Keyword search only finds pages **created** on the target date, not edited. |
+| GitHub rate limiting | Run `gh api rate_limit --jq '.rate'` to check. Normal digest uses ~45 API calls; limit is 5,000/hour. |
+| Want to change Notion IDs | Run `/team-digest setup` to update |
+| Duplicate digest pages | Check database before running manually. Automated runs have Status: "Auto". |
