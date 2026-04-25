@@ -16,6 +16,10 @@ team-digest/
 ├── skills/                # One skill per team/digest type
 │   ├── da-digest/         # Developer Advocacy daily digest (ships today)
 │   └── <team>-digest/     # Future: engineering, product, etc.
+├── profiles/              # Team profiles describing role, priorities, and relevance criteria
+│   ├── da-digest.template.md   # DA team template (committed)
+│   ├── my-team-digest.template.md  # Eng team template (committed)
+│   └── da-digest.md            # Your personalized copy (gitignored)
 ├── docs/                  # Setup, configuration, scheduling, troubleshooting
 └── README.md
 ```
@@ -93,10 +97,13 @@ git pull
 
 ### Customization
 
-Two layers of configuration - no hardcoded Notion links anywhere:
+Three layers of configuration - no hardcoded Notion links anywhere:
 
-1. **`config.json`** (gitignored) - Your Notion page/database IDs. Created from `config.template.json` by `setup.sh`.
-2. **Notion config page** - Live, team-editable settings (keywords, repos, patterns). Anyone on the team can update it.
+1. **`config.json`** (gitignored) - Your Notion page/database IDs and GitHub org structure. Created from `config.template.json` by `setup.sh`.
+2. **Notion config page** - Live, team-editable settings (keywords, partner patterns). Anyone on the team can update it without touching files.
+3. **`profiles/da-digest.md`** (gitignored) - Your team profile. Describes your role, what you care about, and what "relevant" means for your work. Claude reads this to write the **DA Relevance** section in each digest. Edit it to match your actual priorities.
+
+`setup.sh` copies `profiles/da-digest.template.md` to `profiles/da-digest.md` on first run. Edit the `.md` file directly - it's yours and won't be overwritten by `update.sh`.
 
 See [docs/configuration.md](docs/configuration.md).
 
@@ -106,16 +113,18 @@ See [docs/configuration.md](docs/configuration.md).
 /da-digest (or scheduled trigger)
     |
     v
-[0] Read ~/.config/team-digest/config.json (Notion IDs, org, defaults)
+[0] Read config.json (Notion IDs, GitHub orgs) + team profile (role, priorities)
     |
     v
-[1] Fetch Notion config page (live settings) or fall back to local defaults
+[1] Fetch Notion config page (live keywords/patterns) or fall back to defaults
     |
-    +---> [2] gh CLI: scan GitHub org PRs, issues, releases (last 24h)
+    +---> [2] gh CLI: scan GitHub orgs PRs, issues, releases
+    |            Priority repos: synthesized narrative + DA Relevance (from profile)
+    |            Other repos: summary table
     |
-    +---> [3] Notion MCP: search workspace for keyword matches (last 24h)
+    +---> [3] Notion MCP: search workspace for keyword matches
     |
-    +---> [4] Notion MCP: find meeting notes / partner conversations (last 24h)
+    +---> [4] Notion MCP: find meeting notes / partner conversations
     |
     v
 [5] Notion MCP: write combined digest page to database
@@ -142,8 +151,9 @@ To create a digest for another team (e.g., engineering):
 3. Copy `skills/da-digest/SKILL.md` to `skills/my-team-digest/SKILL.md`
 4. In the copied skill, change all occurrences of `da-digest` to `my-team-digest` (the config key, the skill name, the callout title). Convention: the config key always matches the skill directory name.
 5. Adjust the GitHub orgs, priority repos, keywords, and partner patterns to match the new team's focus
-6. Run `./update.sh` to install the new skill
-7. The team can now use `/my-team-digest` in Claude Code
+6. Copy `profiles/da-digest.template.md` to `profiles/my-team-digest.template.md` and rewrite it to describe the engineering team's role, priorities, and what "relevant" means for them
+7. Run `./update.sh` to install the new skill and sync the new profile
+8. The team can now use `/my-team-digest` in Claude Code
 
 Each team's skill is independent - different config keys, different sources, different output databases. No Notion IDs are hardcoded in any committed file.
 
@@ -215,6 +225,9 @@ Product ──> /pm-digest ──> PM Daily Digest database
 | `config.template.json` | Yes | Template with empty Notion IDs; starting point for new users |
 | `config.json` | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template |
 | `~/.config/team-digest/config.json` | N/A (local) | Global copy synced by `setup.sh`; skills read from here |
+| `profiles/<team>.template.md` | Yes | Team profile template; describes role, priorities, relevance criteria |
+| `profiles/<team>.md` | No (gitignored) | Your personalized profile; created from template by `setup.sh` |
+| `~/.config/team-digest/profiles/<team>.md` | N/A (local) | Global copy synced by `setup.sh`; skills read from here |
 
 ## Requirements
 
