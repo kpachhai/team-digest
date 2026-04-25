@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-team-digest is a zero-infrastructure digest system built on Claude Code skills. It aggregates GitHub activity, Notion keyword matches, and partner meeting notes into structured daily summaries written to Notion. Each team gets its own skill and config; the first shipped skill is `/da-digest` for Developer Advocacy at Hiero.
+team-digest is a zero-infrastructure digest system built on Claude Code skills. It aggregates GitHub activity, Notion keyword matches, and partner meeting notes into structured daily summaries written to Notion. Each team gets its own skill and config; the first shipped skill is `/team-digest` for the team.
 
 ## Key Commands
 
@@ -12,8 +12,8 @@ team-digest is a zero-infrastructure digest system built on Claude Code skills. 
 ./setup.sh          # First-time: checks prereqs (claude, gh, Notion MCP), creates config.json
                     # from template, installs skills to ~/.claude/skills/, syncs profiles
 ./update.sh         # After git pull: syncs skills + config, flags new template keys
-/da-digest          # Run in Claude Code - produces yesterday's digest
-/da-digest 2026-04-20  # Backfill a specific date
+/team-digest          # Run in Claude Code - produces yesterday's digest
+/team-digest 2026-04-20  # Backfill a specific date
 ```
 
 There are no build steps, tests, or linters. The codebase is shell scripts and a Claude Code skill definition.
@@ -28,7 +28,7 @@ profiles/*.template.md --(setup.sh copies)--> profiles/*.md --(syncs)--> ~/.conf
 skills/*/SKILL.md      --(setup.sh/update.sh copies)--> ~/.claude/skills/*/SKILL.md
 ```
 
-Skills read config from `~/.config/team-digest/config.json` at runtime, not from the repo. The config key must match the skill directory name (e.g., `da-digest` skill reads `config["da-digest"]`).
+Skills read config from `~/.config/team-digest/config.json` at runtime, not from the repo. The config key must match the skill directory name (e.g., `team-digest` skill reads `config["team-digest"]`).
 
 ### Two-Layer Config
 
@@ -37,9 +37,9 @@ Skills read config from `~/.config/team-digest/config.json` at runtime, not from
 
 ### Digest Pipeline (SKILL.md)
 
-The skill in `skills/da-digest/SKILL.md` is the core logic. It runs as a Claude Code skill, not a standalone script. The pipeline:
+The skill in `skills/team-digest/SKILL.md` is the core logic. It runs as a Claude Code skill, not a standalone script. The pipeline:
 
-0. Read `~/.config/team-digest/config.json` + team profile from `~/.config/team-digest/profiles/da-digest.md`
+0. Read `~/.config/team-digest/config.json` + team profile from `~/.config/team-digest/profiles/team-digest.md`
 1. Fetch Notion config page for live keywords/patterns
 2. Scan GitHub orgs via `gh` CLI (PRs, issues, releases) - parallelized across orgs
 3. Search Notion for keyword matches via `notion-search` MCP tool
@@ -50,7 +50,7 @@ Each source is independent; if one fails, the rest still run and the digest is p
 
 ### Team Profile System
 
-Profiles (`profiles/*.template.md`) describe a team's role, priorities, and what "relevant" means. Claude reads the profile to write contextual "DA Relevance" paragraphs in the digest. Templates are committed; personalized copies (without `.template` suffix) are gitignored.
+Profiles (`profiles/*.template.md`) describe a team's role, priorities, and what "relevant" means. Claude reads the profile to write contextual "Relevance" paragraphs in the digest. Templates are committed; personalized copies (without `.template` suffix) are gitignored.
 
 ## Conventions
 
@@ -62,6 +62,6 @@ Profiles (`profiles/*.template.md`) describe a team's role, priorities, and what
 ## Adding a New Team Digest
 
 1. Add a new top-level key to both `config.json` and `config.template.json`
-2. Copy `skills/da-digest/SKILL.md` to `skills/<team>-digest/SKILL.md`, change all `da-digest` references to `<team>-digest`
+2. Copy `skills/team-digest/SKILL.md` to `skills/<team>-digest/SKILL.md`, change all `team-digest` references to `<team>-digest`
 3. Create `profiles/<team>-digest.template.md` with the team's role and relevance criteria
 4. Run `./update.sh` to install

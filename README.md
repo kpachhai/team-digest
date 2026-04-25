@@ -14,12 +14,12 @@ team-digest/
 ├── setup.sh               # First-time setup: creates config, checks prereqs, installs skills
 ├── update.sh              # After git pull: syncs skills and config, flags new template keys
 ├── skills/                # One skill per team/digest type
-│   ├── da-digest/         # Developer Advocacy daily digest (ships today)
+│   ├── team-digest/         # team daily digest (ships today)
 │   └── <team>-digest/     # Future: engineering, product, etc.
 ├── profiles/              # Team profiles describing role, priorities, and relevance criteria
-│   ├── da-digest.template.md   # DA team template (committed)
+│   ├── team-digest.template.md   # team template (committed)
 │   ├── my-team-digest.template.md  # Eng team template (committed)
-│   └── da-digest.md            # Your personalized copy (gitignored)
+│   └── team-digest.md            # Your personalized copy (gitignored)
 ├── docs/                  # Setup, configuration, scheduling, troubleshooting
 └── README.md
 ```
@@ -37,9 +37,9 @@ Slack channels (future)─┤── (same cadence options)  ──> (same output
 Blog feeds (future)    ─┘
 ```
 
-## Current: DA Daily Digest
+## Current: Team Daily Digest
 
-The first skill ships with this repo - a daily digest for the Developer Advocacy team at Hiero.
+The first skill ships with this repo - a daily digest for the team.
 
 ### What It Scans
 
@@ -50,29 +50,33 @@ The first skill ships with this repo - a daily digest for the Developer Advocacy
 ### Quick Start (under 10 minutes)
 
 **Prerequisites:**
+
 - [Claude Code](https://claude.ai/code) installed and authenticated
 - [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`)
 - Notion MCP server connected in Claude Code (Settings > MCP Servers > Notion)
 
 **Install:**
+
 ```bash
 git clone <this-repo>
 cd team-digest
 ./setup.sh
 ```
 
-The setup script verifies prerequisites, installs the `/da-digest` skill to `~/.claude/skills/`, and checks access to the your-org GitHub org.
+The setup script verifies prerequisites, installs the `/team-digest` skill to `~/.claude/skills/`, and checks access to the your-org GitHub org.
 
 **Run your first digest:**
+
 ```
-/da-digest
+/team-digest
 ```
 
 Open Claude Code in any directory and type the command above. The output lands in your Notion digest database (configured in `config.json`).
 
 **Run for a specific date (backfill):**
+
 ```
-/da-digest 2026-04-20
+/team-digest 2026-04-20
 ```
 
 Useful for catching up on missed days. GitHub data is fully accurate for any past date. Notion sections (keywords, partner conversations) are limited to pages **created** on that date - pages that existed before but were edited that day will not appear (Notion MCP search limitation).
@@ -90,9 +94,9 @@ git pull
 
 `update.sh` syncs all skills to `~/.claude/skills/`, updates your global config, and flags any new digest keys in the template that you need to add to your `config.json`. Restart Claude Code if a session is already open.
 
-| Script | When to Use |
-|--------|-------------|
-| `setup.sh` | First time setup (creates config, checks prereqs, installs skills) |
+| Script      | When to Use                                                         |
+| ----------- | ------------------------------------------------------------------- |
+| `setup.sh`  | First time setup (creates config, checks prereqs, installs skills)  |
 | `update.sh` | After `git pull` (syncs skills and config, flags new template keys) |
 
 ### Customization
@@ -101,16 +105,16 @@ Three layers of configuration - no hardcoded Notion links anywhere:
 
 1. **`config.json`** (gitignored) - Your Notion page/database IDs and GitHub org structure. Created from `config.template.json` by `setup.sh`.
 2. **Notion config page** - Live, team-editable settings (keywords, partner patterns). Anyone on the team can update it without touching files.
-3. **`profiles/da-digest.md`** (gitignored) - Your team profile. Describes your role, what you care about, and what "relevant" means for your work. Claude reads this to write the **DA Relevance** section in each digest. Edit it to match your actual priorities.
+3. **`profiles/team-digest.md`** (gitignored) - Your team profile. Describes your role, what you care about, and what "relevant" means for your work. Claude reads this to write the **Relevance** section in each digest. Edit it to match your actual priorities.
 
-`setup.sh` copies `profiles/da-digest.template.md` to `profiles/da-digest.md` on first run. Edit the `.md` file directly - it's yours and won't be overwritten by `update.sh`.
+`setup.sh` copies `profiles/team-digest.template.md` to `profiles/team-digest.md` on first run. Edit the `.md` file directly - it's yours and won't be overwritten by `update.sh`.
 
 See [docs/configuration.md](docs/configuration.md).
 
 ## How It Works
 
 ```
-/da-digest (or scheduled trigger)
+/team-digest (or scheduled trigger)
     |
     v
 [0] Read config.json (Notion IDs, GitHub orgs) + team profile (role, priorities)
@@ -119,7 +123,7 @@ See [docs/configuration.md](docs/configuration.md).
 [1] Fetch Notion config page (live keywords/patterns) or fall back to defaults
     |
     +---> [2] gh CLI: scan GitHub orgs PRs, issues, releases
-    |            Priority repos: synthesized narrative + DA Relevance (from profile)
+    |            Priority repos: synthesized narrative + Relevance (from profile)
     |            Other repos: summary table
     |
     +---> [3] Notion MCP: search workspace for keyword matches
@@ -140,7 +144,7 @@ To create a digest for another team (e.g., engineering):
 2. Add a new top-level key to `config.json` and `config.template.json`:
    ```json
    {
-     "da-digest": { ... },
+     "team-digest": { ... },
      "my-team-digest": {
        "notion": { "config_page_id": "...", "database_id": "..." },
        "github": { "orgs": [ ... ] },
@@ -148,10 +152,10 @@ To create a digest for another team (e.g., engineering):
      }
    }
    ```
-3. Copy `skills/da-digest/SKILL.md` to `skills/my-team-digest/SKILL.md`
-4. In the copied skill, change all occurrences of `da-digest` to `my-team-digest` (the config key, the skill name, the callout title). Convention: the config key always matches the skill directory name.
+3. Copy `skills/team-digest/SKILL.md` to `skills/my-team-digest/SKILL.md`
+4. In the copied skill, change all occurrences of `team-digest` to `my-team-digest` (the config key, the skill name, the callout title). Convention: the config key always matches the skill directory name.
 5. Adjust the GitHub orgs, priority repos, keywords, and partner patterns to match the new team's focus
-6. Copy `profiles/da-digest.template.md` to `profiles/my-team-digest.template.md` and rewrite it to describe the engineering team's role, priorities, and what "relevant" means for them
+6. Copy `profiles/team-digest.template.md` to `profiles/my-team-digest.template.md` and rewrite it to describe the engineering team's role, priorities, and what "relevant" means for them
 7. Run `./update.sh` to install the new skill and sync the new profile
 8. The team can now use `/my-team-digest` in Claude Code
 
@@ -163,18 +167,18 @@ Each team's skill is independent - different config keys, different sources, dif
 
 The digest architecture is designed to add new data sources without changing existing skills. Each source is a self-contained scan step that produces structured output.
 
-| Source | Status | How It Would Work |
-|--------|--------|-------------------|
-| GitHub org activity | Shipped | `gh` CLI scans PRs, issues, releases |
-| Notion keyword monitor | Shipped | Notion MCP semantic search |
-| Notion meeting notes | Shipped | Notion MCP pattern-based search |
-| RSS / Atom feeds | Planned | `curl` + XML parsing; scan blog feeds, release notes, ecosystem news |
-| Slack channels | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages |
-| Blog feeds | Planned | Web fetch + summarization; monitor Hedera blog, partner blogs, ecosystem publications |
-| Twitter/X lists | Planned | X API; monitor ecosystem accounts for announcements |
-| Linear/Jira issues | Planned | Project management MCP; track sprint progress, blockers |
-| Google Docs/Drive | Planned | Google Drive MCP (already available in Claude Code); scan shared docs for updates |
-| Calendar events | Planned | Calendar integration; surface upcoming meetings, deadlines, events |
+| Source                 | Status  | How It Would Work                                                                     |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------- |
+| GitHub org activity    | Shipped | `gh` CLI scans PRs, issues, releases                                                  |
+| Notion keyword monitor | Shipped | Notion MCP semantic search                                                            |
+| Notion meeting notes   | Shipped | Notion MCP pattern-based search                                                       |
+| RSS / Atom feeds       | Planned | `curl` + XML parsing; scan blog feeds, release notes, ecosystem news                  |
+| Slack channels         | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages  |
+| Blog feeds             | Planned | Web fetch + summarization; monitor Hedera blog, partner blogs, ecosystem publications |
+| Twitter/X lists        | Planned | X API; monitor ecosystem accounts for announcements                                   |
+| Linear/Jira issues     | Planned | Project management MCP; track sprint progress, blockers                               |
+| Google Docs/Drive      | Planned | Google Drive MCP (already available in Claude Code); scan shared docs for updates     |
+| Calendar events        | Planned | Calendar integration; surface upcoming meetings, deadlines, events                    |
 
 Adding a source means adding a new step to the skill's process section and a new configuration block to the Notion config page.
 
@@ -182,12 +186,12 @@ Adding a source means adding a new step to the skill's process section and a new
 
 Daily digests are the atomic unit. Higher-cadence digests are rollups that summarize lower-cadence ones.
 
-| Cadence | Status | Input | Output |
-|---------|--------|-------|--------|
-| Daily | Shipped | Raw sources (GitHub, Notion, meetings) | One Notion page per day |
-| Weekly | Planned | Monday-Friday daily digests | One summary page highlighting the week's most significant items, trends, and unresolved action items |
-| Monthly | Planned | Weekly digests for the month | One page with themes, metrics (PRs merged, partners engaged), and strategic observations |
-| Quarterly | Planned | Monthly digests | Executive-level summary with trends, comparisons to prior quarter, team highlights |
+| Cadence   | Status  | Input                                  | Output                                                                                               |
+| --------- | ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Daily     | Shipped | Raw sources (GitHub, Notion, meetings) | One Notion page per day                                                                              |
+| Weekly    | Planned | Monday-Friday daily digests            | One summary page highlighting the week's most significant items, trends, and unresolved action items |
+| Monthly   | Planned | Weekly digests for the month           | One page with themes, metrics (PRs merged, partners engaged), and strategic observations             |
+| Quarterly | Planned | Monthly digests                        | Executive-level summary with trends, comparisons to prior quarter, team highlights                   |
 
 **How rollups work:** A weekly digest skill reads the last 5 daily digest pages from the Notion database, synthesizes them into themes and highlights, and writes a weekly summary page. The daily pages become the "source of truth" that higher cadences reference - no re-scanning of raw sources needed.
 
@@ -207,7 +211,7 @@ Future skills could query this database directly to answer questions, generate r
 Each team creates their own skill, config page, and database. A future "org digest" skill could aggregate across team databases to produce a cross-functional summary for leadership.
 
 ```
-DA team ──> /da-digest ──> DA Daily Digest database
+team ──> /team-digest ──> Team Daily Digest database
 Eng team ─> /my-team-digest ─> Eng Daily Digest database
 Product ──> /pm-digest ──> PM Daily Digest database
                 |
@@ -220,22 +224,22 @@ Product ──> /pm-digest ──> PM Daily Digest database
 
 ## Configuration Files
 
-| File | Committed | Purpose |
-|------|-----------|---------|
-| `config.template.json` | Yes | Template with empty Notion IDs; starting point for new users |
-| `config.json` | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template |
-| `~/.config/team-digest/config.json` | N/A (local) | Global copy synced by `setup.sh`; skills read from here |
-| `profiles/<team>.template.md` | Yes | Team profile template; describes role, priorities, relevance criteria |
-| `profiles/<team>.md` | No (gitignored) | Your personalized profile; created from template by `setup.sh` |
-| `~/.config/team-digest/profiles/<team>.md` | N/A (local) | Global copy synced by `setup.sh`; skills read from here |
+| File                                       | Committed       | Purpose                                                               |
+| ------------------------------------------ | --------------- | --------------------------------------------------------------------- |
+| `config.template.json`                     | Yes             | Template with empty Notion IDs; starting point for new users          |
+| `config.json`                              | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template           |
+| `~/.config/team-digest/config.json`        | N/A (local)     | Global copy synced by `setup.sh`; skills read from here               |
+| `profiles/<team>.template.md`              | Yes             | Team profile template; describes role, priorities, relevance criteria |
+| `profiles/<team>.md`                       | No (gitignored) | Your personalized profile; created from template by `setup.sh`        |
+| `~/.config/team-digest/profiles/<team>.md` | N/A (local)     | Global copy synced by `setup.sh`; skills read from here               |
 
 ## Requirements
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Claude Code | 2.1+ | Runs digest skills and scheduled triggers |
-| GitHub CLI (gh) | 2.0+ | Scans GitHub orgs for activity |
-| Notion MCP | Built-in | Searches Notion and writes digest pages |
+| Tool            | Version  | Purpose                                   |
+| --------------- | -------- | ----------------------------------------- |
+| Claude Code     | 2.1+     | Runs digest skills and scheduled triggers |
+| GitHub CLI (gh) | 2.0+     | Scans GitHub orgs for activity            |
+| Notion MCP      | Built-in | Searches Notion and writes digest pages   |
 
 Zero additional SaaS costs. Everything runs on existing Claude Code and GitHub subscriptions.
 
