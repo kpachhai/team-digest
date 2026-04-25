@@ -4,16 +4,48 @@ Three options for automated daily runs, from simplest to most persistent.
 
 ## Option 1: Claude Code Desktop/Web Routine (Recommended)
 
-The easiest way to get a persistent, automated daily digest.
+The easiest way to get a persistent, automated daily digest. Routines run on Anthropic's servers - they work when your laptop is closed.
+
+**Important:** Routines have no access to your local filesystem, so you must embed your config (and optionally your team profile) directly in the trigger prompt.
 
 1. Open **Claude Code Desktop** or visit **claude.ai/code**
 2. Create a new **Routine**
-3. Paste the trigger prompt (the full content of `skills/sa-digest/SKILL.md` from this repo)
-4. Set schedule: **Weekdays at 7:00 AM ET** (or your preferred time)
-5. Enable MCP connectors: **Notion**
-6. Save
+3. Paste the trigger prompt: the full content of `skills/sa-digest/SKILL.md`
+4. **At the end of the prompt**, append your config using the inline markers:
+   ```
+   <!-- SA-DIGEST-CONFIG -->
+   {
+     "sa-digest": {
+       "notion": {
+         "config_page_id": "<your-config-page-id>",
+         "database_id": "<your-database-id>"
+       },
+       "github": {
+         "orgs": [
+           { "name": "hiero-ledger", "priority_repos": ["hiero-json-rpc-relay", "hiero-mirror-node", "hiero-consensus-node", "hiero-block-node", "hiero-improvement-proposals", "hiero-contracts", "solo", "hiero-sdk-js", "hiero-mirror-node-explorer"], "scan_all": false },
+           { "name": "hashgraph", "priority_repos": ["hedera-docs", "hedera-agent-kit-js", "hedera-wallet-connect", "hedera-evm-testing", "stablecoin-studio", "asset-tokenization-studio", "guardian"], "scan_all": false },
+           { "name": "hedera-dev", "priority_repos": [], "scan_all": true }
+         ]
+       },
+       "defaults": {
+         "keywords": ["EVM", "smart contracts", "relay", "JSON-RPC", "mirror node", "HIP", "Hiero", "consensus", "block node", "SDK"],
+         "partner_patterns": ["Meeting with", "Call with", "Catch up with", "Deep dive", "Sync with", "Check-in with", "Follow up with", "Debrief"]
+       }
+     }
+   }
+   <!-- /SA-DIGEST-CONFIG -->
+   ```
+5. Optionally append your team profile:
+   ```
+   <!-- SA-DIGEST-PROFILE -->
+   (paste your sa-digest.md profile content here)
+   <!-- /SA-DIGEST-PROFILE -->
+   ```
+6. Set schedule: **Weekdays at 7:00 AM ET** (or your preferred time)
+7. Enable MCP connectors: **Notion**
+8. Save
 
-The routine runs on Anthropic's servers - it works when your laptop is closed. Each team member creates their own routine pointing at the same Notion database.
+Each team member creates their own routine pointing at the same Notion database. See the "Appendix: Inline Config" section in SKILL.md for the full format reference.
 
 ## Option 2: Session-Local Cron
 
@@ -55,7 +87,7 @@ For programmatic setup. Requires your `environment_id` from claude.ai cloud sett
             "type": "user",
             "parent_tool_use_id": null,
             "message": {
-              "content": "PASTE_THE_TRIGGER_PROMPT_HERE",
+              "content": "PASTE_SKILL_MD_CONTENT_WITH_INLINE_CONFIG_APPENDED",
               "role": "user"
             }
           }

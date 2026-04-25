@@ -94,7 +94,27 @@ If the argument is `setup`, run the interactive setup flow (see below) regardles
 
 If the argument is `config`, read `~/.config/team-digest/config.json` and display the current `sa-digest` configuration in a readable format: Notion IDs (masked to last 8 chars for brevity), GitHub orgs, priority repos, and default keywords. Then stop.
 
-#### Load Config (normal run or first-time setup)
+#### Check for Inline Config (Routines / Remote Triggers)
+
+Before reading from the filesystem, check whether config and profile are provided inline at the end of this prompt. Routines and remote triggers run on Anthropic's servers with no access to local files, so config must be embedded in the prompt itself.
+
+Look for these markers in the text **below the end of this skill definition**:
+
+```
+<!-- SA-DIGEST-CONFIG -->
+{ ... JSON config ... }
+<!-- /SA-DIGEST-CONFIG -->
+
+<!-- SA-DIGEST-PROFILE -->
+... profile markdown ...
+<!-- /SA-DIGEST-PROFILE -->
+```
+
+**If inline config is found**, parse the JSON between the config markers and use it as the config (extract the `sa-digest` key). If the profile markers are also present, use that text as the team profile. Skip the filesystem config load entirely and proceed to the normal config load logic below.
+
+**If no inline config is found**, continue to the filesystem flow below.
+
+#### Load Config from Filesystem (normal run or first-time setup)
 
 Read the config file at `~/.config/team-digest/config.json` using the Read tool.
 
@@ -182,7 +202,7 @@ Parse the `sa-digest` key from the config to get:
   - `scan_all` - whether to scan all repos in the org or only priority repos
 - `defaults.*` - fallback values for keywords and partner patterns
 
-Also read the team profile at `~/.config/team-digest/profiles/sa-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest. If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns).
+Also read the team profile at `~/.config/team-digest/profiles/sa-digest.md` using the Read tool (skip if inline profile was already loaded above). If the file does not exist and no inline profile was provided, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest. If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns).
 
 Then fetch the database page using `notion-fetch` with the `database_id` to discover the internal `data_source_id` (the `collection://...` URL in the response). Extract the data source URL from the `data-source-url` attribute in the response.
 
@@ -444,3 +464,46 @@ All settings are read from `~/.config/team-digest/config.json` under the `sa-dig
 - **`scan_all: true`** scans every repo in the org. Set to `false` to only scan priority repos (useful for very large orgs).
 
 The config is created automatically on first run (`/sa-digest`) or manually via `/sa-digest setup`. To update Notion IDs later, run `/sa-digest setup` again. To view current config, run `/sa-digest config`.
+
+## Appendix: Inline Config for Routines and Remote Triggers
+
+When running as a **Claude Code Routine** or **Remote Trigger**, the skill has no access to local files. Append your config and (optionally) your team profile directly after the skill content using these markers:
+
+```
+<!-- SA-DIGEST-CONFIG -->
+{
+  "sa-digest": {
+    "notion": {
+      "config_page_id": "<your-config-page-id>",
+      "database_id": "<your-database-id>"
+    },
+    "github": {
+      "orgs": [
+        {
+          "name": "hiero-ledger",
+          "priority_repos": ["hiero-json-rpc-relay", "hiero-mirror-node", "..."],
+          "scan_all": false
+        }
+      ]
+    },
+    "defaults": {
+      "keywords": ["EVM", "smart contracts", "relay", "JSON-RPC", "mirror node", "HIP", "Hiero", "consensus", "block node", "SDK"],
+      "partner_patterns": ["Meeting with", "Call with", "Catch up with", "Deep dive", "Sync with", "Check-in with", "Follow up with", "Debrief"]
+    }
+  }
+}
+<!-- /SA-DIGEST-CONFIG -->
+
+<!-- SA-DIGEST-PROFILE -->
+(paste your team profile markdown here - optional)
+<!-- /SA-DIGEST-PROFILE -->
+```
+
+**How to set this up:**
+
+1. Copy the full content of this SKILL.md file
+2. At the very end, paste the config block above with your actual Notion IDs
+3. Optionally paste your team profile between the profile markers
+4. Use the combined text as your Routine trigger prompt or Remote Trigger message
+
+The skill checks for these markers before attempting to read from the filesystem. If found, it uses the inline values and skips file reads entirely.
