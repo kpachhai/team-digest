@@ -35,7 +35,7 @@ Blog feeds (future)    ─┘
 
 ## Current: DA Daily Digest
 
-The first skill ships with this repo - a daily digest for the Developer Advocacy team.
+The first skill ships with this repo - a daily digest for the Developer Advocacy team at Hiero.
 
 ### What It Scans
 
@@ -46,13 +46,11 @@ The first skill ships with this repo - a daily digest for the Developer Advocacy
 ### Quick Start (under 10 minutes)
 
 **Prerequisites:**
-
 - [Claude Code](https://claude.ai/code) installed and authenticated
 - [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`)
 - Notion MCP server connected in Claude Code (Settings > MCP Servers > Notion)
 
 **Install:**
-
 ```bash
 git clone <this-repo>
 cd team-digest
@@ -62,7 +60,6 @@ cd team-digest
 The setup script verifies prerequisites, installs the `/da-digest` skill to `~/.claude/skills/`, and checks access to the hiero-ledger GitHub org.
 
 **Run your first digest:**
-
 ```
 /da-digest
 ```
@@ -70,7 +67,6 @@ The setup script verifies prerequisites, installs the `/da-digest` skill to `~/.
 Open Claude Code in any directory and type the command above. The output lands in your Notion digest database (configured in `config.json`).
 
 **Run for a specific date (backfill):**
-
 ```
 /da-digest 2026-04-20
 ```
@@ -90,9 +86,9 @@ git pull
 
 `update.sh` syncs all skills to `~/.claude/skills/`, updates your global config, and flags any new digest keys in the template that you need to add to your `config.json`. Restart Claude Code if a session is already open.
 
-| Script      | When to Use                                                         |
-| ----------- | ------------------------------------------------------------------- |
-| `setup.sh`  | First time setup (creates config, checks prereqs, installs skills)  |
+| Script | When to Use |
+|--------|-------------|
+| `setup.sh` | First time setup (creates config, checks prereqs, installs skills) |
 | `update.sh` | After `git pull` (syncs skills and config, flags new template keys) |
 
 ### Customization
@@ -132,11 +128,22 @@ Each source runs independently. If one fails, the others still run and the diges
 To create a digest for another team (e.g., engineering):
 
 1. Create a new Notion config page and database for the team
-2. Add a new key to `config.json` and `config.template.json` with the new team's Notion IDs
+2. Add a new top-level key to `config.json` and `config.template.json`:
+   ```json
+   {
+     "da-digest": { ... },
+     "eng-digest": {
+       "notion": { "config_page_id": "...", "database_id": "..." },
+       "github": { "orgs": [ ... ] },
+       "defaults": { "keywords": [ ... ], "partner_patterns": [ ... ] }
+     }
+   }
+   ```
 3. Copy `skills/da-digest/SKILL.md` to `skills/eng-digest/SKILL.md`
-4. Update the skill to read from the new config key (`eng-digest` instead of `da-digest`)
-5. Run `./setup.sh` to install all skills
-6. The team can now use `/eng-digest` in Claude Code
+4. In the copied skill, change all occurrences of `da-digest` to `eng-digest` (the config key, the skill name, the callout title). Convention: the config key always matches the skill directory name.
+5. Adjust the GitHub orgs, priority repos, keywords, and partner patterns to match the new team's focus
+6. Run `./update.sh` to install the new skill
+7. The team can now use `/eng-digest` in Claude Code
 
 Each team's skill is independent - different config keys, different sources, different output databases. No Notion IDs are hardcoded in any committed file.
 
@@ -146,18 +153,18 @@ Each team's skill is independent - different config keys, different sources, dif
 
 The digest architecture is designed to add new data sources without changing existing skills. Each source is a self-contained scan step that produces structured output.
 
-| Source                 | Status  | How It Would Work                                                                     |
-| ---------------------- | ------- | ------------------------------------------------------------------------------------- |
-| GitHub org activity    | Shipped | `gh` CLI scans PRs, issues, releases                                                  |
-| Notion keyword monitor | Shipped | Notion MCP semantic search                                                            |
-| Notion meeting notes   | Shipped | Notion MCP pattern-based search                                                       |
-| RSS / Atom feeds       | Planned | `curl` + XML parsing; scan blog feeds, release notes, ecosystem news                  |
-| Slack channels         | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages  |
-| Blog feeds             | Planned | Web fetch + summarization; monitor Hedera blog, partner blogs, ecosystem publications |
-| Twitter/X lists        | Planned | X API; monitor ecosystem accounts for announcements                                   |
-| Linear/Jira issues     | Planned | Project management MCP; track sprint progress, blockers                               |
-| Google Docs/Drive      | Planned | Google Drive MCP (already available in Claude Code); scan shared docs for updates     |
-| Calendar events        | Planned | Calendar integration; surface upcoming meetings, deadlines, events                    |
+| Source | Status | How It Would Work |
+|--------|--------|-------------------|
+| GitHub org activity | Shipped | `gh` CLI scans PRs, issues, releases |
+| Notion keyword monitor | Shipped | Notion MCP semantic search |
+| Notion meeting notes | Shipped | Notion MCP pattern-based search |
+| RSS / Atom feeds | Planned | `curl` + XML parsing; scan blog feeds, release notes, ecosystem news |
+| Slack channels | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages |
+| Blog feeds | Planned | Web fetch + summarization; monitor Hedera blog, partner blogs, ecosystem publications |
+| Twitter/X lists | Planned | X API; monitor ecosystem accounts for announcements |
+| Linear/Jira issues | Planned | Project management MCP; track sprint progress, blockers |
+| Google Docs/Drive | Planned | Google Drive MCP (already available in Claude Code); scan shared docs for updates |
+| Calendar events | Planned | Calendar integration; surface upcoming meetings, deadlines, events |
 
 Adding a source means adding a new step to the skill's process section and a new configuration block to the Notion config page.
 
@@ -165,12 +172,12 @@ Adding a source means adding a new step to the skill's process section and a new
 
 Daily digests are the atomic unit. Higher-cadence digests are rollups that summarize lower-cadence ones.
 
-| Cadence   | Status  | Input                                  | Output                                                                                               |
-| --------- | ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Daily     | Shipped | Raw sources (GitHub, Notion, meetings) | One Notion page per day                                                                              |
-| Weekly    | Planned | Monday-Friday daily digests            | One summary page highlighting the week's most significant items, trends, and unresolved action items |
-| Monthly   | Planned | Weekly digests for the month           | One page with themes, metrics (PRs merged, partners engaged), and strategic observations             |
-| Quarterly | Planned | Monthly digests                        | Executive-level summary with trends, comparisons to prior quarter, team highlights                   |
+| Cadence | Status | Input | Output |
+|---------|--------|-------|--------|
+| Daily | Shipped | Raw sources (GitHub, Notion, meetings) | One Notion page per day |
+| Weekly | Planned | Monday-Friday daily digests | One summary page highlighting the week's most significant items, trends, and unresolved action items |
+| Monthly | Planned | Weekly digests for the month | One page with themes, metrics (PRs merged, partners engaged), and strategic observations |
+| Quarterly | Planned | Monthly digests | Executive-level summary with trends, comparisons to prior quarter, team highlights |
 
 **How rollups work:** A weekly digest skill reads the last 5 daily digest pages from the Notion database, synthesizes them into themes and highlights, and writes a weekly summary page. The daily pages become the "source of truth" that higher cadences reference - no re-scanning of raw sources needed.
 
@@ -203,19 +210,19 @@ Product ──> /pm-digest ──> PM Daily Digest database
 
 ## Configuration Files
 
-| File                                | Committed       | Purpose                                                      |
-| ----------------------------------- | --------------- | ------------------------------------------------------------ |
-| `config.template.json`              | Yes             | Template with empty Notion IDs; starting point for new users |
-| `config.json`                       | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template  |
-| `~/.config/team-digest/config.json` | N/A (local)     | Global copy synced by `setup.sh`; skills read from here      |
+| File | Committed | Purpose |
+|------|-----------|---------|
+| `config.template.json` | Yes | Template with empty Notion IDs; starting point for new users |
+| `config.json` | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template |
+| `~/.config/team-digest/config.json` | N/A (local) | Global copy synced by `setup.sh`; skills read from here |
 
 ## Requirements
 
-| Tool            | Version  | Purpose                                   |
-| --------------- | -------- | ----------------------------------------- |
-| Claude Code     | 2.1+     | Runs digest skills and scheduled triggers |
-| GitHub CLI (gh) | 2.0+     | Scans GitHub orgs for activity            |
-| Notion MCP      | Built-in | Searches Notion and writes digest pages   |
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Claude Code | 2.1+ | Runs digest skills and scheduled triggers |
+| GitHub CLI (gh) | 2.0+ | Scans GitHub orgs for activity |
+| Notion MCP | Built-in | Searches Notion and writes digest pages |
 
 Zero additional SaaS costs. Everything runs on existing Claude Code and GitHub subscriptions.
 
