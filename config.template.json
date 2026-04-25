@@ -1,6 +1,6 @@
 {
   "_comment": "Copy this file to config.json and fill in your Notion IDs. See docs/configuration.md for details. To add a new team digest, add a new top-level key (e.g. 'my-team-digest') with the same structure.",
-  "da-digest": {
+  "team-digest": {
     "notion": {
       "config_page_id": "",
       "config_page_id_help": "32-char hex from the Notion config page URL (notion.so/<this-id>)",

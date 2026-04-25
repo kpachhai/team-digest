@@ -1,24 +1,24 @@
 ---
-name: da-digest
-description: Manually trigger the DA Daily Digest - scans your-org GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /da-digest [YYYY-MM-DD]
+name: team-digest
+description: Manually trigger the Team Daily Digest - scans your-org GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /team-digest [YYYY-MM-DD]
 user-invocable: true
 ---
 
-# DA Daily Digest - Manual Trigger
+# Team Daily Digest - Manual Trigger
 
 ## Purpose
 
-Manually run the DA Daily Digest pipeline on demand. Scans a specific day's activity (00:00-23:59 UTC) across three data sources and writes a structured summary to the DA Daily Digest Notion database.
+Manually run the Team Daily Digest pipeline on demand. Scans a specific day's activity (00:00-23:59 UTC) across three data sources and writes a structured summary to the Team Daily Digest Notion database.
 
 **Usage:**
-- `/da-digest` - digest for the previous calendar day (default)
-- `/da-digest 2026-04-20` - digest for a specific date
+- `/team-digest` - digest for the previous calendar day (default)
+- `/team-digest 2026-04-20` - digest for a specific date
 
 Use this when:
 - Testing the digest before enabling automation
 - Re-running after a failed automated run
 - Running an ad-hoc digest outside the normal schedule
-- Backfilling a missed day (e.g., `/da-digest 2026-04-18`)
+- Backfilling a missed day (e.g., `/team-digest 2026-04-18`)
 
 ## Important Runtime Notes
 
@@ -30,7 +30,7 @@ Use this when:
 
 The digest covers a **single calendar day in UTC** (00:00:00 to 23:59:59 UTC).
 
-**If a date argument is provided** (e.g., `/da-digest 2026-04-20`), use that date.
+**If a date argument is provided** (e.g., `/team-digest 2026-04-20`), use that date.
 **If no argument is provided**, default to the previous calendar day.
 
 This ensures:
@@ -82,9 +82,9 @@ For backfill runs, include a note in the digest footer indicating that Notion se
 
 ### Step 0: Load Local Config
 
-Read the config file at `~/.config/team-digest/config.json` using the Read tool. Parse the `da-digest` key to get (convention: the config key matches the skill directory name - a copied skill named `my-team-digest` reads the `my-team-digest` key):
+Read the config file at `~/.config/team-digest/config.json` using the Read tool. Parse the `team-digest` key to get (convention: the config key matches the skill directory name - a copied skill named `my-team-digest` reads the `my-team-digest` key):
 
-Also read the team profile at `~/.config/team-digest/profiles/da-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest. If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, docs/blog/tutorial opportunities).
+Also read the team profile at `~/.config/team-digest/profiles/team-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest. If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns).
 - `notion.config_page_id` - the Notion configuration page ID
 - `notion.database_id` - the Notion database ID for digest output
 - `github.orgs` - array of GitHub organizations to scan, each with:
@@ -93,7 +93,7 @@ Also read the team profile at `~/.config/team-digest/profiles/da-digest.md` usin
   - `scan_all` - whether to scan all repos in the org or only priority repos
 - `defaults.*` - fallback values for keywords and partner patterns
 
-If the config file does not exist or is missing the `da-digest` key, stop and tell the user to run `setup.sh` from the team-digest repo first.
+If the config file does not exist or is missing the `team-digest` key, stop and tell the user to run `setup.sh` from the team-digest repo first.
 
 Then fetch the database page using `notion-fetch` with the `database_id` to discover the internal `data_source_id` (the `collection://...` URL in the response). Extract the data source URL from the `data-source-url` attribute in the response.
 
@@ -151,7 +151,7 @@ Scan **each org** from `config.github.orgs` for activity during the target date.
 **Output structure - organize by org, then by priority:**
 
 For each org in `config.github.orgs`:
-- **Priority repos** (listed in `priority_repos`): Write synthesized narrative summaries - NOT bulleted PR lists. Group related PRs by theme and describe the collective work in 2-4 paragraphs. Only reference a specific PR by number/link when it is individually significant (breaking change, major feature, hotfix). After the narrative, add a **DA Relevance:** paragraph using the loaded team profile as your guide - the profile describes the team's role, what they care about, and what "relevant" means for them specifically. If no profile was loaded, fall back to: does this affect developer-facing APIs or SDKs? Is it worth a docs update, blog post, or tutorial change? Does it affect EVM compatibility? Is there a breaking change developers should know about? Could it be showcased in a demo? If the activity represents an architectural change (component split/merge, service restructuring, data flow change, before/after pattern), add a Mermaid diagram after the narrative - use `graph TD` with `direction LR` subgraphs for a square layout; keep all node labels on a single line (no `\n` in labels). One diagram per repo maximum; skip if nothing structural happened.
+- **Priority repos** (listed in `priority_repos`): Write synthesized narrative summaries - NOT bulleted PR lists. Group related PRs by theme and describe the collective work in 2-4 paragraphs. Only reference a specific PR by number/link when it is individually significant (breaking change, major feature, hotfix). After the narrative, add a **Relevance:** paragraph using the loaded team profile as your guide - the profile describes the team's role, what they care about, and what "relevant" means for them specifically. If no profile was loaded, fall back to: does this affect developer-facing APIs or SDKs? Does it impact partner integrations or architecture decisions? Does it affect EVM compatibility? Is there a breaking change developers should know about? Could it inform a technical design recommendation? If the activity represents an architectural change (component split/merge, service restructuring, data flow change, before/after pattern), add a Mermaid diagram after the narrative - use `graph TD` with `direction LR` subgraphs for a square layout; keep all node labels on a single line (no `\n` in labels). One diagram per repo maximum; skip if nothing structural happened.
 - **Other repos** (if `scan_all` is true): Create a summary table with repo name and a brief one-line description of notable activity.
 - **Orgs with no priority repos** (e.g., `your-org`): Show all repos in a summary table; no narrative section.
 
@@ -193,13 +193,13 @@ Run keyword searches in parallel batches (2-3 keywords per search query to reduc
 
 **Deduplication:** Track page IDs across all keyword searches. Each page appears only once in the digest with all matching keywords listed.
 
-**Exclusions:** Skip any page whose title starts with "DA Daily Digest" (our own output).
+**Exclusions:** Skip any page whose title starts with "Team Daily Digest" (our own output).
 
 For each unique page found:
 - Fetch full page content using the `notion-fetch` MCP tool
 - Write a narrative summary explaining what the page contains
 - List which keywords matched
-- Add a "DA relevance" note explaining why this matters for the DA team
+- Add a "relevance" note explaining why this matters for the team
 
 If Notion keyword scanning fails, note the failure and continue.
 
@@ -221,12 +221,12 @@ If partner scanning fails, note the failure and continue.
 
 ### Step 5: Write the Combined Digest to Notion
 
-Create a new page in the DA Daily Digest database using the `notion-create-pages` MCP tool.
+Create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
 
 **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 0>" }`
 
 **Properties:**
-- Digest Title: `DA Daily Digest - <DATE_LABEL>`
+- Digest Title: `Team Daily Digest - <DATE_LABEL>`
 - date:Date:start: `<DATE_LABEL>`
 - Digest Type: `Combined`
 - Repos Active: `<count of repos with activity>`
@@ -246,7 +246,7 @@ Create a new page in the DA Daily Digest database using the `notion-create-pages
 
 ```
 <callout icon="📊" color="blue_bg">
-**DA Daily Digest** | <DATE_LABEL>
+**Team Daily Digest** | <DATE_LABEL>
 <N> repos active | <N> PRs updated | <N> issues updated | <N> releases
 Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 </callout>
@@ -261,7 +261,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 <2-4 paragraph synthesized narrative - describes themes and collective work, not a PR list>
 <Mermaid diagram if architectural change occurred>
 
-**DA Relevance:** <why this matters to Developer Advocacy - docs, blog, demo, SDK impact, breaking change>
+**Relevance:** <why this matters to the team - integration impact, architecture decisions, SDK changes, partner-facing APIs, breaking changes>
 
 ---
 
@@ -299,7 +299,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 ---
 
 <callout icon="ℹ️" color="gray_bg">
-**Auto-generated** by DA Daily Digest | Scanned <N> repos in <org> | Data window: <DATE_LABEL> 00:00 - 23:59 UTC
+**Auto-generated** by Team Daily Digest | Scanned <N> repos in <org> | Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 </callout>
 ```
 
@@ -307,7 +307,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 - **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is decomposing the monolithic operations facet into single-responsibility components" beats listing 14 PRs.
 - Only link a specific PR when it is individually significant (breaking change, major feature, hotfix). For a batch of related PRs, link to the repo instead.
-- After each priority repo narrative, add a **DA Relevance:** paragraph. Use the team profile loaded in Step 0 to drive this - the profile specifies what the team cares about, their priorities, and content opportunity triggers. If no profile exists, use generic heuristics.
+- After each priority repo narrative, add a **Relevance:** paragraph. Use the team profile loaded in Step 0 to drive this - the profile specifies what the team cares about, their priorities, and content opportunity triggers. If no profile exists, use generic heuristics.
 - Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. Keep labels on single lines. Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
 - Surface cross-repo connections when relevant (e.g., a Solo bug that also affects relay)
 - Keep the digest scannable in under 3 minutes
@@ -316,11 +316,11 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ## Configuration
 
-All settings are read from `~/.config/team-digest/config.json` under the `da-digest` key:
+All settings are read from `~/.config/team-digest/config.json` under the `team-digest` key:
 
 ```json
 {
-  "da-digest": {
+  "team-digest": {
     "notion": {
       "config_page_id": "<32-char hex from Notion config page URL>",
       "database_id": "<32-char hex from Notion database URL>"
