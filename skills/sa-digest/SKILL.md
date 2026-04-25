@@ -1,6 +1,6 @@
 ---
 name: sa-digest
-description: Manually trigger the SA Daily Digest - scans hiero-ledger GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /sa-digest [YYYY-MM-DD]
+description: SA Daily Digest - scans GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /sa-digest [YYYY-MM-DD | setup | config]
 user-invocable: true
 ---
 
@@ -13,6 +13,8 @@ Manually run the SA Daily Digest pipeline on demand. Scans a specific day's acti
 **Usage:**
 - `/sa-digest` - digest for the previous calendar day (default)
 - `/sa-digest 2026-04-20` - digest for a specific date
+- `/sa-digest setup` - first-time setup or update your Notion IDs
+- `/sa-digest config` - show current config (Notion IDs, orgs, keywords)
 
 Use this when:
 - Testing the digest before enabling automation
@@ -80,11 +82,98 @@ For backfill runs, include a note in the digest footer indicating that Notion se
 
 ## Process
 
-### Step 0: Load Local Config
+### Step 0: Handle Subcommands and Load Config
 
-Read the config file at `~/.config/team-digest/config.json` using the Read tool. Parse the `sa-digest` key to get (convention: the config key matches the skill directory name - a copied skill named `eng-digest` reads the `eng-digest` key):
+**Check the argument first.** If the user passed `setup`, `config`, or no config exists yet, handle those before proceeding to the digest pipeline.
 
-Also read the team profile at `~/.config/team-digest/profiles/sa-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest. If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns).
+#### Subcommand: `setup`
+
+If the argument is `setup`, run the interactive setup flow (see below) regardless of whether a config already exists. This lets users update their Notion IDs at any time. After writing the config, confirm success and stop (do not run the digest).
+
+#### Subcommand: `config`
+
+If the argument is `config`, read `~/.config/team-digest/config.json` and display the current `sa-digest` configuration in a readable format: Notion IDs (masked to last 8 chars for brevity), GitHub orgs, priority repos, and default keywords. Then stop.
+
+#### Load Config (normal run or first-time setup)
+
+Read the config file at `~/.config/team-digest/config.json` using the Read tool.
+
+**If the config file does not exist or is missing the `sa-digest` key**, run the first-time setup flow automatically:
+
+1. Tell the user this is first-time setup for the SA Daily Digest
+2. Explain they need two Notion IDs - both are the 32-char hex string from Notion page URLs (`notion.so/<this-id>`)
+3. Ask for the **Notion config page ID** (the page with keywords and partner patterns)
+4. Ask for the **Notion database ID** (the database where digest pages are written)
+5. Create the directory `~/.config/team-digest/` if it doesn't exist
+6. Write `~/.config/team-digest/config.json` with this structure:
+
+```json
+{
+  "sa-digest": {
+    "notion": {
+      "config_page_id": "<user-provided>",
+      "database_id": "<user-provided>"
+    },
+    "github": {
+      "orgs": [
+        {
+          "name": "hiero-ledger",
+          "priority_repos": [
+            "hiero-json-rpc-relay",
+            "hiero-mirror-node",
+            "hiero-consensus-node",
+            "hiero-block-node",
+            "hiero-improvement-proposals",
+            "hiero-contracts",
+            "solo",
+            "hiero-sdk-js",
+            "hiero-mirror-node-explorer"
+          ],
+          "scan_all": false
+        },
+        {
+          "name": "hashgraph",
+          "priority_repos": [
+            "hedera-docs",
+            "hedera-agent-kit-js",
+            "hedera-wallet-connect",
+            "hedera-evm-testing",
+            "stablecoin-studio",
+            "asset-tokenization-studio",
+            "guardian"
+          ],
+          "scan_all": false
+        },
+        {
+          "name": "hedera-dev",
+          "priority_repos": [],
+          "scan_all": true
+        }
+      ]
+    },
+    "defaults": {
+      "keywords": [
+        "EVM", "smart contracts", "relay", "JSON-RPC",
+        "mirror node", "HIP", "Hiero", "consensus", "block node", "SDK"
+      ],
+      "partner_patterns": [
+        "Meeting with", "Call with", "Catch up with", "Deep dive",
+        "Sync with", "Check-in with", "Follow up with", "Debrief"
+      ]
+    }
+  }
+}
+```
+
+7. If the config file already exists with other digest keys (e.g., `eng-digest`), merge the new `sa-digest` key into the existing file rather than overwriting it.
+8. Confirm the config was created and tell the user they can now run `/sa-digest` to produce their first digest.
+9. **Stop here** (do not continue to the digest pipeline on first-time setup).
+
+If the argument was `setup`, use the same flow above but pre-fill the prompts with existing values so the user can see what's currently set and only change what they need.
+
+#### Normal Config Load (config exists)
+
+Parse the `sa-digest` key from the config to get:
 - `notion.config_page_id` - the Notion configuration page ID
 - `notion.database_id` - the Notion database ID for digest output
 - `github.orgs` - array of GitHub organizations to scan, each with:
@@ -93,7 +182,7 @@ Also read the team profile at `~/.config/team-digest/profiles/sa-digest.md` usin
   - `scan_all` - whether to scan all repos in the org or only priority repos
 - `defaults.*` - fallback values for keywords and partner patterns
 
-If the config file does not exist or is missing the `sa-digest` key, stop and tell the user to run `setup.sh` from the team-digest repo first.
+Also read the team profile at `~/.config/team-digest/profiles/sa-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest. If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns).
 
 Then fetch the database page using `notion-fetch` with the `database_id` to discover the internal `data_source_id` (the `collection://...` URL in the response). Extract the data source URL from the `data-source-url` attribute in the response.
 
@@ -354,4 +443,4 @@ All settings are read from `~/.config/team-digest/config.json` under the `sa-dig
 - **`priority_repos`** get full narrative summaries; others get a summary table. Empty list means all repos are non-priority.
 - **`scan_all: true`** scans every repo in the org. Set to `false` to only scan priority repos (useful for very large orgs).
 
-Run `setup.sh` from the team-digest repo to create this file from the template.
+The config is created automatically on first run (`/sa-digest`) or manually via `/sa-digest setup`. To update Notion IDs later, run `/sa-digest setup` again. To view current config, run `/sa-digest config`.
