@@ -81,12 +81,22 @@ The more specific you are, the more useful the Relevance sections become. Withou
 
 ### Option 1: Claude Code Routine (Recommended)
 
+Routines run on Anthropic's servers (works when your laptop is closed) but have no access to local files. You must embed your config in the prompt.
+
 1. Open Claude Code Desktop or claude.ai/code
 2. Create a new Routine
 3. Paste the full content of `SKILL.md` as the trigger prompt
-4. Set schedule: Weekdays at 7:00 AM (or your preferred time)
-5. Enable MCP connectors: Notion
-6. Save
+4. **At the end**, append your config between markers:
+   ```
+   <!-- SA-DIGEST-CONFIG -->
+   { "team-digest": { "notion": { "config_page_id": "YOUR_ID", "database_id": "YOUR_ID" }, ... } }
+   <!-- /SA-DIGEST-CONFIG -->
+   ```
+   See the "Appendix: Inline Config" section at the bottom of SKILL.md for the full template with all GitHub orgs and defaults pre-filled. Just plug in your two Notion IDs.
+5. Optionally append your profile between `<!-- SA-DIGEST-PROFILE -->` markers
+6. Set schedule: Weekdays at 7:00 AM (or your preferred time)
+7. Enable MCP connectors: Notion
+8. Save
 
 ### Option 2: Session-Local Cron
 
