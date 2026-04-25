@@ -8,16 +8,46 @@
       "database_id_help": "32-char hex from the Notion database URL (notion.so/<this-id>)"
     },
     "github": {
-      "org": "hiero-ledger"
+      "orgs": [
+        {
+          "name": "hiero-ledger",
+          "name_help": "GitHub org name",
+          "priority_repos": [
+            "hiero-json-rpc-relay",
+            "hiero-mirror-node",
+            "hiero-consensus-node",
+            "hiero-block-node",
+            "hiero-improvement-proposals",
+            "hiero-contracts",
+            "solo",
+            "hiero-sdk-js",
+            "hiero-mirror-node-explorer"
+          ],
+          "priority_repos_help": "Repos that get full narrative summaries. Empty list means no priority repos.",
+          "scan_all": true,
+          "scan_all_help": "true = scan all repos in the org; false = only scan priority repos"
+        },
+        {
+          "name": "hashgraph",
+          "priority_repos": [
+            "hedera-docs",
+            "hedera-agent-kit-js",
+            "hedera-wallet-connect",
+            "hedera-evm-testing",
+            "stablecoin-studio",
+            "asset-tokenization-studio",
+            "guardian"
+          ],
+          "scan_all": true
+        },
+        {
+          "name": "hedera-dev",
+          "priority_repos": [],
+          "scan_all": true
+        }
+      ]
     },
     "defaults": {
-      "priority_repos": [
-        "hiero-json-rpc-relay",
-        "hiero-mirror-node",
-        "hiero-consensus-node",
-        "hiero-block-node",
-        "hiero-improvement-proposals"
-      ],
       "keywords": [
         "EVM",
         "smart contracts",
