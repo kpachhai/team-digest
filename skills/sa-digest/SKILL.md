@@ -82,9 +82,32 @@ For backfill runs, include a note in the digest footer indicating that Notion se
 
 ## Process
 
-### Step 0: Handle Subcommands and Load Config
+### PRE-FLIGHT: Scan for Inline Config (DO THIS FIRST, BEFORE ANYTHING ELSE)
 
-**Check the argument first.** If the user passed `setup`, `config`, or no config exists yet, handle those before proceeding to the digest pipeline.
+**This step MUST run before subcommand handling and before any filesystem access.**
+
+Routines and remote triggers run on Anthropic's servers with no access to local files. When running in that context, config is embedded directly in this prompt between these markers:
+
+```
+<!-- SA-DIGEST-CONFIG -->
+{ ... JSON ... }
+<!-- /SA-DIGEST-CONFIG -->
+
+<!-- SA-DIGEST-PROFILE -->
+... markdown ...
+<!-- /SA-DIGEST-PROFILE -->
+```
+
+**Action:** Scan the full text of this prompt right now for those exact marker strings.
+
+- **If `<!-- SA-DIGEST-CONFIG -->` is present:** extract the JSON between the open and close tags, parse it, and store it as `inline_config`. Extract the `team-digest` key from that JSON. If `<!-- SA-DIGEST-PROFILE -->` markers are also present, extract the text between them and store it as `inline_profile`. Set `config_source = "inline"`. Do NOT read from the filesystem.
+- **If the markers are absent:** set `config_source = "filesystem"`. Continue to Step 0 below.
+
+This pre-flight scan happens regardless of subcommand. Even `config` and `setup` subcommands need to know whether they're running inline or filesystem mode.
+
+---
+
+### Step 0: Handle Subcommands and Load Config
 
 #### Subcommand: `setup`
 
@@ -92,33 +115,18 @@ If the argument is `setup`, run the interactive setup flow (see below) regardles
 
 #### Subcommand: `config`
 
-If the argument is `config`, read `~/.config/team-digest/config.json` and display the current `team-digest` configuration in a readable format: Notion IDs (masked to last 8 chars for brevity), GitHub orgs, priority repos, and default keywords. Then stop.
+If the argument is `config` and `config_source == "inline"`, display the inline config values. If `config_source == "filesystem"`, read `~/.config/team-digest/config.json` and display the current `team-digest` configuration in a readable format: Notion IDs (masked to last 8 chars for brevity), GitHub orgs, priority repos, and default keywords. Then stop.
 
-#### Check for Inline Config (Routines / Remote Triggers)
+#### Load Config
 
-Before reading from the filesystem, check whether config and profile are provided inline at the end of this prompt. Routines and remote triggers run on Anthropic's servers with no access to local files, so config must be embedded in the prompt itself.
+If `config_source == "inline"`: config is already loaded from the pre-flight step. Skip filesystem reads.
 
-Look for these markers in the text **below the end of this skill definition**:
+If `config_source == "filesystem"`: read `~/.config/team-digest/config.json` using the Read tool.
 
-```
-<!-- SA-DIGEST-CONFIG -->
-{ ... JSON config ... }
-<!-- /SA-DIGEST-CONFIG -->
+**If the config file does not exist or is missing the `team-digest` key**, and `config_source == "filesystem"`:
 
-<!-- SA-DIGEST-PROFILE -->
-... profile markdown ...
-<!-- /SA-DIGEST-PROFILE -->
-```
-
-**If inline config is found**, parse the JSON between the config markers and use it as the config (extract the `team-digest` key). If the profile markers are also present, use that text as the team profile. Skip the filesystem config load entirely and proceed to the normal config load logic below.
-
-**If no inline config is found**, continue to the filesystem flow below.
-
-#### Load Config from Filesystem (normal run or first-time setup)
-
-Read the config file at `~/.config/team-digest/config.json` using the Read tool.
-
-**If the config file does not exist or is missing the `team-digest` key**, run the first-time setup flow automatically:
+- If this appears to be a routine/automated context (no interactive user, no terminal): **ABORT** with this message: "ERROR: No config found. This appears to be a routine run but no inline config block was found in the prompt and `~/.config/team-digest/config.json` does not exist on this server. Embed your config between `<!-- SA-DIGEST-CONFIG -->` markers at the end of the routine prompt. See the Appendix in the skill definition." Do not proceed further.
+- If this is an interactive local run: run the first-time setup flow automatically:
 
 1. Tell the user this is first-time setup for the Team Daily Digest
 2. Explain they need two Notion IDs - both are the 32-char hex string from Notion page URLs (`notion.so/<this-id>`)
