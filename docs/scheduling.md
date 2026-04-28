@@ -1,10 +1,10 @@
 # Scheduling the SA Daily Digest
 
-Three options for automated daily runs, from simplest to most persistent.
+Four options for automated daily runs. **If you're on macOS and want reliability without cloud dependencies, use Option 4 (launchd).**
 
-## Option 1: Claude Code Desktop/Web Routine (Recommended)
+## Option 1: Claude Code Desktop/Web Routine
 
-The easiest way to get a persistent, automated daily digest. Routines run on Anthropic's servers - they work when your laptop is closed.
+Routines run on Anthropic's servers - they work when your laptop is closed. **Known limitation:** long-running digests (many repos, many Notion searches) can hit server-side session timeouts and produce partial output. If you experience this, use Option 4 (launchd) instead.
 
 **Important:** Routines have no access to your local filesystem, so you must embed your config (and optionally your team profile) directly in the trigger prompt.
 
@@ -21,6 +21,7 @@ The easiest way to get a persistent, automated daily digest. Routines run on Ant
          "database_id": "<your-database-id>"
        },
        "github": {
+         "github_token": "<your-github-pat>",
          "orgs": [
            { "name": "hiero-ledger", "priority_repos": ["hiero-json-rpc-relay", "hiero-mirror-node", "hiero-consensus-node", "hiero-block-node", "hiero-improvement-proposals", "hiero-contracts", "solo", "hiero-sdk-js", "hiero-mirror-node-explorer"], "scan_all": false },
            { "name": "hashgraph", "priority_repos": ["hedera-docs", "hedera-agent-kit-js", "hedera-wallet-connect", "hedera-evm-testing", "stablecoin-studio", "asset-tokenization-studio", "guardian"], "scan_all": false },
@@ -35,6 +36,7 @@ The easiest way to get a persistent, automated daily digest. Routines run on Ant
    }
    <!-- /SA-DIGEST-CONFIG -->
    ```
+   The `github_token` is required for full GitHub coverage in routines (issues and releases will be silently skipped without it due to unauthenticated API rate limits). See `docs/configuration.md` for how to create a minimal read-only PAT.
 5. Optionally append your team profile:
    ```
    <!-- SA-DIGEST-PROFILE -->
@@ -101,6 +103,117 @@ For programmatic setup. Requires your `environment_id` from claude.ai cloud sett
 The `cron_expression` `3 12 * * 1-5` means weekdays at 12:03 PM UTC. Adjust for your timezone.
 
 **Note:** The Remote Trigger API is in research preview. The format may change. The Claude Code Desktop routine (Option 1) is more stable and easier to manage.
+
+## Option 4: Local macOS launchd (Most Reliable for Local Use)
+
+Runs on your Mac via launchd - survives sleep/wake cycles and requires no cloud account. Uses your local `gh` auth and Notion MCP config directly, so no inline config embedding is needed. **Requires your Mac to be on (not off) at the scheduled time.**
+
+### 1. Create the wrapper script
+
+```bash
+mkdir -p ~/.local/bin ~/.local/log
+```
+
+Create `~/.local/bin/sa-digest-run.sh`:
+
+```bash
+#!/bin/bash
+
+# Ensure Homebrew and other tools are on PATH
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+LOG="$HOME/.local/log/sa-digest.log"
+echo "" >> "$LOG"
+echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG"
+
+claude -p "/sa-digest" --allowedTools "Bash,Read,Write,Edit,Glob,Grep" 2>&1 | tee -a "$LOG"
+```
+
+Make it executable:
+
+```bash
+chmod +x ~/.local/bin/sa-digest-run.sh
+```
+
+Test it runs correctly before scheduling:
+
+```bash
+~/.local/bin/sa-digest-run.sh
+```
+
+### 2. Create the launchd plist
+
+Create `~/Library/LaunchAgents/com.team-digest.sa-digest.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.team-digest.sa-digest</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/YOUR_USERNAME/.local/bin/sa-digest-run.sh</string>
+  </array>
+
+  <!-- Weekdays at 8:00 AM local time -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USERNAME/.local/log/sa-digest-launchd.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USERNAME/.local/log/sa-digest-launchd.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
+```
+
+Replace `YOUR_USERNAME` with your actual macOS username (`whoami` to check).
+
+### 3. Load the job
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.team-digest.sa-digest.plist
+```
+
+Verify it loaded:
+
+```bash
+launchctl list | grep sa-digest
+```
+
+### Managing the job
+
+```bash
+# Unload (disable without deleting)
+launchctl unload ~/Library/LaunchAgents/com.team-digest.sa-digest.plist
+
+# Reload after editing the plist
+launchctl unload ~/Library/LaunchAgents/com.team-digest.sa-digest.plist
+launchctl load ~/Library/LaunchAgents/com.team-digest.sa-digest.plist
+
+# Trigger a manual run immediately
+launchctl start com.team-digest.sa-digest
+
+# View logs
+tail -f ~/.local/log/sa-digest.log
+```
+
+**Note:** launchd will not fire a missed run if your Mac was asleep or off at the scheduled time. If you need catch-up on missed days, run `/sa-digest YYYY-MM-DD` manually.
 
 ## Verifying the Schedule
 

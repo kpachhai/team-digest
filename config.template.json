@@ -8,6 +8,8 @@
       "database_id_help": "32-char hex from the Notion database URL (notion.so/<this-id>)"
     },
     "github": {
+      "github_token": "",
+      "github_token_help": "Optional GitHub PAT with public_repo read scope. Required for full coverage when running as a routine (issues and releases use the core API, which is rate-limited to 60 req/hour without auth). Generate a fine-grained PAT at github.com/settings/tokens.",
       "orgs": [
         {
           "name": "hiero-ledger",
