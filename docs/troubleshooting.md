@@ -49,14 +49,16 @@ If Notion MCP is unavailable, the digest will still produce the GitHub section a
 
 ### GitHub rate limiting
 
-The GitHub API allows 5,000 requests per hour for authenticated users. Scanning 40 repos with PR, issue, and release checks uses roughly 45 API calls - well within limits.
+**Local runs:** `gh` uses your authenticated session. Authenticated users get 5,000 core API requests/hour and 30 search requests/hour - well within limits for a daily digest run.
 
-If you hit rate limits:
+**Routine/remote-trigger runs:** No `gh` session exists on Anthropic's servers. Without a `github_token` in the inline config, calls are unauthenticated and share a rate limit tied to the server's IP: **60 core requests/hour** and **10 search requests/hour**. If the limit is exhausted before your run, issues and releases will be skipped (PRs use search, issues/releases use the core API).
+
+Fix: add a GitHub PAT to your config. See `docs/configuration.md` for instructions.
+
+To check your current rate limit status locally:
 ```bash
 gh api rate_limit --jq '.rate'
 ```
-
-This shows your current rate limit status.
 
 ### Digest page is missing sections
 
