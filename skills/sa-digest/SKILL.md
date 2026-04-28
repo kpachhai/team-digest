@@ -228,6 +228,21 @@ If the Notion config page is unreachable, fall back to the `defaults` section fr
 
 ### Step 2: Scan GitHub Activity
 
+**GitHub authentication:** Before running any `gh` command, check authentication status:
+
+```bash
+gh auth status 2>/dev/null
+```
+
+- If that succeeds, `gh` is already authenticated - proceed normally.
+- If it fails (typical in routine/remote-trigger context), check whether `github_token` is set in the loaded config. If it is, export it before all subsequent `gh` commands:
+
+```bash
+export GITHUB_TOKEN="<config.github_token value>"
+```
+
+- If neither is available, note in the digest footer: "GitHub scanned with no auth token - core API rate limit is 60 req/hour and may have been exhausted; issues and releases may be incomplete." Then proceed anyway - PR searches (search API) will still work even when the core API is rate-limited.
+
 Scan **each org** from `config.github.orgs` for activity during the target date.
 
 **Critical: Process JSON output directly in each Bash command. Do not save to intermediate files.**
@@ -486,6 +501,7 @@ When running as a **Claude Code Routine** or **Remote Trigger**, the skill has n
       "database_id": "<your-database-id>"
     },
     "github": {
+      "github_token": "<optional - GitHub PAT with public_repo read scope; required for full coverage when running as a routine>",
       "orgs": [
         {
           "name": "your-org",
