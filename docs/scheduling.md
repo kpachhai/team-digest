@@ -60,6 +60,7 @@ Within any Claude Code session, the `/team-digest` skill can be scheduled locall
 Or use the CronCreate approach directly in chat - ask Claude to set up a cron job.
 
 **Limitations:**
+
 - Dies when the Claude Code session ends
 - Auto-expires after 7 days
 - Requires your laptop to be on and the session running
@@ -118,16 +119,93 @@ Create `~/.local/bin/team-digest-run.sh`:
 
 ```bash
 #!/bin/bash
+# Usage:
+#   team-digest-run.sh           - digest for yesterday (default, used by launchd)
+#   team-digest-run.sh 2026-04-27 - digest for a specific date (manual backfill)
 
 # Ensure Homebrew and other tools are on PATH
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 LOG="$HOME/.local/log/team-digest.log"
+RAW_LOG="$HOME/.local/log/team-digest-raw.jsonl"
 echo "" >> "$LOG"
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG"
 
-claude -p "/team-digest" --allowedTools "Bash,Read,Write,Edit,Glob,Grep" 2>&1 | tee -a "$LOG"
+# Allowed tools - includes Notion MCP tools needed by the digest pipeline.
+# Without these, claude -p will block on permission prompts and exit.
+ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep,mcp__claude_ai_Notion__notion-fetch,mcp__claude_ai_Notion__notion-search,mcp__claude_ai_Notion__notion-create-pages,mcp__claude_ai_Notion__notion-update-page,mcp__claude_ai_Notion__notion-query-data-sources"
+
+MODEL="claude-opus-4-6"
+
+# Format streaming JSON events into human-readable log lines.
+# Falls back to raw JSON if jq is unavailable or an event is unrecognized.
+format_stream() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -r --unbuffered '
+      if .type == "system" and .subtype == "init" then
+        "[init] session=" + (.session_id // "?") + " model=" + (.model // "?")
+      elif .type == "assistant" then
+        (.message.content // []) | map(
+          if .type == "text" then "[claude] " + (.text | gsub("\n"; " ⏎ ") | .[0:500])
+          elif .type == "tool_use" then "[tool→] " + .name + " " + (.input | tostring | .[0:200])
+          else empty end
+        ) | .[]
+      elif .type == "user" then
+        (.message.content // []) | map(
+          if .type == "tool_result" then
+            "[tool✓] " + ((.content // "") | tostring | gsub("\n"; " ⏎ ") | .[0:300])
+          else empty end
+        ) | .[]
+      elif .type == "result" then
+        "[done] " + (.subtype // "?") + " duration=" + ((.duration_ms // 0) | tostring) + "ms cost=$" + ((.total_cost_usd // 0) | tostring)
+      else empty end
+    '
+  else
+    cat
+  fi
+}
+
+run_claude() {
+  local prompt="$1"
+  claude -p "$prompt" \
+    --model "$MODEL" \
+    --allowedTools "$ALLOWED_TOOLS" \
+    --output-format stream-json \
+    --verbose \
+    2>&1 | tee -a "$RAW_LOG" | format_stream | tee -a "$LOG"
+}
+
+DATE_ARG="${1:-}"
+
+if [ -n "$DATE_ARG" ]; then
+  if ! echo "$DATE_ARG" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+    echo "ERROR: Invalid date format '$DATE_ARG'. Use YYYY-MM-DD (e.g. 2026-04-27)" | tee -a "$LOG"
+    exit 1
+  fi
+  echo "Running digest for $DATE_ARG" | tee -a "$LOG"
+  run_claude "/team-digest $DATE_ARG"
+else
+  echo "Running digest for yesterday" | tee -a "$LOG"
+  run_claude "/team-digest"
+fi
 ```
+
+**What you'll see in real time:**
+- `[init] session=... model=...` - once when Claude starts
+- `[claude] ...` - each chunk of assistant reasoning/text
+- `[tool→] Bash {...}` - each tool call as it's invoked
+- `[tool✓] ...` - the result of each tool call
+- `[done] success duration=... cost=$...` - final summary
+
+**Two log files:**
+- `~/.local/log/team-digest.log` - human-readable streaming log
+- `~/.local/log/team-digest-raw.jsonl` - raw JSON events for debugging
+
+If `jq` isn't installed (`brew install jq`), the script falls back to printing raw JSON events.
+
+**About the Notion MCP server name:** The `mcp__claude_ai_Notion__*` prefix matches the Notion connector exposed by Claude Code Desktop. If your MCP server is registered under a different name, run `claude mcp list` to find the actual server identifier and adjust the prefix accordingly. To find which Notion tools are available, look at output of running `/team-digest` once interactively - the tool calls will use the actual MCP names.
+
+**If you'd rather not maintain the tool list:** Replace `--allowedTools "$ALLOWED_TOOLS"` with `--permission-mode bypassPermissions`. This skips all permission prompts. It's broader but simpler, and acceptable for a script you fully control.
 
 Make it executable:
 
@@ -138,7 +216,8 @@ chmod +x ~/.local/bin/team-digest-run.sh
 Test it runs correctly before scheduling:
 
 ```bash
-~/.local/bin/team-digest-run.sh
+~/.local/bin/team-digest-run.sh              # yesterday
+~/.local/bin/team-digest-run.sh 2026-04-27   # specific date
 ```
 
 ### 2. Create the launchd plist
