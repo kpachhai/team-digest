@@ -60,9 +60,11 @@
         "Hiero",
         "consensus",
         "block node",
-        "SDK"
+        "SDK",
+        "explorer"
       ],
       "partner_patterns": [
+        "Discussion",
         "Meeting with",
         "Call with",
         "Catch up with",
