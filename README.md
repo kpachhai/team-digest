@@ -9,16 +9,20 @@ Each team gets its own skill and configuration. New sources and cadences can be 
 ```
 team-digest/
 ├── bin/                   # Headless terminal entry points (claude -p wrappers)
-│   └── team-digest-run.sh   # Symlink onto $PATH; cron/launchd target
+│   ├── team-digest-run.sh   # Daily - symlink onto $PATH for cron/launchd
+│   └── team-weekly-run.sh   # Weekly rollup
 ├── config.template.json   # Committed template with empty Notion IDs
 ├── config.json            # Your Notion IDs (gitignored, created by setup.sh)
 ├── .gitignore
 ├── setup.sh               # First-time setup: creates config, checks prereqs, installs skills + lib/
 ├── update.sh              # After git pull: syncs skills, lib/, config, profiles
-├── skills/                # One skill per team/digest type
-│   └── team-digest/
-│       ├── SKILL.md       # Skill body: orchestration + MCP calls + writing rules
-│       └── lib/           # Shell helpers (compute-window, fetch-github-*, load-config)
+├── skills/                # One skill per team/digest type and cadence
+│   ├── team-digest/         # Daily
+│   │   ├── SKILL.md       # Skill body: orchestration + MCP calls + writing rules
+│   │   └── lib/           # compute-window, load-config, fetch-github-*, fetch-rss, fetch-gh-commits
+│   └── team-weekly/         # Weekly rollup of daily digests
+│       ├── SKILL.md       # Reads dailies from Notion, synthesizes cross-day themes
+│       └── lib/           # compute-week-window
 ├── profiles/              # Team profiles describing role, priorities, glossary
 │   ├── team-digest.template.md   # Committed template
 │   └── team-digest.md            # Your personalized copy (gitignored)
@@ -208,8 +212,8 @@ Daily digests are the atomic unit. Higher-cadence digests are rollups that summa
 
 | Cadence   | Status  | Input                                  | Output                                                                                               |
 | --------- | ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Daily     | Shipped | Raw sources (GitHub, Notion, meetings) | One Notion page per day                                                                              |
-| Weekly    | Planned | Monday-Friday daily digests            | One summary page highlighting the week's most significant items, trends, and unresolved action items |
+| Daily     | Shipped | Raw sources (GitHub, Notion, RSS)      | One Notion page per day                                                                              |
+| Weekly    | Shipped | The week's daily digests in Notion     | One Notion page synthesizing cross-day themes (top GitHub work, releases, partner momentum, content pulse, industry news roundup, favorites movement) |
 | Monthly   | Planned | Weekly digests for the month           | One page with themes, metrics (PRs merged, partners engaged), and strategic observations             |
 | Quarterly | Planned | Monthly digests                        | Executive-level summary with trends, comparisons to prior quarter, team highlights                   |
 
