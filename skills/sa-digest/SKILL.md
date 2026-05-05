@@ -300,7 +300,7 @@ This step covers the user's curated list of "Favorites" pages - documents they c
 2. From the response, read `last_edited_time` (an ISO-8601 UTC timestamp on the page object).
 3. Compare the date portion of `last_edited_time` (in UTC) against `$DATE_LABEL`. If they match, the favorite itself was edited during the digest window - mark it as a "qualifying parent."
 4. If the page was archived (response includes `archived: true`), skip it silently along with any descent.
-5. If `notion-fetch` returns an error (page not found, integration not shared with this page, page deleted), log a one-line failure note like `(Favorite <ID>: not accessible - share the page with the integration)` and continue.
+5. If `notion-fetch` returns an error (page not found, page deleted, user lacks permission), log a one-line failure note like `(Favorite <ID>: not accessible - check the URL or your access)` and continue.
 6. **Collect child page references** from the response content. The Notion MCP enhanced-Markdown response renders child pages as `<page url="..." title="..."/>` tags or as Notion `@mention`-style page links inside the page body. Extract every Notion page URL or ID found inside the favorite's content. These are the candidates for descent.
 
 Emit all favorite `notion-fetch` calls in one message so they run concurrently.
@@ -331,7 +331,7 @@ Track page IDs across all Notion sections. If a page already appeared in the Key
 
 If every favorite (and every descended child) was either inaccessible, archived, or not edited on `$DATE_LABEL`, include the Favorites section with a single line: `No favorited pages or their child pages had updates on <DATE_LABEL>.` This distinguishes a successful no-hit scan from a configuration mistake.
 
-**Permission gotcha:** the Notion MCP integration must be explicitly shared with each favorited page AND each child page you want followed. Sidebar-favoriting in Notion does NOT grant the integration access. After adding a URL to the Favorites list, also share the page (or a parent it inherits from) with the integration. Same applies to children: an unshared child page is invisible to the descent step.
+**Access model:** the Notion-hosted MCP (the OAuth-based connector Anthropic ships) inherits workspace-wide access from the user's OAuth grant - no per-page sharing required. If a `notion-fetch` returns a "not accessible" error, the cause is almost always one of: (a) the page was deleted or moved out of the user's workspace, (b) the user themselves lacks permission to that page (e.g., a private page in another team's space), or (c) the URL is malformed. Treat permission errors as a real signal worth surfacing in the digest, not as expected setup friction.
 
 ### Step 3.6: Scan Pages You Created
 
