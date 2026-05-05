@@ -1,6 +1,6 @@
 ---
 name: team-weekly
-description: Team Weekly Digest - synthesizes the past week's Team Daily Digests into a weekly summary, written to the same Notion database. Usage - /team-weekly [YYYY-MM-DD | --dry-run | config]
+description: Team Weekly Digest - synthesizes the past week (or any custom date range) of Team Daily Digests into a rollup summary, written to the same Notion database. Usage - /team-weekly [YYYY-MM-DD | --from F --to T | --dry-run | config]
 user-invocable: true
 ---
 
@@ -16,11 +16,13 @@ This skill is the "rollup" companion to `/team-digest`. It reads structured prop
 
 - `/team-weekly` - synthesize the **last full ISO week** (the most recent Monday-Sunday that has fully completed in UTC)
 - `/team-weekly 2026-05-07` - synthesize the ISO week **containing** this date (Mon-Sun)
+- `/team-weekly --from 2026-04-25 --to 2026-05-03` - synthesize an arbitrary date range (inclusive on both ends). Useful for catching up after a missed week, post-conference recaps, sprint-aligned summaries, or any non-ISO-week window.
 - `/team-weekly --dry-run` - run the full pipeline but write the markdown to a local file instead of creating a Notion page
-- `/team-weekly 2026-05-07 --dry-run` - both
+- `/team-weekly 2026-05-07 --dry-run` - the ISO-week mode + dry run
+- `/team-weekly --from 2026-04-25 --to 2026-05-03 --dry-run` - custom range + dry run
 - `/team-weekly config` - show the current config (Notion IDs and team-digest reuse)
 
-The flags `--dry-run` and date arg can appear in any order. Dry-run output goes to `/tmp/team-digest-dry-runs/team-weekly-<WEEK_LABEL>-v<N>.md`, ephemeral by design (compare once, discard).
+The flags can appear in any order. Mixing a positional date with `--from`/`--to` is an error - pick one mode. `--from` and `--to` must appear together (specifying only one is an error). Dry-run output goes to `/tmp/team-digest-dry-runs/team-weekly-<WEEK_LABEL>-v<N>.md`, ephemeral by design (compare once, discard). For custom ranges, `WEEK_LABEL` becomes `<from>_to_<to>` (e.g., `2026-04-25_to_2026-05-03`) so the file name stays informative.
 
 This skill also runs from the terminal via `bin/team-weekly-run.sh` in the team-digest repo. Same skill, same `--dry-run` flag.
 
@@ -36,11 +38,17 @@ This skill also runs from the terminal via `bin/team-weekly-run.sh` in the team-
 
 Parse the skill argument as zero or more of:
 
-- A `YYYY-MM-DD` date → captured as `$DATE_ARG`
+- A `YYYY-MM-DD` date → captured as `$DATE_ARG` (snaps to the ISO week containing it)
+- `--from YYYY-MM-DD --to YYYY-MM-DD` → captured as `$FROM` and `$TO` (arbitrary date range, inclusive)
 - The literal `--dry-run` → set `$DRY_RUN=1`
 - The literal `config` → handle as a subcommand (below)
 
-Order does not matter: `/team-weekly 2026-05-07 --dry-run` and `/team-weekly --dry-run 2026-05-07` are equivalent.
+Order does not matter. **Validation rules:**
+
+- `--from` and `--to` must appear together. Specifying one without the other is an error.
+- A positional date arg cannot coexist with `--from`/`--to`. Pick one mode and surface a clear error if both are given.
+
+The window-resolution helper (`compute-week-window.sh`) handles all three valid forms (no-arg, single date, --from/--to range) and validates each. Pass `$DATE_ARG`, `$FROM`, `$TO` through to it as-is.
 
 #### Subcommand: `config`
 
@@ -58,18 +66,24 @@ Yes - this skill reads the **team-digest** config, not a separate `team-weekly` 
 
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md`. Used for the **Relevance** synthesis below. If absent, fall back to generic relevance heuristics.
 
-### Step 1: Compute the week window
+### Step 1: Compute the week (or custom range) window
 
-Run the helper:
+Run the helper, passing whichever args you parsed in Step 0:
 
 ```bash
+# No arg - last full ISO week:
+eval "$(bash ~/.claude/skills/team-weekly/lib/compute-week-window.sh)"
+
+# Single positional date - the ISO week containing that date:
 eval "$(bash ~/.claude/skills/team-weekly/lib/compute-week-window.sh "$DATE_ARG")"
-# $WEEK_START, $WEEK_END, $WEEK_LABEL, $START, $END are now set.
+
+# --from/--to - arbitrary range, inclusive:
+eval "$(bash ~/.claude/skills/team-weekly/lib/compute-week-window.sh --from "$FROM" --to "$TO")"
 ```
 
-`$WEEK_LABEL` is the ISO 8601 week label (e.g., `2026-W19`) used in the digest title. `$WEEK_START` and `$WEEK_END` are the Monday and Sunday dates of the week.
+After `eval`, `$WEEK_START`, `$WEEK_END`, `$WEEK_LABEL`, `$START`, `$END` are set. For ISO-week mode, `$WEEK_LABEL` is the ISO 8601 label (e.g., `2026-W19`); for custom range mode, it's `<from>_to_<to>` (e.g., `2026-04-25_to_2026-05-03`).
 
-If the helper exits non-zero (invalid date format), surface its stderr to the user and stop.
+If the helper exits non-zero (invalid date format, --from after --to, mixing positional with --from/--to), surface its stderr to the user and stop.
 
 ### Step 2: Query the Notion database for daily digests in the window
 
