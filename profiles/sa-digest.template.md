@@ -106,6 +106,52 @@ Flag these opportunities explicitly in the Relevance section.
 
 ---
 
+## Project Glossary
+
+When the digest mentions any of these projects, components, or acronyms for the first time
+in a section, expand them inline using the plain-English description below. Add new entries
+as new projects or components emerge. Keep expansions to 3-10 words - just enough that a
+developer who doesn't work on this specific project understands what it is.
+
+**Hiero / Hedera projects:**
+- `solo` - the single-binary local Hiero/Hedera dev network deployment tool (Kubernetes-based)
+- `hiero-local-node` - the legacy Docker-based local Hiero/Hedera dev network (being deprecated in favor of `solo`)
+- `hiero-consensus-node` - the core Hiero consensus protocol implementation
+- `hiero-mirror-node` - the read-side REST/GraphQL/gRPC indexer for Hiero/Hedera state
+- `hiero-block-node` - the block streaming service for Hiero/Hedera ledger data
+- `hiero-json-rpc-relay` - the EVM-compatibility layer translating JSON-RPC calls to Hedera APIs
+- `hiero-sdk-js` - the official JavaScript/TypeScript SDK for Hiero/Hedera
+- `hiero-contracts` - system contracts and precompiles exposed to Solidity (HTS, HCS, etc.)
+- `hiero-improvement-proposals` - the Hiero ecosystem's HIP repository (specs and approval process)
+- `hedera-docs` - the official developer documentation site
+- `hedera-agent-kit-js` - the JS toolkit for AI agents to interact with Hedera
+- `hedera-wallet-connect` - the Hedera implementation of the WalletConnect protocol
+- `stablecoin-studio` - reference implementation for issuing stablecoins on Hedera
+- `asset-tokenization-studio` - reference implementation for real-world asset (RWA) tokenization
+- `guardian` - sustainability and verifiable credentials platform on Hedera
+- `sdk-collaboration-hub` - cross-language SDK design and specification workspace
+
+**Hedera/Hiero protocol terms:**
+- `HIP` - Hedera/Hiero Improvement Proposal (spec for protocol changes)
+- `HTS` - Hedera Token Service (native fungible/non-fungible token API)
+- `HCS` - Hedera Consensus Service (ordered messaging service)
+- `HFS` - Hedera File Service (on-ledger file storage)
+- `HSS` - Hedera Smart Contract Service (EVM-based smart contracts)
+
+**SDK V3 terms (sdk-collaboration-hub work):**
+- `HieroClient` - the V3 SDK top-level connection object (replacing legacy `Client`)
+- `Operator` - the V3 SDK transaction signing and billing context
+- `MethodDescriptor` - the gRPC method metadata wrapper used for cross-language SDK portability
+
+**Ethereum / EVM terms:**
+- `EIP` - Ethereum Improvement Proposal
+- `ERC` - Ethereum Request for Comment (token standards: ERC-20, ERC-721, ERC-1155, ERC-3643, etc.)
+
+Add entries here whenever the digest produces output you have to mentally translate. The
+glossary is the cheapest fix for jargon-heavy summaries.
+
+---
+
 ## Our Audience
 
 The developers and partners we serve are typically:
