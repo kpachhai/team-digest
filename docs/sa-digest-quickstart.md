@@ -86,7 +86,7 @@ Before turning on automation, run a dry run to preview the digest output as a lo
 /team-digest 2026-04-27 --dry-run    # specific date, written locally
 ```
 
-The output lands in `~/.config/team-digest/dry-runs/team-digest-<DATE>-v<N>.md`. Open the file, sanity-check the format, then do a real run when you're satisfied. Multiple `--dry-run` invocations on the same day produce versioned files (`-v1.md`, `-v2.md`, ...) so you can compare iterations.
+The output lands in `/tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md`. Open the file, sanity-check the format, then do a real run when you're satisfied. Multiple `--dry-run` invocations on the same day produce versioned files (`-v1.md`, `-v2.md`, ...) so you can compare iterations. The `/tmp` path is ephemeral on purpose - if you want to keep a dry run, copy it out before reboot.
 
 ## Automate It
 

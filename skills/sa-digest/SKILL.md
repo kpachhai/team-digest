@@ -18,7 +18,7 @@ Manually run the Team Daily Digest pipeline on demand. Scans a specific day's ac
 - `/team-digest setup` - first-time setup or update your Notion IDs
 - `/team-digest config` - show current config (Notion IDs, orgs, keywords)
 
-The flags `--dry-run` and date arg can appear in any order. The dry-run output goes to `~/.config/team-digest/dry-runs/team-digest-<DATE_LABEL>-v<N>.md`, versioned so repeated runs do not clobber each other.
+The flags `--dry-run` and date arg can appear in any order. The dry-run output goes to `/tmp/team-digest-dry-runs/team-digest-<DATE_LABEL>-v<N>.md`, versioned so repeated runs do not clobber each other. The path is ephemeral on purpose - dry runs are throwaway validation artifacts, not history. If you need to keep one, copy it elsewhere.
 
 Use this when:
 - Testing the digest before enabling automation
@@ -320,7 +320,7 @@ If any of these checks fail, fix the draft before proceeding to Step 5. Bare ent
 **If `$DRY_RUN` is set:** do NOT call `notion-create-pages`. Instead, write the assembled markdown content (everything inside the **Content structure** block below, with `<DATE_LABEL>` and counts substituted) to a versioned local file:
 
 ```bash
-DRY_DIR="$HOME/.config/team-digest/dry-runs"
+DRY_DIR="/tmp/team-digest-dry-runs"
 mkdir -p "$DRY_DIR"
 # Find the next free version number for this date
 N=1

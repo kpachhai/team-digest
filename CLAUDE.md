@@ -88,7 +88,7 @@ Profiles (`profiles/*.template.md`) describe a team's role, priorities, and what
 - **Notion MCP constraints in SKILL.md:** Do not use `readMcpResource`/`ReadMcpResourceTool`; do not save `gh` output to intermediate files. GitHub data fetching lives in `skills/team-digest/lib/*.sh` helpers - do not re-implement `gh search ... | python3 -c "..."` inline.
 - **Helper scripts in `skills/<name>/lib/`:** Skill bodies orchestrate; helpers do CLI/data work. Helpers must not call MCP tools (those only work inside Claude). `setup.sh` and `update.sh` copy `lib/` alongside `SKILL.md` to `~/.claude/skills/<name>/lib/`.
 - **Headless runs via `bin/<digest>-run.sh`:** Each digest skill ships a `bin/<digest>-run.sh` wrapper (in the repo) that invokes `claude -p "/<digest> [args]"` with the necessary Notion MCP tools allow-listed. This is the same skill - just a different invocation path. There is no separate routine/inline-config code path.
-- **`--dry-run` flag:** Every digest skill supports `--dry-run` which runs the full pipeline but writes the markdown to `~/.config/team-digest/dry-runs/<digest>-<date>-v<N>.md` instead of calling Notion. Use this to validate refactors without overwriting an existing live digest page.
+- **`--dry-run` flag:** Every digest skill supports `--dry-run` which runs the full pipeline but writes the markdown to `/tmp/team-digest-dry-runs/<digest>-<date>-v<N>.md` instead of calling Notion. The path is ephemeral on purpose - dry runs are throwaway validation artifacts (compare once, discard). Use this flag to validate refactors without overwriting an existing live digest page.
 
 ## Adding a New Team Digest
 

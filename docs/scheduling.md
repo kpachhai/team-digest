@@ -14,7 +14,7 @@ The team-digest repo ships `bin/team-digest-run.sh` as the headless entry point.
 ```bash
 bin/team-digest-run.sh                        # digest for yesterday (UTC)
 bin/team-digest-run.sh 2026-04-27             # digest for a specific date
-bin/team-digest-run.sh --dry-run              # write markdown to ~/.config/team-digest/dry-runs/, skip Notion
+bin/team-digest-run.sh --dry-run              # write markdown to /tmp/team-digest-dry-runs/, skip Notion
 bin/team-digest-run.sh 2026-04-27 --dry-run   # both
 bin/team-digest-run.sh --help                 # usage
 ```
@@ -199,4 +199,4 @@ After setting up any scheduling option:
 3. A new page should appear with that date and "Auto" status
 4. If nothing appears, check `~/.local/log/team-digest.log` for errors
 
-For repeated debugging without spamming Notion, use `--dry-run` - the markdown lands in `~/.config/team-digest/dry-runs/team-digest-<date>-v<N>.md` and you can `cat` or `diff` it before doing a real run.
+For repeated debugging without spamming Notion, use `--dry-run` - the markdown lands in `/tmp/team-digest-dry-runs/team-digest-<date>-v<N>.md` and you can `cat` or `diff` it before doing a real run. Files are ephemeral (cleared on reboot).
