@@ -84,6 +84,15 @@ The Notion config page holds the live, team-editable settings. The page ID is st
 - To remove: delete the bullet point
 - Tips: match your team's actual naming conventions for meeting notes
 
+**Favorites** - A user-curated list of Notion pages the digest should check for updates each day. The Notion REST API does not expose a user's sidebar Favorites, so this list IS the digest's favorites: pages you care about regardless of keyword match. Each daily run fetches every page on the list and includes any that were edited (`last_edited_time`) during the digest's UTC date window.
+- Add a heading **Favorites** (or **Favorite Pages**) on the config page
+- Under it, paste a bullet list of Notion page URLs - one per line
+- The skill accepts both full URLs (`https://www.notion.so/Page-Title-32hex`) and raw 32-char hex IDs
+- To remove a favorite: delete the bullet point
+- Empty or missing section means no favorites are scanned (the section is silently omitted from the digest)
+
+> **Required permission step:** the Notion MCP integration must be explicitly shared with each favorited page. Adding a page to your sidebar Favorites in Notion does NOT grant the integration access. After adding a page URL to the Favorites list, also share the page (or a parent page it inherits from) with the integration in Notion's UI - otherwise the digest will log a "not accessible" note for that favorite and skip it. This is a one-time setup per page; once shared, the integration retains access.
+
 **Organization** - The GitHub org to scan.
 
 **Scan Window** - How far back to scan (default: 24 hours).

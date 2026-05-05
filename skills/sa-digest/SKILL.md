@@ -197,12 +197,13 @@ Then fetch the database page using `notion-fetch` with the `database_id` to disc
 Using the `config_page_id` from the local config, fetch the Notion configuration page using the `notion-fetch` tool.
 
 Extract:
-- Keywords list (under "Keywords")
-- Partner conversation patterns (under "Title Patterns")
+- Keywords list (under the heading "Keywords")
+- Partner conversation patterns (under the heading "Title Patterns")
+- **Favorites list** (under the heading "Favorites" or "Favorite Pages") - a bullet list of Notion page URLs the user wants to monitor. The Notion API does not expose a user's sidebar Favorites, so this list is the user-curated equivalent: pages they care about regardless of keyword match. Each bullet is a URL like `https://www.notion.so/Page-Title-32hex` or just the 32-char hex page ID. Empty/missing section means no favorites are configured - skip Step 3.5.
 
-GitHub org and repo configuration comes from `config.json` (the `github.orgs` array), not from the Notion config page. This keeps structural config (which orgs/repos to scan) separate from frequently-changing settings (keywords, patterns).
+GitHub org and repo configuration comes from `config.json` (the `github.orgs` array), not from the Notion config page. This keeps structural config (which orgs/repos to scan) separate from frequently-changing settings (keywords, patterns, favorites).
 
-If the Notion config page is unreachable, fall back to the `defaults` section from the local config file.
+If the Notion config page is unreachable, fall back to the `defaults` section from the local config file. Favorites have no `defaults` fallback - if the config page is unreachable, skip Step 3.5 entirely with a one-line note.
 
 ### Step 2: Scan GitHub Activity
 
@@ -286,6 +287,37 @@ For each unique page found:
 
 If Notion keyword scanning fails, note the failure and continue.
 
+### Step 3.5: Scan Notion Favorites
+
+This step covers the user's curated list of "Favorites" pages - documents they care about regardless of keyword match. The Notion REST API does not expose a user's sidebar Favorites, so the list comes from the **Favorites** section of the Notion config page (loaded in Step 1).
+
+**If no Favorites list was extracted from the config page:** skip this step entirely. Do not include a Favorites section in the output.
+
+**For each favorite URL/ID:**
+
+1. Call `notion-fetch` with the URL or ID. The MCP tool accepts both forms; no need to parse the 32-char hex from the URL manually.
+2. From the response, read `last_edited_time` (an ISO-8601 UTC timestamp on the page object).
+3. Compare the date portion of `last_edited_time` (in UTC) against `$DATE_LABEL`. If they match, the page was edited during the digest window and qualifies for inclusion.
+4. If the page was archived (response includes `archived: true`), skip it silently.
+5. If `notion-fetch` returns an error (page not found, integration not shared with this page, page deleted), log a one-line failure note for the digest like `(Favorite <ID>: not accessible - the integration may not be shared with this page)` and continue with the next favorite. Do not abort the digest.
+
+**Parallelize the fetches.** Emit all favorite-URL `notion-fetch` calls in a single message so they run concurrently.
+
+**Deduplication:** Track page IDs across all Notion sections. If a favorite was already covered in the Keyword Monitor (Step 3) or Partner Conversations (Step 4), still mention it briefly in the Favorites section but link back rather than re-summarizing - the user explicitly cares about it, so silent dedup hides signal.
+
+**For each qualifying favorite (edited on `$DATE_LABEL`):**
+
+- Use the page's URL (from the MCP response, not the user's input) as the link target. The MCP-returned URL is canonical.
+- Write a 2-4 sentence narrative summary of what changed or what the page contains. Use the page content from `notion-fetch`.
+- Add an **Relevance:** sentence explaining why this update matters for the team, using the team profile as the lens.
+- Note when (`last_edited_time`) the page was last edited.
+
+If a favorite was NOT edited on `$DATE_LABEL`, omit it silently from the output. Do not write "(no updates)" placeholders for stable favorites - they would clutter the digest.
+
+**If every favorite was either inaccessible or not edited on `$DATE_LABEL`:** include the Favorites section in the digest with a one-line note (`No favorited pages had updates on <DATE_LABEL>.`) rather than omitting the section entirely. This signals to the user that the scan ran successfully and just had no hits, distinguishing from a configuration mistake.
+
+**Permission gotcha (worth a one-line note in the digest footer if any favorite returned a permission error):** the Notion MCP integration must be explicitly shared with each favorited page. Adding a page to your sidebar Favorites does NOT grant the integration access - you must also share the page (or a parent it inherits from) with the integration in Notion's UI.
+
 ### Step 4: Scan Partner Conversations
 
 For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range` filter for the previous calendar day.
@@ -309,7 +341,7 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 1. **Every repo name is a markdown link.** Search the draft for bare repo names (e.g., `hedera-docs`, `solo`, `hiero-mirror-node`). If a repo is mentioned without `[name](https://github.com/<org>/<name>)`, fix it.
 2. **Every PR/issue number is a link.** Search for bare `#<number>` patterns. Every match must be `[#<number>](<url>)` with the actual URL.
 3. **Every release tag is a link.** Search for bare version strings like `v1.2.3` in release contexts. Each must link to the GitHub release page.
-4. **Every Notion page title is a link.** In the Keyword Monitor and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response.
+4. **Every Notion page title is a link.** In the Keyword Monitor, Favorites Activity, and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response.
 5. **Every GitHub user mention is a link.** Search for bare `@<handle>` patterns - each must link to `https://github.com/<handle>`.
 6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
 7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
@@ -404,6 +436,12 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 # Notion Keyword Monitor
 
 <narrative summaries of keyword-matched pages>
+
+---
+
+# Favorites Activity
+
+<for each favorited page edited on DATE_LABEL, write a 2-4 sentence narrative summary with the page title as a markdown link, what changed, when (last_edited_time), and an Relevance line. Omit pages not edited that day. If the favorites list is empty or unreachable, omit this section entirely. If favorites were configured but none had updates, write a single line: "No favorited pages had updates on <DATE_LABEL>.">
 
 ---
 
