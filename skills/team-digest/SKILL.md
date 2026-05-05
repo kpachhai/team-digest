@@ -124,34 +124,6 @@ It reads `~/.config/team-digest/config.json`, validates that the `team-digest` k
       "orgs": [
         {
           "name": "your-org",
-          "priority_repos": [
-            "hiero-json-rpc-relay",
-            "hiero-mirror-node",
-            "hiero-consensus-node",
-            "hiero-block-node",
-            "hiero-improvement-proposals",
-            "hiero-contracts",
-            "solo",
-            "hiero-sdk-js",
-            "hiero-mirror-node-explorer"
-          ],
-          "scan_all": false
-        },
-        {
-          "name": "your-org",
-          "priority_repos": [
-            "hedera-docs",
-            "hedera-agent-kit-js",
-            "hedera-wallet-connect",
-            "hedera-evm-testing",
-            "stablecoin-studio",
-            "asset-tokenization-studio",
-            "guardian"
-          ],
-          "scan_all": false
-        },
-        {
-          "name": "your-org",
           "priority_repos": [],
           "scan_all": true
         }
@@ -159,8 +131,7 @@ It reads `~/.config/team-digest/config.json`, validates that the `team-digest` k
     },
     "defaults": {
       "keywords": [
-        "EVM", "smart contracts", "relay", "JSON-RPC",
-        "mirror node", "HIP", "Hiero", "consensus", "block node", "SDK"
+        "your-keyword-1", "your-keyword-2"
       ],
       "partner_patterns": [
         "Meeting with", "Call with", "Catch up with", "Deep dive",
@@ -171,7 +142,7 @@ It reads `~/.config/team-digest/config.json`, validates that the `team-digest` k
 }
 ```
 
-7. If the config file already exists with other digest keys (e.g., `my-team-digest`), merge the new `team-digest` key into the existing file rather than overwriting it.
+7. If the config file already exists with other digest keys, merge the new `team-digest` key into the existing file rather than overwriting it.
 8. Confirm the config was created and tell the user they can now run `/team-digest` to produce their first digest.
 9. **Stop here** (do not continue to the digest pipeline on first-time setup).
 
@@ -238,12 +209,12 @@ If a helper exits non-zero (e.g., the org is unreachable or `gh` rate-limit hit)
 For each org in `config.github.orgs`:
 - **Priority repos** (listed in `priority_repos`): Write synthesized narrative summaries - NOT bulleted PR lists. Group related PRs by theme and describe the collective work in 2-4 paragraphs. **Whenever you mention any PR, issue, release, or repo, it MUST be a markdown link** (see Linking Rules below). When summarizing a batch of related PRs, link the repo as the primary anchor AND link any individually-significant PRs you call out (breaking change, major feature, hotfix). After the narrative, add a **Relevance:** paragraph using the loaded team profile as your guide - the profile describes the team's role, what they care about, and what "relevant" means for them specifically. If no profile was loaded, fall back to: does this affect developer-facing APIs or SDKs? Does it impact partner integrations or architecture decisions? Does it affect EVM compatibility? Is there a breaking change developers should know about? Could it inform a technical design recommendation? If the activity represents an architectural change (component split/merge, service restructuring, data flow change, before/after pattern), add a Mermaid diagram after the narrative - use `graph TD` with `direction LR` subgraphs for a square layout; keep all node labels on a single line (no `\n` in labels). One diagram per repo maximum; skip if nothing structural happened.
 - **Other repos** (if `scan_all` is true, or for orgs with no priority repos): Build a summary table that includes **every repo with at least one PR, issue, or release in the date window**. No silent drops, no aggregation across repos. One row per repo. The "notable activity" column is plain-English: see the Plain-English Description Rules below.
-- **Orgs with no priority repos** (e.g., `your-org`): Show all repos in the summary table per the rule above; no narrative section.
+- **Orgs with no priority repos**: Show all repos in the summary table per the rule above; no narrative section.
 
 The digest should group output under org-level headers:
 
 ```
-# your-org
+# <org-name-1>
 
 ## Priority Repos
 (narrative summaries for each priority repo with activity)
@@ -251,15 +222,7 @@ The digest should group output under org-level headers:
 ## Other Active Repos
 (summary table - every repo with activity in the date window appears here)
 
-# your-org
-
-## Priority Repos
-(narrative summaries)
-
-## Other Active Repos
-(summary table)
-
-# your-org
+# <org-name-2>
 
 ## Other Active Repos
 (summary table - all repos with activity; no priority repos defined for this org)
@@ -298,7 +261,7 @@ Each helper returns a JSON array of items dated to `$DATE_LABEL`. Empty arrays (
 
 **For each non-empty result, write narrative output:**
 
-- Group by the entry's `category` (e.g., all `hedera` items together, all `ethereum` items together, all `eips` items together).
+- Group by the entry's `category` (e.g., all items sharing the same category label appear together).
 - Within a category, list items as bullet points, one item per line.
 - For RSS items: `- [<title>](<link>) - <1-2 sentence summary>` (source: helper's `summary` field).
 - For github:// commit items: `- [<short SHA>](<commit url>): <commit subject> by <author>` (source: helper's `message` field).
@@ -421,7 +384,7 @@ If partner scanning fails, note the failure and continue.
 
 Before writing to Notion, scan the assembled digest content one final time. Verify:
 
-1. **Every repo name is a markdown link.** Search the draft for bare repo names (e.g., `hedera-docs`, `solo`, `hiero-mirror-node`). If a repo is mentioned without `[name](https://github.com/<org>/<name>)`, fix it.
+1. **Every repo name is a markdown link.** Search the draft for bare repo names. If a repo is mentioned without `[name](https://github.com/<org>/<name>)`, fix it.
 2. **Every PR/issue number is a link.** Search for bare `#<number>` patterns. Every match must be `[#<number>](<url>)` with the actual URL.
 3. **Every release tag is a link.** Search for bare version strings like `v1.2.3` in release contexts. Each must link to the GitHub release page.
 4. **Every Notion page title is a link.** In the Keyword Monitor, Favorites Activity, Pages I Created, and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response. In Favorites Activity specifically, every child-page entry must also link its parent favorite (e.g., `(under [Parent Title](parent-url))`).
@@ -482,7 +445,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ---
 
-# <org-name> (e.g. your-org)
+# <org-name>
 
 ## Priority Repos
 
@@ -557,7 +520,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 - **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is decomposing the monolithic operations facet into single-responsibility components" beats listing 14 PRs.
 - After each priority repo narrative, add a **Relevance:** paragraph. Use the team profile loaded in Step 0 to drive this - the profile specifies what the team cares about, their priorities, and content opportunity triggers. If no profile exists, use generic heuristics.
 - Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. **Keep every node label on a single line - never use `\n` inside labels.** Notion silently truncates Mermaid text after a `\n`, leaving readers with broken diagrams. If a label is too long, shorten it (drop parentheticals, abbreviate, use a single key word). Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
-- Surface cross-repo connections when relevant (e.g., a `solo` bug that also affects `hiero-json-rpc-relay`)
+- Surface cross-repo connections when relevant (e.g., a bug in one repo that also affects a downstream consumer)
 - Keep the digest scannable in under 3 minutes
 - Use hyphens (-) or semicolons (;) instead of em-dashes
 - If any section fails, produce a partial digest with a clear failure indicator rather than failing entirely
@@ -592,10 +555,9 @@ Every PR/repo/release summary must answer three questions in language a develope
 3. **Why does it matter?** (the consequence for SA work - migration, partner advisory, integration impact)
 
 **First-mention expansion rule:** the first time you name any project, internal component, or acronym in a section, immediately follow it with a 3-7 word plain-English expansion. Examples:
-- `[solo](https://github.com/your-org/solo)`, the local Hiero/Hedera dev network deployment tool
-- `HieroClient`, the V3 SDK top-level connection object replacing legacy `Client`
-- `MethodDescriptor`, the gRPC method metadata wrapper used for SDK portability
-- `HTS`, Hedera Token Service, the native token API on the consensus network
+- `[<repo-name>](<repo-url>)`, a one-line description of what the repo does
+- `<ComponentName>`, a short note on the component's role in the system
+- `<ACRONYM>`, the expanded form plus a brief context phrase
 
 The expansions come from two sources, in priority order:
 1. The **Project Glossary** section of the team profile (loaded in Step 0). If a glossary entry exists, use it verbatim.
@@ -604,12 +566,12 @@ The expansions come from two sources, in priority order:
 If you cannot confidently expand a term, that's a signal to skip the term entirely or hedge ("an internal SDK abstraction") rather than parrot the jargon.
 
 **Anti-examples (do NOT write summaries like these):**
-- ❌ "Deprecation notice PR #1328 opened - local-node being formally deprecated in favor of solo" (no link, "solo" not expanded)
-- ❌ "V3 SDK spec sprint: client namespace with HieroClient and Operator (#230)" (no link, every term unexplained)
+- ❌ "Deprecation notice PR #1328 opened - tool-A being formally deprecated in favor of tool-B" (no links, no expansions)
+- ❌ "V3 SDK spec sprint: client namespace with NewClient and Operator (#230)" (no link, every term unexplained)
 
 **Good examples:**
-- ✅ "[#1328](url): [hiero-local-node](url) is being formally deprecated in favor of [solo](url), the local Hiero/Hedera dev network deployment tool. Partners using local-node for testing should plan a migration."
-- ✅ "Active spec work in [#230](url) defines a new `client` namespace with `HieroClient` (the V3 top-level connection object replacing legacy `Client`) and `Operator` (the transaction signing and billing context). Partners writing V3-targeted SDK code will see breaking changes here."
+- ✅ "[#1328](url): [tool-A](url) is being formally deprecated in favor of [tool-B](url), a short plain-English description of tool-B. Partners using tool-A for testing should plan a migration."
+- ✅ "Active spec work in [#230](url) defines a new `client` namespace with `NewClient` (a 5-7 word description of its role) and `Operator` (a brief context phrase). Partners writing against the new SDK will see breaking changes here."
 
 ## Configuration
 
@@ -625,18 +587,8 @@ All settings are read from `~/.config/team-digest/config.json` under the `team-d
     "github": {
       "orgs": [
         {
-          "name": "your-org",
-          "priority_repos": ["hiero-json-rpc-relay", "hiero-mirror-node", "..."],
-          "scan_all": true
-        },
-        {
-          "name": "your-org",
-          "priority_repos": ["hedera-docs", "hedera-agent-kit-js", "..."],
-          "scan_all": true
-        },
-        {
-          "name": "your-org",
-          "priority_repos": [],
+          "name": "<your-org>",
+          "priority_repos": ["<repo-1>", "<repo-2>", "..."],
           "scan_all": true
         }
       ]

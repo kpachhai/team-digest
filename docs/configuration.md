@@ -30,9 +30,8 @@ The config file lives at the repo root as `config.json` (gitignored). It is also
       ]
     },
     "rss_feeds": [
-      {"name": "Hedera Blog",         "url": "https://hedera.com/blog/rss.xml",         "category": "hedera"},
-      {"name": "Ethereum Foundation", "url": "https://blog.ethereum.org/en/feed.xml",   "category": "ethereum"},
-      {"name": "EIPs (commits)",      "url": "github://ethereum/EIPs/EIPS",             "category": "eips"}
+      {"name": "Example Blog",        "url": "https://example.com/feed",                "category": "blogs"},
+      {"name": "Spec Set (commits)",  "url": "github://<owner>/<repo>/<path>",          "category": "specs"}
     ],
     "defaults": {
       "keywords": ["keyword-1", "keyword-2"],
@@ -46,16 +45,14 @@ Each digest type is a top-level key. Add a new key for each new team digest.
 
 ### RSS feeds (Industry News section)
 
-The `rss_feeds` array drives the digest's **Industry News** section: public/external content the team should be aware of (blog posts, ecosystem announcements, EIP changes). Two URL forms are supported:
+The `rss_feeds` array drives the digest's **Industry News** section: public/external content your team should be aware of (blog posts, ecosystem announcements, spec changes). Two URL forms are supported:
 
 - **Standard RSS / Atom feed:** `"url": "https://example.com/feed"` - fetched via `lib/fetch-rss.sh` (curl + Python stdlib XML parsing). Bring any feed URL.
-- **GitHub commit watching:** `"url": "github://<owner>/<repo>"` or `"url": "github://<owner>/<repo>/<path>"` - fetched via `lib/fetch-gh-commits.sh`. Use this for content that lives in a public git repo but doesn't publish RSS, like the EIPs spec set (`github://ethereum/EIPs/EIPS` watches commits to the `EIPS/` directory).
+- **GitHub commit watching:** `"url": "github://<owner>/<repo>"` or `"url": "github://<owner>/<repo>/<path>"` - fetched via `lib/fetch-gh-commits.sh`. Use this for content that lives in a public git repo but doesn't publish RSS (e.g., a spec set tracked via commits to a directory).
 
-Each entry needs a `name` (display label), `url`, and `category` (grouping label that becomes a subheading in the Industry News output). Multiple feeds can share a category (`hedera` groups the Hedera and Example blog feeds together).
+Each entry needs a `name` (display label), `url`, and `category` (grouping label that becomes a subheading in the Industry News output). Multiple feeds can share a category to group related sources together.
 
 If `rss_feeds` is missing or empty, the Industry News section is silently omitted from the digest. If any feed returns no items for the digest day, that source is silently skipped. If every feed returns nothing, the whole section is omitted (no "no news today" filler).
-
-**Hiero blog gap.** As of 2026-05-05, `https://hiero.org/blog` does not expose an RSS or Atom feed. Once they publish one, add it to `rss_feeds` with `"category": "hedera"`. No code change required.
 
 ### GitHub authentication
 
@@ -95,7 +92,7 @@ The Notion config page holds the live, team-editable settings. The page ID is st
 **Keywords** - Notion workspace search terms. Results are deduplicated across overlapping keywords.
 - To add: add a bullet point
 - To remove: delete the bullet point
-- Tips: use specific terms ("JSON-RPC" not "API"); multi-word works ("smart contracts"); search is semantic
+- Tips: use specific terms; multi-word works; search is semantic
 
 **Partner Conversation Patterns** - Phrases that identify meeting notes and partner discussions.
 - To add: add a bullet point with the phrase
@@ -129,26 +126,28 @@ The Notion config page holds the live, team-editable settings. The page ID is st
 
 If the Notion config page is unreachable (MCP not connected, permissions issue), the digest falls back to the `defaults` section in your local `config.json`. This ensures the GitHub section still works even without Notion access.
 
-## Adding a New Team Digest
+## Adding a New Team Digest (LOCAL ONLY)
+
+Additional team-specific digests live in your local checkout - do NOT commit them to this public repo.
 
 1. Create a new Notion config page for the team (duplicate an existing one and update the settings)
 2. Create a new Notion database for the team's digest output
-3. Add a new key to `config.json` and `config.template.json`:
+3. Add a new key to your local `config.json` (NOT `config.template.json`):
    ```json
    {
      "team-digest": { ... },
-     "my-team-digest": {
+     "<my-team>-digest": {
        "notion": {
          "config_page_id": "<new config page ID>",
          "database_id": "<new database ID>"
        },
        "github": {
-         "org": "your-org"
+         "orgs": [{"name": "<your-org>", "priority_repos": [], "scan_all": true}]
        },
        "defaults": { ... }
      }
    }
    ```
-4. Copy `skills/team-digest/SKILL.md` to `skills/my-team-digest/SKILL.md`
-5. Update the skill name and description; change it to read the `my-team-digest` key from config
-6. Run `./setup.sh` to install all skills
+4. Copy `skills/team-digest/` to `skills/<my-team>-digest/` (including the `lib/` subdirectory)
+5. Update the skill name, description, and all `team-digest` references in `SKILL.md` to match `<my-team>-digest`
+6. Run `./update.sh` to install

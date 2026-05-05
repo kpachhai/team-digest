@@ -1,6 +1,6 @@
 # Team Daily Digest - Quick Start Guide
 
-A daily digest that scans GitHub activity, Notion keywords, and partner conversations across the Hedera/Hiero ecosystem, then writes a structured summary to a shared Notion database.
+A daily digest that scans GitHub activity, Notion keywords, and partner conversations across the systems your team cares about, then writes a structured summary to a shared Notion database.
 
 ## Prerequisites
 
@@ -51,29 +51,7 @@ Create a profile file to customize the "Relevance" sections in each digest:
 mkdir -p ~/.config/team-digest/profiles
 ```
 
-Create `~/.config/team-digest/profiles/team-digest.md` with your team's role and priorities. Example structure:
-
-```markdown
-# Team Profile: team
-
-## Role and Responsibilities
-We are the team. Our job is to...
-
-## What "Relevant" Means for Us
-
-### High Priority - Always Surface
-- SDK breaking changes - we support partners using these SDKs...
-- New APIs or features - these open new integration patterns...
-
-### Medium Priority - Worth Noting
-- Performance improvements...
-- Partner conversations about friction...
-
-## Our Key Repos and Why They Matter
-| Repo | Why We Care |
-|------|-------------|
-| hiero-sdk-js | JS/TS SDK used in partner integrations |
-```
+Create `~/.config/team-digest/profiles/team-digest.md` with your team's role and priorities. Use `profiles/team-digest.template.md` in the repo as a starting point - copy it and replace the `<placeholder>` fields with your team's actual context (role, responsibilities, key repos, glossary, audience).
 
 The more specific you are, the more useful the Relevance sections become. Without a profile, the skill falls back to generic heuristics.
 
@@ -107,23 +85,23 @@ ln -sf "$(pwd)/bin/team-digest-run.sh" ~/.local/bin/team-digest-run.sh
 
 The full launchd plist, cron syntax, and a GitHub Actions workflow example are in [`docs/scheduling.md`](scheduling.md).
 
-## Add a New Team Digest
+## Add a New Team Digest (LOCAL ONLY)
 
-To create a digest for another team (e.g., engineering):
+Additional team-specific digests live in your local checkout - do NOT commit them to the public repo. To create a digest for another team (e.g., engineering):
 
 1. Copy `SKILL.md` to a new skill directory:
    ```bash
-   mkdir -p ~/.claude/skills/my-team-digest
-   cp ~/.claude/skills/team-digest/SKILL.md ~/.claude/skills/my-team-digest/SKILL.md
+   mkdir -p ~/.claude/skills/<my-team>-digest
+   cp ~/.claude/skills/team-digest/SKILL.md ~/.claude/skills/<my-team>-digest/SKILL.md
    ```
 
-2. In the copied skill, replace all `team-digest` with `my-team-digest` and all `SA` references with `Eng` (skill name, config key, callout titles, relevance section names).
+2. In the copied skill, replace all `team-digest` references with `<my-team>-digest` (skill name, config key, callout titles, helper invocations).
 
 3. Create a separate Notion config page and database for the new team.
 
-4. Run `/my-team-digest` - the first-run setup will ask for the new team's Notion IDs.
+4. Run `/<my-team>-digest` - the first-run setup will ask for the new team's Notion IDs.
 
-5. Optionally create a profile at `~/.config/team-digest/profiles/my-team-digest.md` describing the engineering team's priorities.
+5. Optionally create a profile at `~/.config/team-digest/profiles/<my-team>-digest.md` describing the team's priorities.
 
 Each team's config key matches its skill directory name. Multiple digests coexist in the same config file without conflict.
 

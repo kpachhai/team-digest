@@ -2,7 +2,7 @@
 # fetch-rss.sh - fetch RSS/Atom feed entries published on a target date.
 #
 # Usage: fetch-rss.sh <feed-url> <YYYY-MM-DD>
-#   e.g. fetch-rss.sh https://hedera.com/blog/rss.xml 2026-05-04
+#   e.g. fetch-rss.sh https://example.com/feed 2026-05-04
 #
 # Output: JSON array on stdout of `[{title, link, published, summary}]`,
 # one entry per feed item whose pubDate (RSS) or updated/published (Atom)

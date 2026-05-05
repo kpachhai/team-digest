@@ -126,15 +126,15 @@ Collect every release mentioned in any daily digest's "Releases" section. Format
 
 **Theme C - Partner momentum**
 
-Aggregate partner conversations across the week. For each company that appeared in 2+ daily digests, write a 1-2 sentence "what's moving" summary. For companies that appeared once, list them in a "Single touch" line at the end of the section. Pull action items the dailies surfaced and check if any spanned multiple days (e.g., a Tuesday action item that resurfaced as a Friday follow-up). Surface those as "Open threads" - they are the most likely SA escalation candidates.
+Aggregate partner conversations across the week. For each company that appeared in 2+ daily digests, write a 1-2 sentence "what's moving" summary. For companies that appeared once, list them in a "Single touch" line at the end of the section. Pull action items the dailies surfaced and check if any spanned multiple days (e.g., a Tuesday action item that resurfaced as a Friday follow-up). Surface those as "Open threads" - they are the most likely escalation candidates.
 
 **Theme D - Notion content pulse**
 
-Aggregate the `Keywords Matched` property across all daily pages. Sort keywords by frequency (how many days they appeared). Top 3-5 keywords get a brief callout: "**EVM** appeared every day this week, mostly in [page-1](url) (Mon) and [page-2](url) (Wed)." Skip keywords that appeared on only one day - those are already well-covered in the daily.
+Aggregate the `Keywords Matched` property across all daily pages. Sort keywords by frequency (how many days they appeared). Top 3-5 keywords get a brief callout: "**<keyword>** appeared every day this week, mostly in [page-1](url) (Mon) and [page-2](url) (Wed)." Skip keywords that appeared on only one day - those are already well-covered in the daily.
 
 **Theme E - Industry news roundup**
 
-Aggregate the Industry News sections across all daily digests. **Deduplicate by URL** - a single blog post can appear in multiple dailies if its `pubDate` shifts due to timezone or feed lag. Group results by category (the same categories the dailies used: `hedera`, `ethereum`, `eips`). For each category, list 1 line per item with the link. If a category had nothing all week, omit the subsection.
+Aggregate the Industry News sections across all daily digests. **Deduplicate by URL** - a single blog post can appear in multiple dailies if its `pubDate` shifts due to timezone or feed lag. Group results by category (the same categories the dailies used). For each category, list 1 line per item with the link. If a category had nothing all week, omit the subsection.
 
 **Theme F - Favorites movement**
 
