@@ -9,7 +9,7 @@
 # Usage:
 #   sa-digest-run.sh                          # digest for yesterday (UTC)
 #   sa-digest-run.sh 2026-05-04               # digest for a specific date
-#   sa-digest-run.sh --dry-run                # write markdown to ~/.config/team-digest/dry-runs/, skip Notion
+#   sa-digest-run.sh --dry-run                # write markdown to /tmp/team-digest-dry-runs/, skip Notion
 #   sa-digest-run.sh 2026-05-04 --dry-run     # both
 #
 # Logs:

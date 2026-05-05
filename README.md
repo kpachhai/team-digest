@@ -90,7 +90,7 @@ Useful for catching up on missed days. GitHub data is fully accurate for any pas
 /sa-digest 2026-04-20 --dry-run     # specific date, local file
 ```
 
-The output goes to `~/.config/team-digest/dry-runs/sa-digest-<DATE>-v<N>.md`. Use this to validate refactors or preview a digest before doing a real run that overwrites a Notion page.
+The output goes to `/tmp/team-digest-dry-runs/sa-digest-<DATE>-v<N>.md`. Use this to validate refactors or preview a digest before doing a real run that overwrites a Notion page. Files are ephemeral (cleared on reboot) - copy them out if you want to keep one.
 
 **Run from the terminal (cron / launchd / scripts):**
 
@@ -252,7 +252,7 @@ Product ──> /pm-digest ──> PM Daily Digest database
 | `profiles/<team>.template.md`                   | Yes             | Team profile template; describes role, priorities, relevance criteria, glossary |
 | `profiles/<team>.md`                            | No (gitignored) | Your personalized profile; created from template by `setup.sh`                |
 | `~/.config/team-digest/profiles/<team>.md`      | N/A (local)     | Global copy synced by `setup.sh`; skills read from here                       |
-| `~/.config/team-digest/dry-runs/`               | N/A (local)     | `--dry-run` markdown output; created on demand                                |
+| `/tmp/team-digest-dry-runs/`                    | N/A (local)     | `--dry-run` markdown output; ephemeral, cleared on reboot                     |
 | `bin/<team>-run.sh`                             | Yes             | Headless terminal entry point; symlink to `~/.local/bin/` for cron/launchd     |
 | `skills/<team>-digest/lib/*.sh`                 | Yes             | Helper scripts the skill body invokes for GitHub fetching and config loading   |
 | `~/.claude/skills/<team>-digest/lib/*.sh`       | N/A (local)     | Installed copy synced by `setup.sh`/`update.sh`; the skill invokes from here   |
