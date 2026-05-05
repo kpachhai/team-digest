@@ -312,8 +312,9 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 4. **Every Notion page title is a link.** In the Keyword Monitor and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response.
 5. **Every GitHub user mention is a link.** Search for bare `@<handle>` patterns - each must link to `https://github.com/<handle>`.
 6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
+7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
 
-If any of these checks fail, fix the draft before proceeding to Step 5. Bare entity references and unexplained jargon are the two most common readability bugs - this audit is the gate that prevents both from reaching Notion.
+If any of these checks fail, fix the draft before proceeding to Step 5. Bare entity references, unexplained jargon, and broken Mermaid diagrams are the three most common readability bugs - this audit is the gate that prevents all three from reaching Notion.
 
 ### Step 5: Write the Combined Digest
 
@@ -423,7 +424,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 - **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is decomposing the monolithic operations facet into single-responsibility components" beats listing 14 PRs.
 - After each priority repo narrative, add a **Relevance:** paragraph. Use the team profile loaded in Step 0 to drive this - the profile specifies what the team cares about, their priorities, and content opportunity triggers. If no profile exists, use generic heuristics.
-- Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. Keep labels on single lines. Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
+- Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. **Keep every node label on a single line - never use `\n` inside labels.** Notion silently truncates Mermaid text after a `\n`, leaving readers with broken diagrams. If a label is too long, shorten it (drop parentheticals, abbreviate, use a single key word). Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
 - Surface cross-repo connections when relevant (e.g., a `solo` bug that also affects `hiero-json-rpc-relay`)
 - Keep the digest scannable in under 3 minutes
 - Use hyphens (-) or semicolons (;) instead of em-dashes
