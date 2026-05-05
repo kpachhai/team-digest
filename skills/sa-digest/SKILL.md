@@ -283,9 +283,9 @@ Scan **each org** from `config.github.orgs` for activity during the target date.
 **Output structure - organize by org, then by priority:**
 
 For each org in `config.github.orgs`:
-- **Priority repos** (listed in `priority_repos`): Write synthesized narrative summaries - NOT bulleted PR lists. Group related PRs by theme and describe the collective work in 2-4 paragraphs. Only reference a specific PR by number/link when it is individually significant (breaking change, major feature, hotfix). After the narrative, add a **Relevance:** paragraph using the loaded team profile as your guide - the profile describes the team's role, what they care about, and what "relevant" means for them specifically. If no profile was loaded, fall back to: does this affect developer-facing APIs or SDKs? Does it impact partner integrations or architecture decisions? Does it affect EVM compatibility? Is there a breaking change developers should know about? Could it inform a technical design recommendation? If the activity represents an architectural change (component split/merge, service restructuring, data flow change, before/after pattern), add a Mermaid diagram after the narrative - use `graph TD` with `direction LR` subgraphs for a square layout; keep all node labels on a single line (no `\n` in labels). One diagram per repo maximum; skip if nothing structural happened.
-- **Other repos** (if `scan_all` is true): Create a summary table with repo name and a brief one-line description of notable activity.
-- **Orgs with no priority repos** (e.g., `your-org`): Show all repos in a summary table; no narrative section.
+- **Priority repos** (listed in `priority_repos`): Write synthesized narrative summaries - NOT bulleted PR lists. Group related PRs by theme and describe the collective work in 2-4 paragraphs. **Whenever you mention any PR, issue, release, or repo, it MUST be a markdown link** (see Linking Rules below). When summarizing a batch of related PRs, link the repo as the primary anchor AND link any individually-significant PRs you call out (breaking change, major feature, hotfix). After the narrative, add a **Relevance:** paragraph using the loaded team profile as your guide - the profile describes the team's role, what they care about, and what "relevant" means for them specifically. If no profile was loaded, fall back to: does this affect developer-facing APIs or SDKs? Does it impact partner integrations or architecture decisions? Does it affect EVM compatibility? Is there a breaking change developers should know about? Could it inform a technical design recommendation? If the activity represents an architectural change (component split/merge, service restructuring, data flow change, before/after pattern), add a Mermaid diagram after the narrative - use `graph TD` with `direction LR` subgraphs for a square layout; keep all node labels on a single line (no `\n` in labels). One diagram per repo maximum; skip if nothing structural happened.
+- **Other repos** (if `scan_all` is true, or for orgs with no priority repos): Build a summary table that includes **every repo with at least one PR, issue, or release in the date window**. No silent drops, no aggregation across repos. One row per repo. The "notable activity" column is plain-English: see the Plain-English Description Rules below.
+- **Orgs with no priority repos** (e.g., `your-org`): Show all repos in the summary table per the rule above; no narrative section.
 
 The digest should group output under org-level headers:
 
@@ -295,21 +295,21 @@ The digest should group output under org-level headers:
 ## Priority Repos
 (narrative summaries for each priority repo with activity)
 
-## Other Activity
-(summary table for non-priority repos)
+## Other Active Repos
+(summary table - every repo with activity in the date window appears here)
 
 # your-org
 
 ## Priority Repos
 (narrative summaries)
 
-## Other Activity
+## Other Active Repos
 (summary table)
 
 # your-org
 
-## Activity
-(summary table for all repos - no priority repos defined)
+## Other Active Repos
+(summary table - all repos with activity; no priority repos defined for this org)
 ```
 
 If scanning an org fails, note the failure and continue with the next org.
@@ -351,6 +351,19 @@ For each meeting/conversation page found:
 
 If partner scanning fails, note the failure and continue.
 
+### Step 4.5: Pre-Write Link Audit (mandatory)
+
+Before writing to Notion, scan the assembled digest content one final time. Verify:
+
+1. **Every repo name is a markdown link.** Search the draft for bare repo names (e.g., `hedera-docs`, `solo`, `hiero-mirror-node`). If a repo is mentioned without `[name](https://github.com/<org>/<name>)`, fix it.
+2. **Every PR/issue number is a link.** Search for bare `#<number>` patterns. Every match must be `[#<number>](<url>)` with the actual URL.
+3. **Every release tag is a link.** Search for bare version strings like `v1.2.3` in release contexts. Each must link to the GitHub release page.
+4. **Every Notion page title is a link.** In the Keyword Monitor and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response.
+5. **Every GitHub user mention is a link.** Search for bare `@<handle>` patterns - each must link to `https://github.com/<handle>`.
+6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
+
+If any of these checks fail, fix the draft before proceeding to Step 5. Bare entity references and unexplained jargon are the two most common readability bugs - this audit is the gate that prevents both from reaching Notion.
+
 ### Step 5: Write the Combined Digest to Notion
 
 Create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
@@ -389,8 +402,8 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ## Priority Repos
 
-### <repo-name>
-<2-4 paragraph synthesized narrative - describes themes and collective work, not a PR list>
+### [<repo-name>](https://github.com/<org>/<repo>)
+<2-4 paragraph synthesized narrative. Every PR, issue, release, repo, or @handle reference inside the narrative is a markdown link. First mention of any project/component/acronym gets a 3-7 word plain-English expansion. See Linking Rules and Plain-English Description Rules in the Style Rules section.>
 <Mermaid diagram if architectural change occurred>
 
 **Relevance:** <why this matters to the team - integration impact, architecture decisions, SDK changes, partner-facing APIs, breaking changes>
@@ -401,20 +414,22 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ## Other Active Repos
 
-<summary table>
+<table header-row="true">
+<tr><td>Repo</td><td>Notable Activity</td></tr>
+<tr><td>[<repo-name>](https://github.com/<org>/<repo>)</td><td><plain-English summary - what changed, what it affects, why it matters - with PR/issue numbers as links></td></tr>
+</table>
+
+(every repo with at least one PR/issue/release in the date window MUST appear; no aggregation, no silent drops)
 
 ---
 
 (repeat org section for each org)
 
-
-# Other Active Repos
-
-<table with repo name and notable activity>
-
 # Releases
 
-<releases or "No new releases">
+<releases listed with linked tag names: [v1.2.3](release-url) - <repo> - <plain-English release summary>, or "No new releases">
+
+---
 
 ---
 
@@ -437,14 +452,62 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ## Style Rules
 
+### Synthesis
+
 - **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is decomposing the monolithic operations facet into single-responsibility components" beats listing 14 PRs.
-- Only link a specific PR when it is individually significant (breaking change, major feature, hotfix). For a batch of related PRs, link to the repo instead.
 - After each priority repo narrative, add a **Relevance:** paragraph. Use the team profile loaded in Step 0 to drive this - the profile specifies what the team cares about, their priorities, and content opportunity triggers. If no profile exists, use generic heuristics.
 - Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. Keep labels on single lines. Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
-- Surface cross-repo connections when relevant (e.g., a Solo bug that also affects relay)
+- Surface cross-repo connections when relevant (e.g., a `solo` bug that also affects `hiero-json-rpc-relay`)
 - Keep the digest scannable in under 3 minutes
 - Use hyphens (-) or semicolons (;) instead of em-dashes
 - If any section fails, produce a partial digest with a clear failure indicator rather than failing entirely
+
+### Linking Rules (mandatory)
+
+**Every entity reference is a markdown link.** Bare entity names are the #1 cause of digest unusability - a reader who wants to dig deeper has to manually search GitHub or Notion. Every time you write the name of an entity, link it.
+
+| Entity | Link target | Format |
+|--------|-------------|--------|
+| Repo | `https://github.com/<org>/<repo>` | `[<repo>](https://github.com/<org>/<repo>)` |
+| Pull request | The PR's `html_url` from the `gh` JSON output | `[#<number>](<url>)` |
+| Issue | The issue's `html_url` from the `gh` JSON output | `[#<number>](<url>)` |
+| Release | The release's GitHub URL | `[<tag-name>](<url>)` |
+| GitHub user | `https://github.com/<handle>` | `[@<handle>](https://github.com/<handle>)` |
+| Notion page | The page's URL from the MCP response | `[<page title>](<notion-url>)` |
+
+**Notes:**
+- Person names that are NOT GitHub handles (e.g., partner names mentioned in meeting notes) do NOT get links.
+- The first time you mention any specific entity in a section, it must be linked. Subsequent mentions in the same section may be plain text if context makes the reference unambiguous, but linking again is preferred.
+- When the `gh` helper output contains a `url` field for a PR/issue/release, USE IT. Do not reconstruct URLs manually.
+- For Notion pages found via `notion-search` or `notion-fetch`, the response includes a `url` (or `public_url`) field. Use that exact value.
+
+### Plain-English Description Rules
+
+Every PR/repo/release summary must answer three questions in language a developer who doesn't work on that specific project can understand:
+
+1. **What changed?** (the action - "deprecated", "added", "split", "renamed")
+2. **What does it affect?** (the surface area - an API, an SDK, a deployment tool)
+3. **Why does it matter?** (the consequence for SA work - migration, partner advisory, integration impact)
+
+**First-mention expansion rule:** the first time you name any project, internal component, or acronym in a section, immediately follow it with a 3-7 word plain-English expansion. Examples:
+- `[solo](https://github.com/your-org/solo)`, the local Hiero/Hedera dev network deployment tool
+- `HieroClient`, the V3 SDK top-level connection object replacing legacy `Client`
+- `MethodDescriptor`, the gRPC method metadata wrapper used for SDK portability
+- `HTS`, Hedera Token Service, the native token API on the consensus network
+
+The expansions come from two sources, in priority order:
+1. The **Project Glossary** section of the team profile (loaded in Step 0). If a glossary entry exists, use it verbatim.
+2. Your own knowledge of the project, written in plain English at the level of detail above.
+
+If you cannot confidently expand a term, that's a signal to skip the term entirely or hedge ("an internal SDK abstraction") rather than parrot the jargon.
+
+**Anti-examples (do NOT write summaries like these):**
+- ❌ "Deprecation notice PR #1328 opened - local-node being formally deprecated in favor of solo" (no link, "solo" not expanded)
+- ❌ "V3 SDK spec sprint: client namespace with HieroClient and Operator (#230)" (no link, every term unexplained)
+
+**Good examples:**
+- ✅ "[#1328](url): [hiero-local-node](url) is being formally deprecated in favor of [solo](url), the local Hiero/Hedera dev network deployment tool. Partners using local-node for testing should plan a migration."
+- ✅ "Active spec work in [#230](url) defines a new `client` namespace with `HieroClient` (the V3 top-level connection object replacing legacy `Client`) and `Operator` (the transaction signing and billing context). Partners writing V3-targeted SDK code will see breaking changes here."
 
 ## Configuration
 
