@@ -51,7 +51,7 @@ Last 5-7 daily digests         ─┐
 
 ## Skills shipped today
 
-This repo ships two skills out of the box - one for each cadence the team uses:
+This repo ships two skills out of the box - one for each cadence:
 
 - **`/team-digest`** - the daily digest (the workhorse)
 - **`/team-weekly`** - the weekly rollup (synthesizes the past week's daily digests)
@@ -60,9 +60,9 @@ Both write to the SAME Notion database, distinguished by the `Digest Type` prope
 
 ### What `/team-digest` scans (six sources)
 
-1. **GitHub Activity** - PRs, issues, and releases across configured GitHub orgs (currently `your-org`, `your-org`, `your-org`). Priority repos get rich narrative summaries with synthesized themes, **Relevance** notes, and Mermaid diagrams for architectural changes; every other repo with activity in the date window gets a row in the **Other Active Repos** table.
-2. **Industry News** - public RSS/Atom feeds (Hedera, Example, and Ethereum Foundation blogs) plus GitHub commit-watching for spec sets that don't publish RSS (EIPs). Configured via `rss_feeds` in `config.json`. Items dated to the digest day are grouped by category in an **Industry News** section.
-3. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords (EVM, smart contracts, HIP, etc.). One narrative summary per matched page with linked title, matched keywords, and relevance.
+1. **GitHub Activity** - PRs, issues, and releases across configured GitHub orgs. Priority repos get rich narrative summaries with synthesized themes, **Relevance** notes, and Mermaid diagrams for architectural changes; every other repo with activity in the date window gets a row in the **Other Active Repos** table.
+2. **Industry News** - public RSS/Atom feeds plus GitHub commit-watching for spec sets that don't publish RSS. Configured via `rss_feeds` in `config.json`. Items dated to the digest day are grouped by category in an **Industry News** section.
+3. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords. One narrative summary per matched page with linked title, matched keywords, and relevance.
 4. **Notion Favorites** - reads a user-curated list of Notion page URLs from a **Favorites** heading on the Notion config page (since Notion's API does not expose sidebar Favorites). For each favorite, fetches `last_edited_time`; if the page was edited on the digest day it gets a summary. Single-level child descent: if a favorite is an *index* page, the digest also fetches each linked page (one hop, capped at 50 children) and includes those edited that day.
 5. **Pages I Created** - searches Notion for pages **created** on the digest day where `created_by.person.email` matches the email under the **Track Pages Created By** heading on the Notion config page. Catches new strategy docs, one-off notes, and meeting pages that don't match keywords.
 6. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
@@ -99,7 +99,7 @@ cd team-digest
 ./setup.sh
 ```
 
-The setup script verifies prerequisites, installs the `/team-digest` skill to `~/.claude/skills/`, and checks access to the your-org GitHub org.
+The setup script verifies prerequisites, installs the `/team-digest` and `/team-weekly` skills to `~/.claude/skills/`, and checks access to the first GitHub org configured in `config.json`.
 
 **Run your first daily digest:**
 
@@ -265,28 +265,30 @@ Each source runs independently. If one fails (org unreachable, malformed feed, d
 
 The weekly's value is the synthesis - patterns that span days that no single daily can show. Token cost is bounded because the weekly reads pre-summarized markdown, not raw GitHub/Notion/RSS data.
 
-## Adding a New Team
+## Adding a New Team Digest
 
-To create a digest for another team (e.g., engineering):
+The default `team-digest` skill is the public, generic shell. Any additional team-specific skill you create lives entirely in your local checkout - don't commit it to this repo. The `.gitignore` already covers `profiles/*.md` and `config.json`; any new team's skill folder under `skills/` is also ignored unless you explicitly add it.
 
-1. Create a new Notion config page and database for the team
-2. Add a new top-level key to `config.json` and `config.template.json`:
+To create a digest for another team locally (e.g., engineering, product, growth):
+
+1. Create a new Notion config page and database for the team.
+2. Add a new top-level key to your local `config.json` (NOT `config.template.json`):
    ```json
    {
      "team-digest": { ... },
-     "my-team-digest": {
+     "<my-team>-digest": {
        "notion": { "config_page_id": "...", "database_id": "..." },
        "github": { "orgs": [ ... ] },
        "defaults": { "keywords": [ ... ], "partner_patterns": [ ... ] }
      }
    }
    ```
-3. Copy the entire `skills/team-digest/` directory (including the `lib/` subdirectory) to `skills/my-team-digest/`. The `lib/*.sh` helpers are reusable as-is - they're parameterized by digest name where needed.
-4. In `skills/my-team-digest/SKILL.md`, change all occurrences of `team-digest` to `my-team-digest` (config key, skill name, callout title, helper invocations). Convention: the config key always matches the skill directory name.
+3. Copy the entire `skills/team-digest/` directory to `skills/<my-team>-digest/`. The `lib/*.sh` helpers are reusable as-is.
+4. In `skills/<my-team>-digest/SKILL.md`, change all occurrences of `team-digest` to `<my-team>-digest` (config key, skill name, callout title, helper invocations). Convention: the config key always matches the skill directory name.
 5. Adjust the GitHub orgs, priority repos, keywords, and partner patterns to match the new team's focus.
-6. Copy `profiles/team-digest.template.md` to `profiles/my-team-digest.template.md` and rewrite it to describe the engineering team's role, priorities, glossary, and what "relevant" means for them.
-7. Copy `bin/team-digest-run.sh` to `bin/my-team-digest-run.sh` and search-replace `team-digest` → `my-team-digest` (prompt string, log path, env var names).
-8. Run `./update.sh` to install. Verify with `my-team-digest --dry-run` before the first live run.
+6. Copy `profiles/team-digest.template.md` to `profiles/<my-team>-digest.md` and personalize it. (No `.template.md` needed for local-only skills - go straight to the personalized copy.)
+7. Copy `bin/team-digest-run.sh` to `bin/<my-team>-digest-run.sh` and search-replace `team-digest` → `<my-team>-digest`.
+8. Run `./update.sh` to install. Verify with `<my-team>-digest --dry-run`.
 
 Each team's skill is independent - different config keys, different sources, different output databases. No Notion IDs are hardcoded in any committed file.
 
@@ -304,8 +306,7 @@ The digest architecture is designed to add new data sources without changing exi
 | Pages I created              | Shipped | `notion-search` filtered by `created_by.person.email` matching a config-page email                            |
 | Notion meeting notes         | Shipped | `notion-search` MCP filtered by configurable title patterns                                                   |
 | RSS / Atom feeds             | Shipped | `lib/fetch-rss.sh` - curl + Python stdlib XML; handles RSS 2.0 and Atom in one pass                           |
-| GitHub spec-set commits      | Shipped | `lib/fetch-gh-commits.sh` - `gh api commits` with optional path filter (used for ethereum/EIPs)               |
-| Hiero blog                   | Blocked | Site does not currently expose RSS/Atom; once they publish a feed, drop the URL into `rss_feeds` config.      |
+| GitHub spec-set commits      | Shipped | `lib/fetch-gh-commits.sh` - `gh api commits` with optional path filter (e.g., a public spec repo)             |
 | Slack channels               | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages                          |
 | Twitter/X lists              | Planned | X API; monitor ecosystem accounts for announcements                                                           |
 | Linear/Jira issues           | Planned | Project management MCP; track sprint progress, blockers                                                       |
@@ -332,9 +333,9 @@ Daily digests are the atomic unit. Higher-cadence digests are rollups that summa
 As digests accumulate over weeks and months, the Notion database becomes a searchable organizational memory:
 
 - **"What happened with Company X?"** - Search the database for partner mentions across all digests
-- **"When did we start seeing HIP-1195 activity?"** - Filter digests by keyword to find the first mention
+- **"When did we start seeing <topic> activity?"** - Filter digests by keyword to find the first mention
 - **"What were the biggest changes last quarter?"** - Quarterly rollup provides the answer
-- **"Who was working on the Pectra upgrade?"** - GitHub activity sections track contributors by name
+- **"Who was working on <feature>?"** - GitHub activity sections track contributors by name
 
 Future skills could query this database directly to answer questions, generate reports, or surface trends over time.
 
@@ -343,9 +344,9 @@ Future skills could query this database directly to answer questions, generate r
 Each team creates their own skill, config page, and database. A future "org digest" skill could aggregate across team databases to produce a cross-functional summary for leadership.
 
 ```
-team ──> /team-digest ──> Team Daily Digest database
-Eng team ─> /my-team-digest ─> Eng Daily Digest database
-Product ──> /pm-digest ──> PM Daily Digest database
+Team A ──> /team-digest ──> Team A Daily Digest database
+Team B ──> /<team-b>-digest ──> Team B Daily Digest database
+Team C ──> /<team-c>-digest ──> Team C Daily Digest database
                 |
                 v
          /org-digest (future)

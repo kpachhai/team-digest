@@ -179,23 +179,32 @@ else
 fi
 
 # -------------------------------------------------------------------
-# 7. Verify GitHub org access
+# 7. Verify GitHub org access (first configured org)
 # -------------------------------------------------------------------
 echo ""
 ORG=$(python3 -c "
 import json
 with open('$CONFIG_FILE') as f:
     config = json.load(f)
-first_digest = next(iter(config.values()))
-print(first_digest.get('github', {}).get('org', 'your-org'))
-" 2>/dev/null || echo "your-org")
+for digest_config in config.values():
+    if not isinstance(digest_config, dict):
+        continue
+    orgs = digest_config.get('github', {}).get('orgs', [])
+    if orgs and isinstance(orgs[0], dict):
+        print(orgs[0].get('name', ''))
+        break
+" 2>/dev/null || echo "")
 
-echo "Verifying access to $ORG org..."
-REPO_COUNT=$(gh api "orgs/$ORG/repos" --jq 'length' 2>/dev/null || echo "0")
-if [ "$REPO_COUNT" -gt 0 ]; then
-  echo "[OK] Can access $ORG org ($REPO_COUNT repos visible)"
+if [ -z "$ORG" ] || [ "$ORG" = "your-org" ]; then
+  echo "[SKIP] GitHub org access check - no real org configured yet (edit config.json first)."
 else
-  echo "[WARN] Cannot access $ORG org. Check your gh auth permissions."
+  echo "Verifying access to $ORG org..."
+  REPO_COUNT=$(gh api "orgs/$ORG/repos" --jq 'length' 2>/dev/null || echo "0")
+  if [ "$REPO_COUNT" -gt 0 ]; then
+    echo "[OK] Can access $ORG org ($REPO_COUNT repos visible)"
+  else
+    echo "[WARN] Cannot access $ORG org. Check your gh auth permissions."
+  fi
 fi
 
 # -------------------------------------------------------------------
