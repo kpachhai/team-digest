@@ -32,6 +32,14 @@ else
   fi
 fi
 
+if ! command -v python3 &>/dev/null; then
+  MISSING+=("python3 (required by skill helpers - install via your OS package manager)")
+fi
+
+if ! command -v jq &>/dev/null; then
+  MISSING+=("jq (required by fetch-github-releases.sh and the bin/ wrapper - 'brew install jq')")
+fi
+
 if [ ${#MISSING[@]} -ne 0 ]; then
   echo "ERROR: Missing prerequisites:"
   for item in "${MISSING[@]}"; do
@@ -148,6 +156,17 @@ for skill_dir in "$SCRIPT_DIR"/skills/*/; do
     mkdir -p "$target_dir"
     cp "$skill_dir/SKILL.md" "$target_dir/SKILL.md"
     echo "[OK] Installed /$skill_name -> $target_dir/SKILL.md"
+
+    # Copy lib/ helpers if the skill has them. The skill body invokes
+    # these by absolute path at ~/.claude/skills/<name>/lib/<helper>.sh.
+    if [ -d "$skill_dir/lib" ]; then
+      mkdir -p "$target_dir/lib"
+      cp "$skill_dir/lib/"*.sh "$target_dir/lib/" 2>/dev/null || true
+      cp "$skill_dir/lib/README.md" "$target_dir/lib/README.md" 2>/dev/null || true
+      chmod +x "$target_dir/lib/"*.sh 2>/dev/null || true
+      lib_count=$(find "$skill_dir/lib" -name '*.sh' -type f | wc -l | tr -d ' ')
+      echo "[OK]   + $lib_count helper script(s) in $target_dir/lib/"
+    fi
     INSTALLED=$((INSTALLED + 1))
   fi
 done
