@@ -6,10 +6,12 @@
 # the terminal. From inside Claude Code, just type /sa-weekly instead.
 #
 # Usage:
-#   sa-weekly-run.sh                          # last full week (Mon-Sun)
+#   sa-weekly-run.sh                          # last full ISO week (Mon-Sun)
 #   sa-weekly-run.sh 2026-05-07               # the ISO week containing this date
+#   sa-weekly-run.sh --from F --to T          # arbitrary date range, F to T inclusive
 #   sa-weekly-run.sh --dry-run                # write to /tmp/team-digest-dry-runs/, skip Notion
-#   sa-weekly-run.sh 2026-05-07 --dry-run     # both
+#   sa-weekly-run.sh 2026-05-07 --dry-run     # ISO-week mode + dry run
+#   sa-weekly-run.sh --from F --to T --dry-run # custom range + dry run
 #
 # Logs:
 #   $TEAM_DIGEST_LOG (default ~/.local/log/sa-weekly.log)         - human-readable
@@ -77,39 +79,73 @@ run_claude() {
 }
 
 # ---- Argument parsing ------------------------------------------------------
-# Supported forms (order is flexible):
+# Supported forms (order is flexible, except --from/--to must each have a value):
 #   sa-weekly-run.sh
 #   sa-weekly-run.sh YYYY-MM-DD
+#   sa-weekly-run.sh --from YYYY-MM-DD --to YYYY-MM-DD
 #   sa-weekly-run.sh --dry-run
 #   sa-weekly-run.sh YYYY-MM-DD --dry-run
-#   sa-weekly-run.sh --dry-run YYYY-MM-DD
+#   sa-weekly-run.sh --from F --to T --dry-run
 
 DATE_ARG=""
 DRY_RUN=""
+FROM=""
+TO=""
 
-for arg in "$@"; do
-  case "$arg" in
+while [ $# -gt 0 ]; do
+  case "$1" in
     --dry-run)
       DRY_RUN="--dry-run"
+      shift
+      ;;
+    --from)
+      FROM="${2:-}"
+      if [ -z "$FROM" ] || ! echo "$FROM" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+        echo "ERROR: --from requires a YYYY-MM-DD value (got '$FROM')." | tee -a "$LOG"
+        exit 1
+      fi
+      shift 2
+      ;;
+    --to)
+      TO="${2:-}"
+      if [ -z "$TO" ] || ! echo "$TO" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+        echo "ERROR: --to requires a YYYY-MM-DD value (got '$TO')." | tee -a "$LOG"
+        exit 1
+      fi
+      shift 2
       ;;
     -h|--help)
-      sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
-      if echo "$arg" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
-        DATE_ARG="$arg"
+      if echo "$1" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+        DATE_ARG="$1"
       else
-        echo "ERROR: unrecognized argument '$arg'. Use YYYY-MM-DD or --dry-run." | tee -a "$LOG"
+        echo "ERROR: unrecognized argument '$1'. Use YYYY-MM-DD, --from/--to, or --dry-run." | tee -a "$LOG"
         exit 1
       fi
+      shift
       ;;
   esac
 done
 
+# Cross-flag validation
+if [ -n "$FROM" ] && [ -z "$TO" ]; then
+  echo "ERROR: --from requires --to." | tee -a "$LOG"; exit 1
+fi
+if [ -z "$FROM" ] && [ -n "$TO" ]; then
+  echo "ERROR: --to requires --from." | tee -a "$LOG"; exit 1
+fi
+if { [ -n "$FROM" ] || [ -n "$TO" ]; } && [ -n "$DATE_ARG" ]; then
+  echo "ERROR: cannot mix a positional date arg with --from/--to. Pick one mode." | tee -a "$LOG"
+  exit 1
+fi
+
 # ---- Build the prompt ------------------------------------------------------
 PROMPT="/sa-weekly"
 [ -n "$DATE_ARG" ] && PROMPT="$PROMPT $DATE_ARG"
+[ -n "$FROM" ] && [ -n "$TO" ] && PROMPT="$PROMPT --from $FROM --to $TO"
 [ -n "$DRY_RUN" ] && PROMPT="$PROMPT $DRY_RUN"
 
 echo "Running: $PROMPT" | tee -a "$LOG"

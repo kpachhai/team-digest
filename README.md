@@ -129,9 +129,11 @@ The output goes to `/tmp/team-digest-dry-runs/sa-digest-<DATE>-v<N>.md`. Use thi
 **Run the weekly rollup:**
 
 ```
-/sa-weekly                                 # last full ISO week (Mon-Sun)
-/sa-weekly 2026-05-07                      # the week containing this date
-/sa-weekly --dry-run                       # preview, no Notion write
+/sa-weekly                                                # last full ISO week (Mon-Sun)
+/sa-weekly 2026-05-07                                     # the week containing this date
+/sa-weekly --from 2026-04-25 --to 2026-05-03              # arbitrary range (post-conf recap, missed-week catch-up, sprint window)
+/sa-weekly --dry-run                                      # preview, no Notion write
+/sa-weekly --from 2026-04-25 --to 2026-05-03 --dry-run    # custom range + dry run
 ```
 
 Reads the past week's daily digests already in Notion (no re-scanning) and writes a synthesized weekly summary to the same database. Prerequisite: at least 5-7 dailies for the target week must already exist in Notion. See [docs/sa-weekly-quickstart.md](docs/sa-weekly-quickstart.md) for the full walkthrough.
