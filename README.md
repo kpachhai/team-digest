@@ -1,6 +1,6 @@
 # team-digest
 
-A modular, extensible digest system that aggregates activity from multiple sources (GitHub, Notion, meetings) into structured summaries delivered to Notion. Built on Claude Code with zero infrastructure.
+A modular, extensible digest system that aggregates activity from multiple sources (GitHub, Notion pages and meetings, your Notion Favorites, pages you authored, RSS/Atom blog feeds, and GitHub spec-set commits like EIPs) into structured summaries delivered to Notion. Daily digests synthesize one day; weekly digests roll up a full week. Built on Claude Code with zero infrastructure.
 
 Each team gets its own skill and configuration. New sources and cadences can be added without changing existing ones.
 
@@ -33,25 +33,55 @@ team-digest/
 **Core concept:** A digest is a combination of **sources** (where data comes from) and a **cadence** (how often it runs). Each team configures which sources they care about and how they want the output structured.
 
 ```
-Sources (pluggable)          Cadence (configurable)        Output
-─────────────────           ──────────────────────        ──────
-GitHub org activity    ─┐
-Notion keywords        ─┤── daily / weekly / monthly ──> Notion database
-Notion meetings        ─┘
-RSS feeds (future)     ─┐
-Slack channels (future)─┤── (same cadence options)  ──> (same output)
-Blog feeds (future)    ─┘
+Sources (pluggable)                  Cadence              Output
+─────────────────                    ───────              ──────
+GitHub org PRs/issues/releases  ─┐
+Notion keywords                  │
+Notion Favorites + 1-hop descent ├── daily   ───────> Notion database
+Pages you created                │   (team-digest)         (one page per day,
+Partner conversation patterns    │                        Digest Type=Combined)
+RSS/Atom blog feeds              │
+GitHub commits to spec sets     ─┘
+
+Last 5-7 daily digests         ─┐
+                                ├── weekly  ───────> Same Notion database
+                                │   (team-weekly)        (one page per week,
+                                                        Digest Type=Weekly)
 ```
 
-## Current: Team Daily Digest
+## Skills shipped today
 
-The first skill ships with this repo - a daily digest for the team.
+This repo ships two skills out of the box - one for each cadence the team uses:
 
-### What It Scans
+- **`/team-digest`** - the daily digest (the workhorse)
+- **`/team-weekly`** - the weekly rollup (synthesizes the past week's daily digests)
 
-1. **GitHub Activity** - PRs, issues, and releases across all 40+ your-org repos. Priority repos get rich narrative summaries; others get a highlights table.
-2. **Notion Keyword Monitor** - Searches the entire Notion workspace for pages matching configurable keywords (EVM, smart contracts, HIP, etc.).
-3. **Partner Conversations** - Finds meeting notes and partner discussions, groups by company, extracts action items.
+Both write to the SAME Notion database, distinguished by the `Digest Type` property (`Combined` vs. `Weekly`).
+
+### What `/team-digest` scans (six sources)
+
+1. **GitHub Activity** - PRs, issues, and releases across configured GitHub orgs (currently `your-org`, `your-org`, `your-org`). Priority repos get rich narrative summaries with synthesized themes, **Relevance** notes, and Mermaid diagrams for architectural changes; every other repo with activity in the date window gets a row in the **Other Active Repos** table.
+2. **Industry News** - public RSS/Atom feeds (Hedera, Example, and Ethereum Foundation blogs) plus GitHub commit-watching for spec sets that don't publish RSS (EIPs). Configured via `rss_feeds` in `config.json`. Items dated to the digest day are grouped by category in an **Industry News** section.
+3. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords (EVM, smart contracts, HIP, etc.). One narrative summary per matched page with linked title, matched keywords, and relevance.
+4. **Notion Favorites** - reads a user-curated list of Notion page URLs from a **Favorites** heading on the Notion config page (since Notion's API does not expose sidebar Favorites). For each favorite, fetches `last_edited_time`; if the page was edited on the digest day it gets a summary. Single-level child descent: if a favorite is an *index* page, the digest also fetches each linked page (one hop, capped at 50 children) and includes those edited that day.
+5. **Pages I Created** - searches Notion for pages **created** on the digest day where `created_by.person.email` matches the email under the **Track Pages Created By** heading on the Notion config page. Catches new strategy docs, one-off notes, and meeting pages that don't match keywords.
+6. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
+
+Pages found through multiple sources are deduplicated by page ID across sections; the user explicitly cares about Favorites, so a favorite that ALSO matched a keyword stays in the Favorites section with a back-link rather than being silently dropped.
+
+### What `/team-weekly` does (cross-day synthesis, no re-scan)
+
+`/team-weekly` reads the past week's daily digests already in Notion (filtered by `Digest Type = Combined` and date in [Mon, Sun]) and synthesizes seven cross-day themes:
+
+- **Top GitHub Themes** - repos with sustained activity across 3+ days, with linked PRs/issues
+- **Releases This Week** - every release from any daily, in a single linked GFM table
+- **Partner Momentum** - companies that came up multiple days, with multi-day "Open threads"
+- **Notion Content Pulse** - keywords that spanned multiple days, with example linked pages
+- **Industry News Roundup** - deduplicated RSS items across the week, grouped by category
+- **Favorites Movement** - favorited pages that updated on 2+ days (active work) vs. single-day touches
+- **Day-by-Day Index** - one linked entry per daily for fast navigation
+
+Critically, `/team-weekly` does NOT re-scan GitHub, Notion, or RSS - the dailies have already done that work. The weekly is a pure synthesis layer over the daily output, which keeps token cost bounded and avoids drift between what each cadence "saw."
 
 ### Quick Start (under 10 minutes)
 
@@ -71,7 +101,7 @@ cd team-digest
 
 The setup script verifies prerequisites, installs the `/team-digest` skill to `~/.claude/skills/`, and checks access to the your-org GitHub org.
 
-**Run your first digest:**
+**Run your first daily digest:**
 
 ```
 /team-digest
@@ -85,7 +115,7 @@ Open Claude Code in any directory and type the command above. The output lands i
 /team-digest 2026-04-20
 ```
 
-Useful for catching up on missed days. GitHub data is fully accurate for any past date. Notion sections (keywords, partner conversations) are limited to pages **created** on that date - pages that existed before but were edited that day will not appear (Notion MCP search limitation).
+Useful for catching up on missed days. GitHub data is fully accurate for any past date. Notion sections (keywords, partner conversations, pages-I-created) are limited to pages **created** on that date - pages that existed before but were edited that day will not appear in those sections (Notion MCP search limitation). The Favorites section uses `last_edited_time` instead of `created_time`, so it correctly catches edits to existing pages.
 
 **Preview a digest without writing to Notion (`--dry-run`):**
 
@@ -96,16 +126,28 @@ Useful for catching up on missed days. GitHub data is fully accurate for any pas
 
 The output goes to `/tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md`. Use this to validate refactors or preview a digest before doing a real run that overwrites a Notion page. Files are ephemeral (cleared on reboot) - copy them out if you want to keep one.
 
+**Run the weekly rollup:**
+
+```
+/team-weekly                                 # last full ISO week (Mon-Sun)
+/team-weekly 2026-05-07                      # the week containing this date
+/team-weekly --dry-run                       # preview, no Notion write
+```
+
+Reads the past week's daily digests already in Notion (no re-scanning) and writes a synthesized weekly summary to the same database. Prerequisite: at least 5-7 dailies for the target week must already exist in Notion. See [docs/team-weekly-quickstart.md](docs/team-weekly-quickstart.md) for the full walkthrough.
+
 **Run from the terminal (cron / launchd / scripts):**
 
 ```bash
-bin/team-digest-run.sh                       # yesterday's digest (writes to Notion)
-bin/team-digest-run.sh 2026-04-20 --dry-run  # specific date, local file
+bin/team-digest-run.sh                       # yesterday's daily (writes to Notion)
+bin/team-digest-run.sh 2026-04-20 --dry-run  # specific daily, local file
+bin/team-weekly-run.sh                       # last full week's rollup
+bin/team-weekly-run.sh --dry-run             # preview the rollup, no Notion write
 ```
 
-The wrapper invokes `claude -p` headlessly with the Notion MCP tools allow-listed. It's the same skill, the same flags, the same output - just a non-interactive entry point. Symlink to `~/.local/bin/` for convenience.
+Both wrappers invoke `claude -p` headlessly with the Notion MCP tools allow-listed. Same skill, same flags, same output - just non-interactive entry points. Symlink to `~/.local/bin/` for convenience.
 
-**Automate it:** See [docs/scheduling.md](docs/scheduling.md) for the launchd plist, cron syntax, and a GitHub Actions example.
+**Automate it:** See [docs/scheduling.md](docs/scheduling.md) for the launchd plist, cron syntax, and a GitHub Actions example. Recommended cadence: `bin/team-digest-run.sh` every weekday morning, `bin/team-weekly-run.sh` Monday morning after Friday's daily lands.
 
 ### Updating After Git Pull
 
@@ -137,28 +179,89 @@ See [docs/configuration.md](docs/configuration.md).
 
 ## How It Works
 
+### `/team-digest` pipeline
+
 ```
-/team-digest (or scheduled trigger)
+/team-digest [YYYY-MM-DD] [--dry-run]
     |
     v
-[0] Read config.json (Notion IDs, GitHub orgs) + team profile (role, priorities)
+[0] Argument parsing (date arg, --dry-run, setup, config) + load config
+    |    via lib/load-config.sh - validates Notion IDs are present
+    |    + load team profile + Project Glossary (jargon expansion source)
+    |    via lib/compute-window.sh - resolves DATE_LABEL / START / END (UTC)
+    v
+[1] notion-fetch the Notion config page (Keywords, Title Patterns,
+    Favorites list, Track-Pages-Created-By email, data_source_id)
+    |
+    +---> [2]  lib/fetch-github-prs.sh / fetch-github-issues.sh /
+    |          fetch-github-releases.sh - parallel across all orgs
+    |          (Priority repos: narratives with Mermaid diagrams + Relevance.
+    |           Other Active Repos: every repo with activity gets a row.)
+    |
+    +---> [2.5] lib/fetch-rss.sh / fetch-gh-commits.sh - parallel across
+    |           all rss_feeds entries (RSS for blogs, github:// for spec sets)
+    |
+    +---> [3]  notion-search keywords, scoped to created_date_range = DATE_LABEL
+    |
+    +---> [3.5] For each Favorite URL: notion-fetch + check last_edited_time.
+    |           For favorited *index* pages: also fetch one-level-deep children
+    |           (capped at 50 per parent).
+    |
+    +---> [3.6] notion-search created_date_range = DATE_LABEL,
+    |           filter by created_by.person.email
+    |
+    +---> [4]  notion-search partner-conversation title patterns
     |
     v
-[1] Fetch Notion config page (live keywords/patterns) or fall back to defaults
-    |
-    +---> [2] gh CLI: scan GitHub orgs PRs, issues, releases
-    |            Priority repos: synthesized narrative + Relevance (from profile)
-    |            Other repos: summary table
-    |
-    +---> [3] Notion MCP: search workspace for keyword matches
-    |
-    +---> [4] Notion MCP: find meeting notes / partner conversations
+[4.5] Pre-Write Link Audit (mandatory): every repo/PR/issue/release/
+      Notion-page is a markdown link; no \n in Mermaid labels;
+      first-mention expansions present; HTML stripped from RSS summaries
     |
     v
-[5] Notion MCP: write combined digest page to database
+[5] notion-create-pages → Team Daily Digest database
+    OR (if --dry-run) Write tool → /tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md
 ```
 
-Each source runs independently. If one fails, the others still run and the digest is produced with a failure indicator for the broken section.
+Each source runs independently. If one fails (org unreachable, malformed feed, deleted page), the others still run and the digest is produced with a failure indicator for the broken section instead of aborting.
+
+### `/team-weekly` pipeline
+
+```
+/team-weekly [YYYY-MM-DD] [--dry-run]
+    |
+    v
+[0] Argument parsing + load shared team-digest config (no separate team-weekly config)
+    |
+    v
+[1] lib/compute-week-window.sh resolves to ISO week (Mon-Sun) timestamps,
+    WEEK_LABEL (e.g. 2026-W19), START / END
+    |
+    v
+[2] notion-query-data-sources on the Team Daily Digest database, filtered
+    by Digest Type = Combined and date in [WEEK_START, WEEK_END]
+    Returns up to 7 daily page IDs/URLs (one per weekday)
+    |
+    v
+[3] notion-fetch each daily page in parallel - capture full content
+    Missing days are noted in the Day-by-Day Index, not aborted on
+    |
+    v
+[4] Synthesize 7 cross-day themes (no re-scanning of raw sources):
+      - Top GitHub Themes      - Notion Content Pulse
+      - Releases This Week     - Industry News Roundup (deduplicated)
+      - Partner Momentum       - Favorites Movement
+                               - Day-by-Day Index
+    |
+    v
+[4.5] Same Pre-Write Link Audit as /team-digest
+    |
+    v
+[5] notion-create-pages → same Team Daily Digest database with
+    Digest Type = Weekly, date = WEEK_END (Sunday)
+    OR (if --dry-run) Write → /tmp/team-digest-dry-runs/team-weekly-<WEEK_LABEL>-v<N>.md
+```
+
+The weekly's value is the synthesis - patterns that span days that no single daily can show. Token cost is bounded because the weekly reads pre-summarized markdown, not raw GitHub/Notion/RSS data.
 
 ## Adding a New Team
 
@@ -191,18 +294,21 @@ Each team's skill is independent - different config keys, different sources, dif
 
 The digest architecture is designed to add new data sources without changing existing skills. Each source is a self-contained scan step that produces structured output.
 
-| Source                 | Status  | How It Would Work                                                                     |
-| ---------------------- | ------- | ------------------------------------------------------------------------------------- |
-| GitHub org activity    | Shipped | `gh` CLI scans PRs, issues, releases                                                  |
-| Notion keyword monitor | Shipped | Notion MCP semantic search                                                            |
-| Notion meeting notes   | Shipped | Notion MCP pattern-based search                                                       |
-| RSS / Atom feeds       | Planned | `curl` + XML parsing; scan blog feeds, release notes, ecosystem news                  |
-| Slack channels         | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages  |
-| Blog feeds             | Planned | Web fetch + summarization; monitor Hedera blog, partner blogs, ecosystem publications |
-| Twitter/X lists        | Planned | X API; monitor ecosystem accounts for announcements                                   |
-| Linear/Jira issues     | Planned | Project management MCP; track sprint progress, blockers                               |
-| Google Docs/Drive      | Planned | Google Drive MCP (already available in Claude Code); scan shared docs for updates     |
-| Calendar events        | Planned | Calendar integration; surface upcoming meetings, deadlines, events                    |
+| Source                       | Status  | How It Works                                                                                                  |
+| ---------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| GitHub org activity          | Shipped | `lib/fetch-github-prs.sh` / `fetch-github-issues.sh` / `fetch-github-releases.sh` - `gh` CLI + Python parsing |
+| Notion keyword monitor       | Shipped | `notion-search` MCP scoped to `created_date_range`                                                            |
+| Notion Favorites + 1-hop     | Shipped | Favorites list on the Notion config page; per-favorite `notion-fetch` + child-page descent (cap 50)           |
+| Pages I created              | Shipped | `notion-search` filtered by `created_by.person.email` matching a config-page email                            |
+| Notion meeting notes         | Shipped | `notion-search` MCP filtered by configurable title patterns                                                   |
+| RSS / Atom feeds             | Shipped | `lib/fetch-rss.sh` - curl + Python stdlib XML; handles RSS 2.0 and Atom in one pass                           |
+| GitHub spec-set commits      | Shipped | `lib/fetch-gh-commits.sh` - `gh api commits` with optional path filter (used for ethereum/EIPs)               |
+| Hiero blog                   | Blocked | Site does not currently expose RSS/Atom; once they publish a feed, drop the URL into `rss_feeds` config.      |
+| Slack channels               | Planned | Slack MCP (when available) or Slack API; scan channels for keyword-relevant messages                          |
+| Twitter/X lists              | Planned | X API; monitor ecosystem accounts for announcements                                                           |
+| Linear/Jira issues           | Planned | Project management MCP; track sprint progress, blockers                                                       |
+| Google Docs/Drive             | Planned | Google Drive MCP (available in Claude Code); scan shared docs for updates                                     |
+| Calendar events              | Planned | Calendar integration; surface upcoming meetings, deadlines, events                                            |
 
 Adding a source means adding a new step to the skill's process section and a new configuration block to the Notion config page.
 
@@ -273,6 +379,8 @@ Zero additional SaaS costs. Everything runs on existing Claude Code and GitHub s
 
 ## Docs
 
-- [docs/configuration.md](docs/configuration.md) - Customize keywords, repos, partner patterns
-- [docs/scheduling.md](docs/scheduling.md) - Set up automated daily runs
+- [docs/team-digest-quickstart.md](docs/team-digest-quickstart.md) - 10-minute setup walkthrough for the daily digest
+- [docs/team-weekly-quickstart.md](docs/team-weekly-quickstart.md) - The weekly rollup skill: prerequisites, usage, scheduling, failure modes
+- [docs/configuration.md](docs/configuration.md) - Customize keywords, partner patterns, Favorites, Pages-I-Created email, RSS feeds
+- [docs/scheduling.md](docs/scheduling.md) - macOS launchd, Linux cron, GitHub Actions self-hosted runners
 - [docs/troubleshooting.md](docs/troubleshooting.md) - Common issues and fixes
