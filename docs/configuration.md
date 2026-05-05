@@ -29,6 +29,11 @@ The config file lives at the repo root as `config.json` (gitignored). It is also
         }
       ]
     },
+    "rss_feeds": [
+      {"name": "Hedera Blog",         "url": "https://hedera.com/blog/rss.xml",         "category": "hedera"},
+      {"name": "Ethereum Foundation", "url": "https://blog.ethereum.org/en/feed.xml",   "category": "ethereum"},
+      {"name": "EIPs (commits)",      "url": "github://ethereum/EIPs/EIPS",             "category": "eips"}
+    ],
     "defaults": {
       "keywords": ["keyword-1", "keyword-2"],
       "partner_patterns": ["Meeting with", "Call with"]
@@ -38,6 +43,19 @@ The config file lives at the repo root as `config.json` (gitignored). It is also
 ```
 
 Each digest type is a top-level key. Add a new key for each new team digest.
+
+### RSS feeds (Industry News section)
+
+The `rss_feeds` array drives the digest's **Industry News** section: public/external content the SA team should be aware of (blog posts, ecosystem announcements, EIP changes). Two URL forms are supported:
+
+- **Standard RSS / Atom feed:** `"url": "https://example.com/feed"` - fetched via `lib/fetch-rss.sh` (curl + Python stdlib XML parsing). Bring any feed URL.
+- **GitHub commit watching:** `"url": "github://<owner>/<repo>"` or `"url": "github://<owner>/<repo>/<path>"` - fetched via `lib/fetch-gh-commits.sh`. Use this for content that lives in a public git repo but doesn't publish RSS, like the EIPs spec set (`github://ethereum/EIPs/EIPS` watches commits to the `EIPS/` directory).
+
+Each entry needs a `name` (display label), `url`, and `category` (grouping label that becomes a subheading in the Industry News output). Multiple feeds can share a category (`hedera` groups the Hedera and Hashgraph blog feeds together).
+
+If `rss_feeds` is missing or empty, the Industry News section is silently omitted from the digest. If any feed returns no items for the digest day, that source is silently skipped. If every feed returns nothing, the whole section is omitted (no "no news today" filler).
+
+**Hiero blog gap.** As of 2026-05-05, `https://hiero.org/blog` does not expose an RSS or Atom feed. Once they publish one, add it to `rss_feeds` with `"category": "hedera"`. No code change required.
 
 ### GitHub authentication
 

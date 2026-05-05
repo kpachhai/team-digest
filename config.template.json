@@ -47,6 +47,13 @@
         }
       ]
     },
+    "rss_feeds": [
+      {"name": "Hedera Blog",         "url": "https://hedera.com/blog/rss.xml",         "category": "hedera"},
+      {"name": "Hashgraph Blog",      "url": "https://www.hashgraph.com/blog/feed/",    "category": "hedera"},
+      {"name": "Ethereum Foundation", "url": "https://blog.ethereum.org/en/feed.xml",   "category": "ethereum"},
+      {"name": "EIPs (commits)",      "url": "github://ethereum/EIPs/EIPS",             "category": "eips"}
+    ],
+    "rss_feeds_help": "Public content sources monitored for items dated to the digest day. URLs starting with https:// are fetched as RSS/Atom via lib/fetch-rss.sh. URLs of the form github://<owner>/<repo>[/<path>] are fetched as commits via lib/fetch-gh-commits.sh - useful for spec sets like EIPs that don't publish RSS but live in a public git repo. Hiero blog (https://hiero.org/blog) does not currently expose RSS - add it here once they do.",
     "defaults": {
       "keywords": [
         "EVM",
