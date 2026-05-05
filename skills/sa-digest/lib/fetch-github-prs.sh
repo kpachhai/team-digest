@@ -13,12 +13,9 @@ set -euo pipefail
 ORG="${1:?usage: fetch-github-prs.sh <org> <start-iso>}"
 START="${2:?usage: fetch-github-prs.sh <org> <start-iso>}"
 
-gh search prs \
-  --owner="$ORG" \
-  --updated=">=$START" \
-  --json repository,title,state,author,number,body,url,labels \
-  --limit 100 \
-  | python3 - <<'PY'
+_py=$(mktemp /tmp/gh-prs-XXXXXX.py)
+trap 'rm -f "$_py"' EXIT
+cat > "$_py" <<'PY'
 import json, sys
 
 data = json.load(sys.stdin)
@@ -47,3 +44,10 @@ for repo in sorted(repos):
             print(f'    Description: {body}')
         print()
 PY
+
+gh search prs \
+  --owner="$ORG" \
+  --updated=">=$START" \
+  --json repository,title,state,author,number,body,url,labels \
+  --limit 100 \
+  | python3 "$_py"
