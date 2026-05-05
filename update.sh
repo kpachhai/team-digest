@@ -85,7 +85,25 @@ for skill_dir in "$SCRIPT_DIR"/skills/*/; do
     target_dir="$HOME/.claude/skills/$skill_name"
     mkdir -p "$target_dir"
     cp "$skill_dir/SKILL.md" "$target_dir/SKILL.md"
-    echo "[OK] Updated /$skill_name"
+
+    # Sync lib/ helpers if the skill has them. Mirror the lib/ contents
+    # so removed helpers in the repo get cleaned up at the install path.
+    if [ -d "$skill_dir/lib" ]; then
+      mkdir -p "$target_dir/lib"
+      # Remove any installed helpers no longer present in the repo
+      for installed in "$target_dir/lib/"*.sh; do
+        [ -f "$installed" ] || continue
+        helper_name=$(basename "$installed")
+        [ -f "$skill_dir/lib/$helper_name" ] || rm -f "$installed"
+      done
+      cp "$skill_dir/lib/"*.sh "$target_dir/lib/" 2>/dev/null || true
+      cp "$skill_dir/lib/README.md" "$target_dir/lib/README.md" 2>/dev/null || true
+      chmod +x "$target_dir/lib/"*.sh 2>/dev/null || true
+      lib_count=$(find "$skill_dir/lib" -name '*.sh' -type f | wc -l | tr -d ' ')
+      echo "[OK] Updated /$skill_name (with $lib_count helper script(s))"
+    else
+      echo "[OK] Updated /$skill_name"
+    fi
     INSTALLED=$((INSTALLED + 1))
   fi
 done

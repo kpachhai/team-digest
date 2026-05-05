@@ -21,7 +21,6 @@ The config file lives at the repo root as `config.json` (gitignored). It is also
       "database_id": "<32-char hex from database URL>"
     },
     "github": {
-      "github_token": "<optional GitHub PAT - see below>",
       "orgs": [
         {
           "name": "hiero-ledger",
@@ -40,20 +39,11 @@ The config file lives at the repo root as `config.json` (gitignored). It is also
 
 Each digest type is a top-level key. Add a new key for each new team digest.
 
-### GitHub Token (optional but recommended for routines)
+### GitHub authentication
 
-Without a token, GitHub API calls are unauthenticated. Unauthenticated calls share a rate limit tied to the server IP: **60 requests/hour** for the core API (used for issues and releases) and **10/hour** for search (used for PRs). On Anthropic's shared routine servers these limits are easily exhausted, causing issues and releases to be silently skipped.
+The skill uses your local `gh` CLI authentication. Run `gh auth login` once (any scope is fine for public repos; for private repos you need at least `repo` read access). The `bin/sa-digest-run.sh` headless entry point also inherits your local `gh` auth - cron and launchd both work without any token configuration.
 
-With a token, limits jump to **5000 requests/hour** (core) and **30/hour** (search).
-
-To add a token:
-1. Go to `github.com` > Settings > Developer settings > Personal access tokens > Fine-grained tokens
-2. Set repository access to the orgs you scan (public repos only)
-3. Permissions: `Contents: Read-only`, `Metadata: Read-only` - nothing else
-4. Paste the token as `github_token` in the `github` section of `config.json`
-5. If using a routine, also add it to the inline `<!-- SA-DIGEST-CONFIG -->` block in the routine prompt
-
-The token is stored in plaintext in `config.json` (gitignored) and in the routine prompt. Use a read-only PAT scoped to public repos only to minimize risk.
+If `gh auth status` fails when the digest runs, the skill aborts with an actionable error rather than producing a partial digest. There is no token-in-config fallback.
 
 ### Finding Notion IDs
 

@@ -77,34 +77,35 @@ We are the Solutions Architect team. Our job is to...
 
 The more specific you are, the more useful the Relevance sections become. Without a profile, the skill falls back to generic heuristics.
 
+## Validate Without Spamming Notion
+
+Before turning on automation, run a dry run to preview the digest output as a local file (no Notion write):
+
+```bash
+/sa-digest --dry-run               # yesterday's digest, written locally
+/sa-digest 2026-04-27 --dry-run    # specific date, written locally
+```
+
+The output lands in `~/.config/team-digest/dry-runs/sa-digest-<DATE>-v<N>.md`. Open the file, sanity-check the format, then do a real run when you're satisfied. Multiple `--dry-run` invocations on the same day produce versioned files (`-v1.md`, `-v2.md`, ...) so you can compare iterations.
+
 ## Automate It
 
-### Option 1: Claude Code Routine (Recommended)
+The recommended option for daily runs is **macOS launchd** (or **Linux cron**) using the repo's `bin/sa-digest-run.sh`. This survives sleep/wake cycles, requires no cloud account, and uses your local `gh` and Notion MCP setup directly.
 
-Routines run on Anthropic's servers (works when your laptop is closed) but have no access to local files. You must embed your config in the prompt.
+```bash
+# Symlink the wrapper script onto your $PATH
+mkdir -p ~/.local/bin ~/.local/log
+ln -sf "$(pwd)/bin/sa-digest-run.sh" ~/.local/bin/sa-digest-run.sh
 
-1. Open Claude Code Desktop or claude.ai/code
-2. Create a new Routine
-3. Paste the full content of `SKILL.md` as the trigger prompt
-4. **At the end**, append your config between markers:
-   ```
-   <!-- SA-DIGEST-CONFIG -->
-   { "sa-digest": { "notion": { "config_page_id": "YOUR_ID", "database_id": "YOUR_ID" }, ... } }
-   <!-- /SA-DIGEST-CONFIG -->
-   ```
-   See the "Appendix: Inline Config" section at the bottom of SKILL.md for the full template with all GitHub orgs and defaults pre-filled. Just plug in your two Notion IDs.
-5. Optionally append your profile between `<!-- SA-DIGEST-PROFILE -->` markers
-6. Set schedule: Weekdays at 7:00 AM (or your preferred time)
-7. Enable MCP connectors: Notion
-8. Save
+# Smoke test before scheduling
+~/.local/bin/sa-digest-run.sh --dry-run    # safe - skips Notion write
+~/.local/bin/sa-digest-run.sh              # real run for yesterday
 
-### Option 2: Session-Local Cron
-
-```
-/schedule sa-digest every weekday at 7am
+# Schedule via launchd or cron
+# See docs/scheduling.md for the launchd plist and cron line
 ```
 
-Dies when the session ends. Good for testing before committing to a routine.
+The full launchd plist, cron syntax, and a GitHub Actions workflow example are in [`docs/scheduling.md`](scheduling.md).
 
 ## Add a New Team Digest
 

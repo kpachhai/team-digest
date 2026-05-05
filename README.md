@@ -8,17 +8,19 @@ Each team gets its own skill and configuration. New sources and cadences can be 
 
 ```
 team-digest/
+├── bin/                   # Headless terminal entry points (claude -p wrappers)
+│   └── sa-digest-run.sh   # Symlink onto $PATH; cron/launchd target
 ├── config.template.json   # Committed template with empty Notion IDs
 ├── config.json            # Your Notion IDs (gitignored, created by setup.sh)
 ├── .gitignore
-├── setup.sh               # First-time setup: creates config, checks prereqs, installs skills
-├── update.sh              # After git pull: syncs skills and config, flags new template keys
+├── setup.sh               # First-time setup: creates config, checks prereqs, installs skills + lib/
+├── update.sh              # After git pull: syncs skills, lib/, config, profiles
 ├── skills/                # One skill per team/digest type
-│   ├── sa-digest/         # Solutions Architect daily digest (ships today)
-│   └── <team>-digest/     # Future: engineering, product, etc.
-├── profiles/              # Team profiles describing role, priorities, and relevance criteria
-│   ├── sa-digest.template.md   # SA team template (committed)
-│   ├── eng-digest.template.md  # Eng team template (committed)
+│   └── sa-digest/
+│       ├── SKILL.md       # Skill body: orchestration + MCP calls + writing rules
+│       └── lib/           # Shell helpers (compute-window, fetch-github-*, load-config)
+├── profiles/              # Team profiles describing role, priorities, glossary
+│   ├── sa-digest.template.md   # Committed template
 │   └── sa-digest.md            # Your personalized copy (gitignored)
 ├── docs/                  # Setup, configuration, scheduling, troubleshooting
 └── README.md
@@ -81,7 +83,25 @@ Open Claude Code in any directory and type the command above. The output lands i
 
 Useful for catching up on missed days. GitHub data is fully accurate for any past date. Notion sections (keywords, partner conversations) are limited to pages **created** on that date - pages that existed before but were edited that day will not appear (Notion MCP search limitation).
 
-**Automate it:** See [docs/scheduling.md](docs/scheduling.md) for daily automation options.
+**Preview a digest without writing to Notion (`--dry-run`):**
+
+```
+/sa-digest --dry-run                # yesterday's digest, written to a local file
+/sa-digest 2026-04-20 --dry-run     # specific date, local file
+```
+
+The output goes to `~/.config/team-digest/dry-runs/sa-digest-<DATE>-v<N>.md`. Use this to validate refactors or preview a digest before doing a real run that overwrites a Notion page.
+
+**Run from the terminal (cron / launchd / scripts):**
+
+```bash
+bin/sa-digest-run.sh                       # yesterday's digest (writes to Notion)
+bin/sa-digest-run.sh 2026-04-20 --dry-run  # specific date, local file
+```
+
+The wrapper invokes `claude -p` headlessly with the Notion MCP tools allow-listed. It's the same skill, the same flags, the same output - just a non-interactive entry point. Symlink to `~/.local/bin/` for convenience.
+
+**Automate it:** See [docs/scheduling.md](docs/scheduling.md) for the launchd plist, cron syntax, and a GitHub Actions example.
 
 ### Updating After Git Pull
 
@@ -152,12 +172,12 @@ To create a digest for another team (e.g., engineering):
      }
    }
    ```
-3. Copy `skills/sa-digest/SKILL.md` to `skills/eng-digest/SKILL.md`
-4. In the copied skill, change all occurrences of `sa-digest` to `eng-digest` (the config key, the skill name, the callout title). Convention: the config key always matches the skill directory name.
-5. Adjust the GitHub orgs, priority repos, keywords, and partner patterns to match the new team's focus
-6. Copy `profiles/sa-digest.template.md` to `profiles/eng-digest.template.md` and rewrite it to describe the engineering team's role, priorities, and what "relevant" means for them
-7. Run `./update.sh` to install the new skill and sync the new profile
-8. The team can now use `/eng-digest` in Claude Code
+3. Copy the entire `skills/sa-digest/` directory (including the `lib/` subdirectory) to `skills/eng-digest/`. The `lib/*.sh` helpers are reusable as-is - they're parameterized by digest name where needed.
+4. In `skills/eng-digest/SKILL.md`, change all occurrences of `sa-digest` to `eng-digest` (config key, skill name, callout title, helper invocations). Convention: the config key always matches the skill directory name.
+5. Adjust the GitHub orgs, priority repos, keywords, and partner patterns to match the new team's focus.
+6. Copy `profiles/sa-digest.template.md` to `profiles/eng-digest.template.md` and rewrite it to describe the engineering team's role, priorities, glossary, and what "relevant" means for them.
+7. Copy `bin/sa-digest-run.sh` to `bin/eng-digest-run.sh` and search-replace `sa-digest` → `eng-digest` (prompt string, log path, env var names).
+8. Run `./update.sh` to install. Verify with `eng-digest --dry-run` before the first live run.
 
 Each team's skill is independent - different config keys, different sources, different output databases. No Notion IDs are hardcoded in any committed file.
 
@@ -224,14 +244,18 @@ Product ──> /pm-digest ──> PM Daily Digest database
 
 ## Configuration Files
 
-| File                                       | Committed       | Purpose                                                               |
-| ------------------------------------------ | --------------- | --------------------------------------------------------------------- |
-| `config.template.json`                     | Yes             | Template with empty Notion IDs; starting point for new users          |
-| `config.json`                              | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template           |
-| `~/.config/team-digest/config.json`        | N/A (local)     | Global copy synced by `setup.sh`; skills read from here               |
-| `profiles/<team>.template.md`              | Yes             | Team profile template; describes role, priorities, relevance criteria |
-| `profiles/<team>.md`                       | No (gitignored) | Your personalized profile; created from template by `setup.sh`        |
-| `~/.config/team-digest/profiles/<team>.md` | N/A (local)     | Global copy synced by `setup.sh`; skills read from here               |
+| File                                            | Committed       | Purpose                                                                       |
+| ----------------------------------------------- | --------------- | ----------------------------------------------------------------------------- |
+| `config.template.json`                          | Yes             | Template with empty Notion IDs; starting point for new users                  |
+| `config.json`                                   | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template                   |
+| `~/.config/team-digest/config.json`             | N/A (local)     | Global copy synced by `setup.sh`; skills read from here                       |
+| `profiles/<team>.template.md`                   | Yes             | Team profile template; describes role, priorities, relevance criteria, glossary |
+| `profiles/<team>.md`                            | No (gitignored) | Your personalized profile; created from template by `setup.sh`                |
+| `~/.config/team-digest/profiles/<team>.md`      | N/A (local)     | Global copy synced by `setup.sh`; skills read from here                       |
+| `~/.config/team-digest/dry-runs/`               | N/A (local)     | `--dry-run` markdown output; created on demand                                |
+| `bin/<team>-run.sh`                             | Yes             | Headless terminal entry point; symlink to `~/.local/bin/` for cron/launchd     |
+| `skills/<team>-digest/lib/*.sh`                 | Yes             | Helper scripts the skill body invokes for GitHub fetching and config loading   |
+| `~/.claude/skills/<team>-digest/lib/*.sh`       | N/A (local)     | Installed copy synced by `setup.sh`/`update.sh`; the skill invokes from here   |
 
 ## Requirements
 

@@ -1,222 +1,75 @@
 # Scheduling the SA Daily Digest
 
-Four options for automated daily runs. **If you're on macOS and want reliability without cloud dependencies, use Option 4 (launchd).**
+The skill runs in two contexts and the same `bin/sa-digest-run.sh` covers both:
 
-## Option 1: Claude Code Desktop/Web Routine
+1. **Interactive (Claude Code)** - type `/sa-digest` in a Claude Code session.
+2. **Headless (terminal / cron / launchd)** - run `bin/sa-digest-run.sh` from a shell.
 
-Routines run on Anthropic's servers - they work when your laptop is closed. **Known limitation:** long-running digests (many repos, many Notion searches) can hit server-side session timeouts and produce partial output. If you experience this, use Option 4 (launchd) instead.
+For automated daily runs on macOS, **launchd is the recommended option**. It survives sleep/wake cycles, requires no cloud account, and uses your local `gh` and Notion MCP setup directly.
 
-**Important:** Routines have no access to your local filesystem, so you must embed your config (and optionally your team profile) directly in the trigger prompt.
+## The wrapper script: `bin/sa-digest-run.sh`
 
-1. Open **Claude Code Desktop** or visit **claude.ai/code**
-2. Create a new **Routine**
-3. Paste the trigger prompt: the full content of `skills/sa-digest/SKILL.md`
-4. **At the end of the prompt**, append your config using the inline markers:
-   ```
-   <!-- SA-DIGEST-CONFIG -->
-   {
-     "sa-digest": {
-       "notion": {
-         "config_page_id": "<your-config-page-id>",
-         "database_id": "<your-database-id>"
-       },
-       "github": {
-         "github_token": "<your-github-pat>",
-         "orgs": [
-           { "name": "hiero-ledger", "priority_repos": ["hiero-json-rpc-relay", "hiero-mirror-node", "hiero-consensus-node", "hiero-block-node", "hiero-improvement-proposals", "hiero-contracts", "solo", "hiero-sdk-js", "hiero-mirror-node-explorer"], "scan_all": false },
-           { "name": "hashgraph", "priority_repos": ["hedera-docs", "hedera-agent-kit-js", "hedera-wallet-connect", "hedera-evm-testing", "stablecoin-studio", "asset-tokenization-studio", "guardian"], "scan_all": false },
-           { "name": "hedera-dev", "priority_repos": [], "scan_all": true }
-         ]
-       },
-       "defaults": {
-         "keywords": ["EVM", "smart contracts", "relay", "JSON-RPC", "mirror node", "HIP", "Hiero", "consensus", "block node", "SDK"],
-         "partner_patterns": ["Meeting with", "Call with", "Catch up with", "Deep dive", "Sync with", "Check-in with", "Follow up with", "Debrief"]
-       }
-     }
-   }
-   <!-- /SA-DIGEST-CONFIG -->
-   ```
-   The `github_token` is required for full GitHub coverage in routines (issues and releases will be silently skipped without it due to unauthenticated API rate limits). See `docs/configuration.md` for how to create a minimal read-only PAT.
-5. Optionally append your team profile:
-   ```
-   <!-- SA-DIGEST-PROFILE -->
-   (paste your sa-digest.md profile content here)
-   <!-- /SA-DIGEST-PROFILE -->
-   ```
-6. Set schedule: **Weekdays at 7:00 AM ET** (or your preferred time)
-7. Enable MCP connectors: **Notion**
-8. Save
-
-Each team member creates their own routine pointing at the same Notion database. See the "Appendix: Inline Config" section in SKILL.md for the full format reference.
-
-## Option 2: Session-Local Cron
-
-Within any Claude Code session, the `/sa-digest` skill can be scheduled locally:
-
-```
-/schedule sa-digest every weekday at 7am
-```
-
-Or use the CronCreate approach directly in chat - ask Claude to set up a cron job.
-
-**Limitations:**
-
-- Dies when the Claude Code session ends
-- Auto-expires after 7 days
-- Requires your laptop to be on and the session running
-
-**Good for:** Testing the schedule before committing to a persistent routine.
-
-## Option 3: Remote Trigger API
-
-For programmatic setup. Requires your `environment_id` from claude.ai cloud settings.
-
-```json
-{
-  "name": "SA Daily Digest",
-  "cron_expression": "3 12 * * 1-5",
-  "job_config": {
-    "ccr": {
-      "environment_id": "YOUR_ENVIRONMENT_ID",
-      "session_context": {
-        "model": "claude-sonnet-4-6",
-        "allowed_tools": ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
-      },
-      "events": [
-        {
-          "data": {
-            "uuid": "GENERATE_A_UUID_V4",
-            "session_id": "",
-            "type": "user",
-            "parent_tool_use_id": null,
-            "message": {
-              "content": "PASTE_SKILL_MD_CONTENT_WITH_INLINE_CONFIG_APPENDED",
-              "role": "user"
-            }
-          }
-        }
-      ]
-    }
-  }
-}
-```
-
-The `cron_expression` `3 12 * * 1-5` means weekdays at 12:03 PM UTC. Adjust for your timezone.
-
-**Note:** The Remote Trigger API is in research preview. The format may change. The Claude Code Desktop routine (Option 1) is more stable and easier to manage.
-
-## Option 4: Local macOS launchd (Most Reliable for Local Use)
-
-Runs on your Mac via launchd - survives sleep/wake cycles and requires no cloud account. Uses your local `gh` auth and Notion MCP config directly, so no inline config embedding is needed. **Requires your Mac to be on (not off) at the scheduled time.**
-
-### 1. Create the wrapper script
+The team-digest repo ships `bin/sa-digest-run.sh` as the headless entry point. It invokes the `/sa-digest` skill via `claude -p` with the necessary Notion MCP tools allow-listed. From the repo root:
 
 ```bash
-mkdir -p ~/.local/bin ~/.local/log
+bin/sa-digest-run.sh                        # digest for yesterday (UTC)
+bin/sa-digest-run.sh 2026-04-27             # digest for a specific date
+bin/sa-digest-run.sh --dry-run              # write markdown to ~/.config/team-digest/dry-runs/, skip Notion
+bin/sa-digest-run.sh 2026-04-27 --dry-run   # both
+bin/sa-digest-run.sh --help                 # usage
 ```
 
-Create `~/.local/bin/sa-digest-run.sh`:
+For convenience, copy or symlink it to a directory on your `$PATH`:
 
 ```bash
-#!/bin/bash
-# Usage:
-#   sa-digest-run.sh           - digest for yesterday (default, used by launchd)
-#   sa-digest-run.sh 2026-04-27 - digest for a specific date (manual backfill)
+# Symlink (preferred - tracks repo updates automatically):
+mkdir -p ~/.local/bin
+ln -sf "$(pwd)/bin/sa-digest-run.sh" ~/.local/bin/sa-digest-run.sh
 
-# Ensure Homebrew and other tools are on PATH
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
-
-LOG="$HOME/.local/log/sa-digest.log"
-RAW_LOG="$HOME/.local/log/sa-digest-raw.jsonl"
-echo "" >> "$LOG"
-echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG"
-
-# Allowed tools - includes Notion MCP tools needed by the digest pipeline.
-# Without these, claude -p will block on permission prompts and exit.
-ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep,mcp__claude_ai_Notion__notion-fetch,mcp__claude_ai_Notion__notion-search,mcp__claude_ai_Notion__notion-create-pages,mcp__claude_ai_Notion__notion-update-page,mcp__claude_ai_Notion__notion-query-data-sources"
-
-MODEL="claude-opus-4-6"
-
-# Format streaming JSON events into human-readable log lines.
-# Falls back to raw JSON if jq is unavailable or an event is unrecognized.
-format_stream() {
-  if command -v jq >/dev/null 2>&1; then
-    jq -r --unbuffered '
-      if .type == "system" and .subtype == "init" then
-        "[init] session=" + (.session_id // "?") + " model=" + (.model // "?")
-      elif .type == "assistant" then
-        (.message.content // []) | map(
-          if .type == "text" then "[claude] " + (.text | gsub("\n"; " ⏎ ") | .[0:500])
-          elif .type == "tool_use" then "[tool→] " + .name + " " + (.input | tostring | .[0:200])
-          else empty end
-        ) | .[]
-      elif .type == "user" then
-        (.message.content // []) | map(
-          if .type == "tool_result" then
-            "[tool✓] " + ((.content // "") | tostring | gsub("\n"; " ⏎ ") | .[0:300])
-          else empty end
-        ) | .[]
-      elif .type == "result" then
-        "[done] " + (.subtype // "?") + " duration=" + ((.duration_ms // 0) | tostring) + "ms cost=$" + ((.total_cost_usd // 0) | tostring)
-      else empty end
-    '
-  else
-    cat
-  fi
-}
-
-run_claude() {
-  local prompt="$1"
-  claude -p "$prompt" \
-    --model "$MODEL" \
-    --allowedTools "$ALLOWED_TOOLS" \
-    --output-format stream-json \
-    --verbose \
-    2>&1 | tee -a "$RAW_LOG" | format_stream | tee -a "$LOG"
-}
-
-DATE_ARG="${1:-}"
-
-if [ -n "$DATE_ARG" ]; then
-  if ! echo "$DATE_ARG" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
-    echo "ERROR: Invalid date format '$DATE_ARG'. Use YYYY-MM-DD (e.g. 2026-04-27)" | tee -a "$LOG"
-    exit 1
-  fi
-  echo "Running digest for $DATE_ARG" | tee -a "$LOG"
-  run_claude "/sa-digest $DATE_ARG"
-else
-  echo "Running digest for yesterday" | tee -a "$LOG"
-  run_claude "/sa-digest"
-fi
+# Or copy (snapshot - won't auto-update with git pull):
+cp bin/sa-digest-run.sh ~/.local/bin/sa-digest-run.sh
 ```
 
-**What you'll see in real time:**
+After symlinking, you can invoke `sa-digest-run.sh` from anywhere.
+
+### Environment overrides
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TEAM_DIGEST_LOG` | `~/.local/log/sa-digest.log` | Human-readable streaming log |
+| `TEAM_DIGEST_RAW_LOG` | `~/.local/log/sa-digest-raw.jsonl` | Raw `claude -p --output-format stream-json` events |
+| `TEAM_DIGEST_MODEL` | `claude-opus-4-7` | Override the model used by `claude -p` |
+
+### What you'll see streaming in real time
+
 - `[init] session=... model=...` - once when Claude starts
 - `[claude] ...` - each chunk of assistant reasoning/text
 - `[tool→] Bash {...}` - each tool call as it's invoked
 - `[tool✓] ...` - the result of each tool call
 - `[done] success duration=... cost=$...` - final summary
 
-**Two log files:**
-- `~/.local/log/sa-digest.log` - human-readable streaming log
-- `~/.local/log/sa-digest-raw.jsonl` - raw JSON events for debugging
-
 If `jq` isn't installed (`brew install jq`), the script falls back to printing raw JSON events.
 
-**About the Notion MCP server name:** The `mcp__claude_ai_Notion__*` prefix matches the Notion connector exposed by Claude Code Desktop. If your MCP server is registered under a different name, run `claude mcp list` to find the actual server identifier and adjust the prefix accordingly. To find which Notion tools are available, look at output of running `/sa-digest` once interactively - the tool calls will use the actual MCP names.
+### About the Notion MCP server name
 
-**If you'd rather not maintain the tool list:** Replace `--allowedTools "$ALLOWED_TOOLS"` with `--permission-mode bypassPermissions`. This skips all permission prompts. It's broader but simpler, and acceptable for a script you fully control.
+The `mcp__claude_ai_Notion__*` prefix in the script's allow-list matches the Notion connector exposed by Claude Code Desktop. If your MCP server is registered under a different name, run `claude mcp list` to find the actual server identifier and adjust the prefix in `bin/sa-digest-run.sh`. Alternatively, replace `--allowedTools "$ALLOWED_TOOLS"` with `--permission-mode bypassPermissions` for a script you fully control - simpler, broader.
 
-Make it executable:
+## Local macOS launchd (recommended for daily automation)
+
+### 1. Make sure the wrapper is reachable
+
+Either symlink the repo's script (preferred) or copy it:
 
 ```bash
-chmod +x ~/.local/bin/sa-digest-run.sh
+mkdir -p ~/.local/bin ~/.local/log
+ln -sf "$(pwd)/bin/sa-digest-run.sh" ~/.local/bin/sa-digest-run.sh
 ```
 
-Test it runs correctly before scheduling:
+Test it manually before scheduling:
 
 ```bash
-~/.local/bin/sa-digest-run.sh              # yesterday
+~/.local/bin/sa-digest-run.sh --dry-run    # safe smoke test - no Notion write
+~/.local/bin/sa-digest-run.sh              # real run for yesterday
 ~/.local/bin/sa-digest-run.sh 2026-04-27   # specific date
 ```
 
@@ -292,13 +145,58 @@ launchctl start com.team-digest.sa-digest
 tail -f ~/.local/log/sa-digest.log
 ```
 
-**Note:** launchd will not fire a missed run if your Mac was asleep or off at the scheduled time. If you need catch-up on missed days, run `/sa-digest YYYY-MM-DD` manually.
+**Note:** launchd will not fire a missed run if your Mac was asleep or off at the scheduled time. If you need catch-up on missed days, run `bin/sa-digest-run.sh YYYY-MM-DD` (or `/sa-digest YYYY-MM-DD` interactively) manually.
 
-## Verifying the Schedule
+## Linux cron
+
+Same script works under cron. Add to `crontab -e`:
+
+```
+0 8 * * 1-5 /home/YOUR_USERNAME/.local/bin/sa-digest-run.sh > /dev/null 2>&1
+```
+
+The script handles its own logging via `TEAM_DIGEST_LOG` and `TEAM_DIGEST_RAW_LOG`. Cron will not fire missed runs on a sleeping machine - same caveat as launchd.
+
+## GitHub Actions (self-hosted runner)
+
+If you have a self-hosted runner with `claude` and `gh` configured, add a workflow:
+
+```yaml
+name: SA Daily Digest
+on:
+  schedule:
+    - cron: '0 13 * * 1-5'  # weekdays at 13:00 UTC
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'YYYY-MM-DD (blank = yesterday)'
+        required: false
+      dry_run:
+        description: 'Dry run (writes locally, skips Notion)'
+        type: boolean
+        default: false
+
+jobs:
+  digest:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          ARGS=""
+          [ -n "${{ inputs.date }}" ] && ARGS="$ARGS ${{ inputs.date }}"
+          [ "${{ inputs.dry_run }}" = "true" ] && ARGS="$ARGS --dry-run"
+          ./bin/sa-digest-run.sh $ARGS
+```
+
+GitHub-hosted runners do not have `claude` installed, so this requires a self-hosted setup. The Claude Code CLI must be authenticated on the runner.
+
+## Verifying the schedule
 
 After setting up any scheduling option:
 
-1. Wait for the next scheduled run (or trigger manually with `/sa-digest`)
+1. Wait for the next scheduled run (or trigger manually)
 2. Check your digest database in Notion (the `database_id` from your `config.json`)
-3. A new page should appear with today's date and "Auto" status
-4. If nothing appears, check the Claude Code session logs or routine history for errors
+3. A new page should appear with that date and "Auto" status
+4. If nothing appears, check `~/.local/log/sa-digest.log` for errors
+
+For repeated debugging without spamming Notion, use `--dry-run` - the markdown lands in `~/.config/team-digest/dry-runs/sa-digest-<date>-v<N>.md` and you can `cat` or `diff` it before doing a real run.
