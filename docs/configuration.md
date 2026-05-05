@@ -85,13 +85,23 @@ The Notion config page holds the live, team-editable settings. The page ID is st
 - Tips: match your team's actual naming conventions for meeting notes
 
 **Favorites** - A user-curated list of Notion pages the digest should check for updates each day. The Notion REST API does not expose a user's sidebar Favorites, so this list IS the digest's favorites: pages you care about regardless of keyword match. Each daily run fetches every page on the list and includes any that were edited (`last_edited_time`) during the digest's UTC date window.
+
 - Add a heading **Favorites** (or **Favorite Pages**) on the config page
 - Under it, paste a bullet list of Notion page URLs - one per line
 - The skill accepts both full URLs (`https://www.notion.so/Page-Title-32hex`) and raw 32-char hex IDs
 - To remove a favorite: delete the bullet point
 - Empty or missing section means no favorites are scanned (the section is silently omitted from the digest)
 
-> **Required permission step:** the Notion MCP integration must be explicitly shared with each favorited page. Adding a page to your sidebar Favorites in Notion does NOT grant the integration access. After adding a page URL to the Favorites list, also share the page (or a parent page it inherits from) with the integration in Notion's UI - otherwise the digest will log a "not accessible" note for that favorite and skip it. This is a one-time setup per page; once shared, the integration retains access.
+**Single-level child descent.** If a favorited page is an *index* page (contains links to other Notion pages), the digest also fetches each linked page one level deep and includes those that were edited on the digest day. Caps at 50 child pages per favorite to bound cost. Child page entries in the digest always reference their parent favorite (e.g., `[Child Title](url) (under [Parent Favorite](parent-url))`). Loops are not a concern because there is no recursion past the first hop.
+
+> **Required permission step:** the Notion MCP integration must be explicitly shared with each favorited page **and each child page you want followed**. Adding a page to your sidebar Favorites in Notion does NOT grant the integration access. After adding a page URL to the Favorites list, also share the page (or a parent page it inherits from) with the integration in Notion's UI. The same applies to children of an index page - an unshared child is invisible to the descent step. This is a one-time setup per page; once shared, the integration retains access.
+
+**Track Pages Created By** - A list of Notion user emails. The digest scans the workspace for pages created on the digest day where `created_by.person.email` matches one of these emails, and surfaces them in a dedicated "Pages I Created" section. Useful for catching new strategy docs, one-off notes, or fresh meeting pages that don't match keywords or partner patterns.
+
+- Add a heading **Track Pages Created By** on the config page
+- Under a sub-heading **Email** (or directly under the main heading), paste a bullet list of Notion user emails - one per line
+- Empty or missing section means this scan is skipped (the section is silently omitted from the digest)
+- Multi-team digest: list multiple emails to surface pages created by any teammate
 
 **Organization** - The GitHub org to scan.
 
