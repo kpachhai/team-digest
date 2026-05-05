@@ -13,12 +13,14 @@ team-digest is a zero-infrastructure digest system built on Claude Code skills. 
                                       #   creates config.json from template, installs skills
                                       #   + lib/ helpers to ~/.claude/skills/, syncs profiles
 ./update.sh                           # After git pull: re-syncs SKILL.md, lib/, config, profiles
-/team-digest                            # In Claude Code: yesterday's digest, written to Notion
-/team-digest 2026-04-20                 # Specific date
-/team-digest --dry-run                  # Same pipeline, but write markdown locally - skip Notion
-bin/team-digest-run.sh                  # Headless terminal entry point - uses `claude -p`,
-                                      #   inherits local gh auth, supports same flags
-bin/team-digest-run.sh 2026-04-20 --dry-run
+/team-digest                            # Daily: yesterday's digest, written to Notion
+/team-digest 2026-04-20                 # Daily: specific date
+/team-digest --dry-run                  # Daily: write markdown locally, skip Notion
+/team-weekly                            # Weekly: synthesize last full week of dailies into
+                                      #   a weekly summary, written to the same Notion DB
+/team-weekly 2026-05-07 --dry-run       # Weekly: specific week, preview locally
+bin/team-digest-run.sh                  # Headless terminal entry point for /team-digest
+bin/team-weekly-run.sh                  # Headless terminal entry point for /team-weekly
 ```
 
 There are no build steps, tests, or linters. The codebase is shell scripts, Bash helper scripts, and Claude Code skill definitions.
@@ -35,15 +37,23 @@ team-digest/
 ├── profiles/
 │   ├── team-digest.template.md         # Committed team profile template
 │   └── team-digest.md                  # Gitignored - your personalized profile
-├── skills/team-digest/
-│   ├── SKILL.md                      # Skill body: orchestration + MCP calls + writing rules
-│   └── lib/                          # Shell helpers (no MCP - those only work inside Claude)
-│       ├── compute-window.sh         # Resolve date arg → DATE_LABEL/START/END
-│       ├── load-config.sh            # Read + validate config.json
-│       ├── fetch-github-prs.sh       # gh search prs + python parsing
-│       ├── fetch-github-issues.sh
-│       ├── fetch-github-releases.sh
-│       └── README.md                 # Helper inventory and conventions
+├── skills/
+│   ├── team-digest/                    # Daily digest
+│   │   ├── SKILL.md                  # Skill body: orchestration + MCP calls + writing rules
+│   │   └── lib/                      # Shell helpers (no MCP - those only work inside Claude)
+│   │       ├── compute-window.sh     # Resolve date arg → DATE_LABEL/START/END
+│   │       ├── load-config.sh        # Read + validate config.json (used by team-weekly too)
+│   │       ├── fetch-github-prs.sh   # gh search prs + python parsing
+│   │       ├── fetch-github-issues.sh
+│   │       ├── fetch-github-releases.sh
+│   │       ├── fetch-rss.sh          # RSS/Atom feed → JSON of items dated to target
+│   │       ├── fetch-gh-commits.sh   # GitHub commits on a date (for spec sets w/o RSS)
+│   │       └── README.md             # Helper inventory and conventions
+│   └── team-weekly/                    # Weekly rollup of dailies
+│       ├── SKILL.md                  # Reads dailies from Notion DB, synthesizes cross-day themes
+│       └── lib/
+│           ├── compute-week-window.sh  # Resolve date arg → ISO week Mon-Sun timestamps
+│           └── README.md
 └── docs/                             # User-facing documentation
 ```
 
