@@ -267,6 +267,48 @@ The digest should group output under org-level headers:
 
 If scanning an org fails, note the failure and continue with the next org.
 
+### Step 2.5: Scan Industry News (RSS feeds + commit-watching for spec sets)
+
+This step covers public/external content the team should be aware of - blog posts, ecosystem announcements, EIP changes. Configured via the `rss_feeds` array in `config.json` (already loaded by `lib/load-config.sh` in Step 0).
+
+**If `rss_feeds` is missing or empty:** skip this step entirely. Do not include an Industry News section in the output.
+
+Each `rss_feeds` entry has the shape:
+
+```json
+{ "name": "<display name>", "url": "<URL or github:// pseudo-URL>", "category": "<grouping label>" }
+```
+
+**Two URL forms are recognized:**
+
+- `https://...` (or `http://...`) - a regular RSS or Atom feed → call `lib/fetch-rss.sh`.
+- `github://<owner>/<repo>` or `github://<owner>/<repo>/<path>` - a public GitHub repo (optionally restricted to a path) → call `lib/fetch-gh-commits.sh`. This is for spec sets like EIPs that don't publish RSS but live as a public git repo.
+
+**Dispatch one helper per entry, in parallel** (one Bash tool message with N parallel calls):
+
+```bash
+# RSS/Atom feed:
+bash ~/.claude/skills/team-digest/lib/fetch-rss.sh "<url>" "$DATE_LABEL"
+
+# GitHub commit-watching - parse <owner>/<repo>[/<path>] from the github:// URL:
+bash ~/.claude/skills/team-digest/lib/fetch-gh-commits.sh "<owner>/<repo>" "$DATE_LABEL" "<path-or-empty>"
+```
+
+Each helper returns a JSON array of items dated to `$DATE_LABEL`. Empty arrays (`[]`) are valid - that source had no items that day. Helper failures (network issue, malformed XML, gh rate limit) result in `[]` plus a stderr WARN line; do not abort the digest.
+
+**For each non-empty result, write narrative output:**
+
+- Group by the entry's `category` (e.g., all `hedera` items together, all `ethereum` items together, all `eips` items together).
+- Within a category, list items as bullet points, one item per line.
+- For RSS items: `- [<title>](<link>) - <1-2 sentence summary>` (source: helper's `summary` field).
+- For github:// commit items: `- [<short SHA>](<commit url>): <commit subject> by <author>` (source: helper's `message` field).
+- **Strip HTML tags from RSS summaries.** Many feeds return summaries containing `<p>`, `<img>`, `<a>` tags. Render them as plain text before writing - readers should not see raw HTML in the digest.
+- **Do NOT fetch full article HTML.** The 400-char summary the helper returns is enough for a 1-2 sentence digest entry. Token cost is bounded.
+
+**Section-empty fallback:** if every helper returned `[]`, omit the Industry News section entirely. Do NOT write "No industry news today" filler.
+
+**Critical: do not save helper output to intermediate files. Capture stdout into the conversation context.**
+
 ### Step 3: Scan Notion Keywords
 
 For each keyword group from configuration, search the Notion workspace:
@@ -386,6 +428,7 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 5. **Every GitHub user mention is a link.** Search for bare `@<handle>` patterns - each must link to `https://github.com/<handle>`.
 6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
 7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
+8. **Every Industry News title or commit SHA is a link.** Items in the Industry News section must each be `[<title>](<link>)` (RSS) or `[<short-sha>](<commit-url>)` (commit). No bare titles or SHAs. Summaries must have HTML tags stripped - search the section for `<p>`, `<img>`, `<a `, and similar; if any are present, render the prose as plain text instead.
 
 If any of these checks fail, fix the draft before proceeding to Step 5. Bare entity references, unexplained jargon, and broken Mermaid diagrams are the three most common readability bugs - this audit is the gate that prevents all three from reaching Notion.
 
@@ -472,6 +515,10 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ---
 
+# Industry News
+
+<grouped by category. Each category has a `## <category>` subheading and a bullet list of items - RSS posts as `- [title](link) - 1-2 sentence summary`, GitHub commits as `- [short-sha](commit-url): subject by author`. Strip HTML tags from RSS summaries. Omit the entire section if every feed returned 0 items for DATE_LABEL.>
+
 ---
 
 # Notion Keyword Monitor
@@ -527,6 +574,8 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 | Release | The release's GitHub URL | `[<tag-name>](<url>)` |
 | GitHub user | `https://github.com/<handle>` | `[@<handle>](https://github.com/<handle>)` |
 | Notion page | The page's URL from the MCP response | `[<page title>](<notion-url>)` |
+| Industry News post | The `link` field from the RSS helper output | `[<title>](<link>)` |
+| Industry News commit | The `url` field from the gh-commits helper output | `[<short-sha>](<commit-url>)` |
 
 **Notes:**
 - Person names that are NOT GitHub handles (e.g., partner names mentioned in meeting notes) do NOT get links.
