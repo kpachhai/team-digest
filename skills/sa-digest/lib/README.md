@@ -18,6 +18,8 @@ implementation. The skill is the orchestrator; helpers are the data layer.
 | `fetch-github-prs.sh` | Fetch PRs updated in the window for one org. | `<org> <start-iso>` | Plain-text summary grouped by repo, with PR numbers, authors, URLs, descriptions. |
 | `fetch-github-issues.sh` | Fetch issues updated in the window for one org. | `<org> <start-iso>` | Plain-text summary, same shape as PRs. |
 | `fetch-github-releases.sh` | Fetch releases published in the window for one org. Iterates every repo via `gh api`. | `<org> <start-iso>` | One line per release: `<repo>: <tag> - <name> (<date>) <url>`. |
+| `fetch-rss.sh` | Fetch RSS or Atom feed entries published on a target date. Curl + Python stdlib XML parsing; no `feedparser` dependency. | `<feed-url> <YYYY-MM-DD>` | JSON array `[{title, link, published, summary}]`; empty array if no matches or parse error. |
+| `fetch-gh-commits.sh` | Fetch GitHub commits to a repo on a target date, optionally restricted to a path prefix. Used for spec sets that don't publish RSS (notably EIPs). | `<owner/repo> <YYYY-MM-DD> [path]` | JSON array `[{sha, message, author, date, url}]`; empty array if no matches. |
 
 ## Conventions
 
