@@ -24,21 +24,27 @@ It does NOT re-scan GitHub, Notion, or RSS. The dailies have already done that w
 ## Run it
 
 ```
-/team-weekly                           # last full week (Mon-Sun)
-/team-weekly 2026-05-07                # ISO week containing this date
-/team-weekly --dry-run                 # preview - markdown to /tmp/team-digest-dry-runs/, no Notion write
-/team-weekly 2026-05-07 --dry-run      # both
-/team-weekly config                    # show current config
+/team-weekly                                       # last full ISO week (Mon-Sun)
+/team-weekly 2026-05-07                            # the ISO week containing this date
+/team-weekly --from 2026-04-25 --to 2026-05-03     # arbitrary date range, inclusive
+/team-weekly --dry-run                             # preview - markdown to /tmp/team-digest-dry-runs/, no Notion write
+/team-weekly 2026-05-07 --dry-run                  # ISO-week mode + dry run
+/team-weekly --from 2026-04-25 --to 2026-05-03 --dry-run    # custom range + dry run
+/team-weekly config                                # show current config
 ```
+
+The `--from / --to` mode unlocks non-week windows: post-conference recaps, sprint-aligned summaries, catching up after a missed week with a 10-day window, or any custom span. The synthesis themes (top GitHub work, releases, partner momentum, etc.) don't care about week boundaries. `--from` and `--to` must appear together; mixing a positional date with `--from / --to` is an error.
 
 The first time you run it, do a `--dry-run` against a complete past week to see the synthesis quality before letting it write to Notion.
 
 ## Run it from a terminal
 
 ```bash
-bin/team-weekly-run.sh                          # last full week
-bin/team-weekly-run.sh 2026-05-07               # specific week
-bin/team-weekly-run.sh 2026-05-07 --dry-run     # preview
+bin/team-weekly-run.sh                                          # last full ISO week
+bin/team-weekly-run.sh 2026-05-07                               # specific ISO week
+bin/team-weekly-run.sh --from 2026-04-25 --to 2026-05-03        # custom range
+bin/team-weekly-run.sh 2026-05-07 --dry-run                     # preview
+bin/team-weekly-run.sh --from 2026-04-25 --to 2026-05-03 --dry-run    # custom range preview
 ```
 
 Symlink to `~/.local/bin/` for cron/launchd convenience:
