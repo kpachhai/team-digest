@@ -183,7 +183,14 @@ Write plain Markdown for the dry-run file (no Notion-flavored `<callout>`, `<det
 - `Keywords Matched`: union of `Keywords Matched` across the week as a JSON array
 - `Status`: `Auto`
 
-**Content** uses Notion-flavored Markdown:
+**Content** uses Notion-flavored Markdown. The same Notion API rules apply as in `/team-digest` Step 5. Specifically:
+
+- Emoji must be standard Unicode characters (📈, ℹ️, 📊, ⚠️) - NEVER `:shortcode:` form. Notion's API rejects shortcodes with `validation_error: Custom emoji ":xxx:" not found in this workspace`.
+- Do NOT wrap inline code in bold (`**`code`**` produces `**** ` artifacts).
+- The auto-generated footer is the LAST block. Do NOT replace it with a "Known limitations" / "Caveats" / meta-section about the run; section-level inline notes belong inside their section, not at the end.
+- Do NOT invent closing meta-sections about run hygiene. If a daily fetch failed, note it inline in the Day-by-Day Index, not as a closing callout.
+
+
 
 ```
 <callout icon="📈" color="purple_bg">
