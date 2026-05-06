@@ -517,7 +517,9 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ### Synthesis
 
-- **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is decomposing the monolithic operations facet into single-responsibility components" beats listing 14 PRs.
+- **Synthesize, don't list** - describe what the team is collectively accomplishing, not individual PR titles. "The team is breaking one large contract into several smaller single-purpose contracts" beats listing 14 PRs.
+- **Short paragraphs, scannable structure.** Two to three sentences per paragraph maximum. If a priority repo has more than one theme, break into two paragraphs (e.g., a "what merged" paragraph and a "what's still open" paragraph). When listing 5+ related PRs, prefer a short bullet list with one bullet per PR over a comma-separated run-on sentence - the eye can land on individual changes.
+- **Lead with the user-visible change, not the PR number.** Each paragraph's opening sentence describes what changed for users; the PR/issue reference comes as a citation, not the subject. (See Plain-English Description Rules below for the translation-first rule and concrete bad/good shapes.)
 - After each priority repo narrative, add a **Relevance:** paragraph. Use the team profile loaded in Step 0 to drive this - the profile specifies what the team cares about, their priorities, and content opportunity triggers. If no profile exists, use generic heuristics.
 - Add a Mermaid diagram for architectural changes - component splits, service restructuring, data flow changes. **Keep every node label on a single line - never use `\n` inside labels.** Notion silently truncates Mermaid text after a `\n`, leaving readers with broken diagrams. If a label is too long, shorten it (drop parentheticals, abbreviate, use a single key word). Use `graph TD` with `direction LR` subgraphs for square layout. One diagram per repo max.
 - Surface cross-repo connections when relevant (e.g., a bug in one repo that also affects a downstream consumer)
@@ -548,30 +550,90 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ### Plain-English Description Rules
 
-Every PR/repo/release summary must answer three questions in language a developer who doesn't work on that specific project can understand:
+#### Audience
 
-1. **What changed?** (the action - "deprecated", "added", "split", "renamed")
-2. **What does it affect?** (the surface area - an API, an SDK, a deployment tool)
-3. **Why does it matter?** (the consequence for SA work - migration, partner advisory, integration impact)
+**Write for an outsider** - a developer or partner who has NEVER worked in this codebase. Assume they know general industry concepts (HTTP, REST APIs, blockchain, smart contracts, RPC calls, OAuth, git, CI) but NOT:
 
-**First-mention expansion rule:** the first time you name any project, internal component, or acronym in a section, immediately follow it with a 3-7 word plain-English expansion. Examples:
-- `[<repo-name>](<repo-url>)`, a one-line description of what the repo does
-- `<ComponentName>`, a short note on the component's role in the system
-- `<ACRONYM>`, the expanded form plus a brief context phrase
+- Your internal class names, method names, or file names
+- Your internal acronyms (MAF, NPE, JPA, FIFO-in-this-context, TCK, BN, MN, CN, PE, etc.)
+- Your team's sprint vocabulary or release shorthand
+- Project-specific jargon even when it sounds like industry standard (e.g., "facet" means something specific in your codebase that an outsider does not know)
 
-The expansions come from two sources, in priority order:
-1. The **Project Glossary** section of the team profile (loaded in Step 0). If a glossary entry exists, use it verbatim.
-2. Your own knowledge of the project, written in plain English at the level of detail above.
+The team profile's **Project Glossary** is your starting point, NOT your ceiling. If a term is in the glossary, use the glossary entry. If a term is NOT in the glossary but YOU still recognize it as insider-only (an internal class name, an internal abstraction, a code-review shorthand), you must STILL translate it - either inline in plain English, or by skipping the term entirely.
 
-If you cannot confidently expand a term, that's a signal to skip the term entirely or hedge ("an internal SDK abstraction") rather than parrot the jargon.
+#### Translation-first rule (mandatory)
 
-**Anti-examples (do NOT write summaries like these):**
-- ❌ "Deprecation notice PR #1328 opened - tool-A being formally deprecated in favor of tool-B" (no links, no expansions)
-- ❌ "V3 SDK spec sprint: client namespace with NewClient and Operator (#230)" (no link, every term unexplained)
+**Every paragraph leads with one plain-English sentence describing the user-visible change.** PR/issue references come after the plain-English lead, not as the subject of the sentence.
 
-**Good examples:**
-- ✅ "[#1328](url): [tool-A](url) is being formally deprecated in favor of [tool-B](url), a short plain-English description of tool-B. Partners using tool-A for testing should plan a migration."
-- ✅ "Active spec work in [#230](url) defines a new `client` namespace with `NewClient` (a 5-7 word description of its role) and `Operator` (a brief context phrase). Partners writing against the new SDK will see breaking changes here."
+Bad shape (PR-as-subject): `[#5371](url) merged: the async lock-service rework adjusts how eth_sendRawTransaction preserves FIFO nonce ordering for concurrent transactions.`
+
+Good shape (change-as-subject): `When users send multiple Ethereum transactions at the same time, the JSON-RPC relay now keeps them in the order they were submitted, preventing out-of-order execution. Merged in [#5371](url).`
+
+The change is the subject; the PR is the citation. Reverse the polarity of every paragraph and the digest reads to an outsider.
+
+#### Forbidden patterns (with concrete fixes)
+
+**1. Creative metaphors and sprint slang.** Banned phrases - if you find yourself writing one, rewrite the sentence with plain action verbs (released, fixed, added, merged, opened, closed):
+
+| ❌ Avoid | ✅ Use |
+|---|---|
+| "had a particularly load-bearing day" | "shipped 14 PRs and 1 release" |
+| "defensive plumbing also tightened" | "added safety checks against bad input" |
+| "a flurry of related items" | "five PRs, all related to X" |
+| "in flight" | "open" or "still under review" |
+| "cherry-picked into" | "also merged into the X release branch" |
+| "the bulk of the work is" | "most of the activity is" |
+| "lands" / "landed" | "merged" |
+
+**2. Internal class/method/file names without translation.** If you have to cite an internal name (because it is the most precise reference), wrap it in plain English on first mention:
+
+| ❌ Bad | ✅ Better |
+|---|---|
+| "fixes a NoSuchElementException in `RegisteredNodeCreateTransformer`" | "fixes a crash that occurred when a network state change was missing the expected node-registration record" |
+| "extracts maturity from `BondFacet` into `MaturityFacet`" | "split bond-maturity logic out of the main bond contract into its own dedicated module" |
+| "guards `getHistoricalBlockResponse` against empty mirror-node responses" | "added a safety check so the relay no longer crashes when the mirror node briefly returns no data" |
+
+**3. RPC / API method names without context.** Ethereum RPC methods (`eth_call`, `eth_sendRawTransaction`, `eth_getBlockByNumber`, etc.), internal API endpoints, and protocol method names need a one-phrase translation on first mention:
+
+| ❌ Bad | ✅ Better |
+|---|---|
+| "extends `eth_call` to accept blockhash" | "the read-only contract-call API can now accept a block hash directly, instead of only block numbers" |
+| "fixes nonce typing issues and chain_id mapping bugs" | "fixes two type-handling bugs that affected transaction signing on the new fork" |
+| "improves `debug_traceBlockByNumber` failures" | "fixes a developer-tooling endpoint that traces transaction execution for a given block" |
+
+**4. Acronyms not in the Project Glossary.** Expand on first mention - first time only, then the bare acronym is fine in the rest of that section. If you cannot expand it confidently, drop it:
+
+| ❌ Bad | ✅ Better |
+|---|---|
+| "the ongoing MAF migration" | "the ongoing 'Modular Architecture Facet' (MAF) migration - splitting one large contract into many smaller, single-purpose contracts" |
+| "EIP-155 NPE fix on null chainId" | "fixes a crash (null pointer error) when processing pre-EIP-155 legacy Ethereum transactions, which do not carry a chain ID" |
+
+**5. Multi-jargon sentences.** A sentence with three or more unexplained insider terms is unreadable. Split into two sentences, or translate at least one:
+
+| ❌ Bad | ✅ Better |
+|---|---|
+| "fixes nonce typing and chain_id mapping for Pectra-era transactions surfaced from the new authorization-list parser" | "fixes type-handling bugs in two places that the new transaction-authorization parser found while processing Ethereum-Pectra-fork transactions" |
+
+#### The Outsider Test (mandatory before completion)
+
+After writing each priority-repo paragraph, read it imagining you joined the team last week and have only general blockchain knowledge. Ask:
+
+- Did I introduce any term I don't recognize?
+- Did I have to mentally translate any phrase?
+- Is the user-visible change clear in the first sentence?
+- Are there more than 3 unexplained internal terms in any single sentence?
+
+If the answer is "yes" to any of those, rewrite. The Pre-Write Link Audit (Step 4.5) checks links and Mermaid syntax mechanically; this Outsider Test checks readability semantically and is your job to apply paragraph-by-paragraph as you write.
+
+#### Glossary-driven expansions (when the term IS in the profile)
+
+When the **Project Glossary** in the team profile has an entry for a project/component/acronym, use it verbatim on first mention in the section. Examples (these come from glossary entries, not made up):
+
+- `[<repo-name>](<repo-url>)`, the [glossary description verbatim]
+- `<ComponentName>`, the [glossary description verbatim]
+- `<ACRONYM>`, [glossary expansion + glossary description]
+
+If the glossary entry is more than one line, condense to the most useful 7-12 words for the inline expansion.
 
 ## Configuration
 

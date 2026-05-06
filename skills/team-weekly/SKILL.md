@@ -262,7 +262,8 @@ The same Style Rules from `/team-digest` apply here. Specifically:
 
 - **Synthesize, don't copy.** Re-summarizing the daily content is a waste; the point of the weekly is the cross-day signal you cannot get from any one daily.
 - **Linking is mandatory.** Every entity reference (repo, PR, issue, release, Notion page, GitHub user) is a markdown link. See team-digest's Linking Rules for the full table.
-- **Plain-English first-mention expansion.** First mention of any project name, component, or acronym in a section gets a 3-7 word expansion. Use the team profile's Project Glossary as the source of truth.
+- **Write for an outsider.** A reader of the weekly may not be the same person who reads the dailies. Apply team-digest's full Plain-English Description Rules: write for someone who has never worked in this codebase, lead each paragraph with the user-visible change (not the PR number), translate every internal class name / RPC method / acronym on first mention, and avoid creative metaphors and sprint slang. Apply the Outsider Test paragraph-by-paragraph: re-read each paragraph imagining you joined the team last week with general blockchain knowledge - if you have to translate any term, rewrite.
+- **Short paragraphs, scannable structure.** Two to three sentences per paragraph maximum. Use bullets for cross-day theme lists rather than run-on sentences. The weekly is a high-density artifact - readability discipline matters more here than in the dailies.
 - **No `\n` inside Mermaid labels.** If you render any Mermaid diagram (rare in weekly), keep all node labels on a single line.
 - **Failure mode: partial digest, not no digest.** If one daily fetch fails, synthesize from the rest and note the gap. If one theme has no data, omit it from the output.
 
