@@ -171,11 +171,10 @@ Extract:
 - Keywords list (under the heading "Keywords")
 - Partner conversation patterns (under the heading "Title Patterns")
 - **Favorites list** (under the heading "Favorites" or "Favorite Pages") - a bullet list of Notion page URLs the user wants to monitor. The Notion API does not expose a user's sidebar Favorites, so this list is the user-curated equivalent: pages they care about regardless of keyword match. Each bullet is a URL like `https://www.notion.so/Page-Title-32hex` or just the 32-char hex page ID. Empty/missing section means no favorites are configured - skip Step 3.5.
-- **Track Pages Created By email** (under the heading "Track Pages Created By" or "Email") - a single email address (or list, one per bullet) of the Notion users whose newly-created pages should be surfaced in the digest. This drives Step 3.6: pages created on the digest day where `created_by.person.email` matches one of these emails. Empty/missing section means skip Step 3.6.
 
-GitHub org and repo configuration comes from `config.json` (the `github.orgs` array), not from the Notion config page. This keeps structural config (which orgs/repos to scan) separate from frequently-changing settings (keywords, patterns, favorites, created-by emails).
+GitHub org and repo configuration comes from `config.json` (the `github.orgs` array), not from the Notion config page. This keeps structural config (which orgs/repos to scan) separate from frequently-changing settings (keywords, patterns, favorites).
 
-If the Notion config page is unreachable, fall back to the `defaults` section from the local config file. Favorites and Track-Pages-Created-By have no `defaults` fallback - if the config page is unreachable, skip Step 3.5 and Step 3.6 entirely with a one-line note.
+If the Notion config page is unreachable, fall back to the `defaults` section from the local config file. The Favorites list has no `defaults` fallback - if the config page is unreachable, skip Step 3.5 with a one-line note.
 
 ### Step 2: Scan GitHub Activity
 
@@ -338,32 +337,6 @@ If every favorite (and every descended child) was either inaccessible, archived,
 
 **Access model:** the Notion-hosted MCP (the OAuth-based connector Anthropic ships) inherits workspace-wide access from the user's OAuth grant - no per-page sharing required. If a `notion-fetch` returns a "not accessible" error, the cause is almost always one of: (a) the page was deleted or moved out of the user's workspace, (b) the user themselves lacks permission to that page (e.g., a private page in another team's space), or (c) the URL is malformed. Treat permission errors as a real signal worth surfacing in the digest, not as expected setup friction.
 
-### Step 3.6: Scan Pages You Created
-
-This step surfaces Notion pages **you** personally created on the digest day - useful for catching new strategy docs, one-off notes, or fresh meeting pages that don't match the configured keywords or partner patterns.
-
-**If no email was extracted from the "Track Pages Created By" config heading:** skip this step entirely. Do not include a Pages I Created section in the output.
-
-**Process:**
-
-1. Use `notion-search` with `query_type: "internal"`, `created_date_range: { start_date: "<DATE_LABEL>" }`, and an empty query string (or a generic term like the workspace name). Set `page_size: 50`.
-2. From results, filter to those where `created_by.person.email` (or equivalent field on the response) matches any email in the configured list.
-3. For each match, call `notion-fetch` to get the page content (parallelize).
-4. Apply cross-section dedup against Keyword, Partner, and Favorites sections - if a page already appeared elsewhere, mention it briefly in this section with a link-back rather than re-summarizing.
-
-**Output for each match:**
-
-- Page title as a markdown link (canonical URL from the MCP response)
-- 1-3 sentence summary of what the page is for
-- A **Relevance:** sentence using the team profile as the lens (or "Personal note - no team context inferred." if the page looks personal)
-- The `created_at` timestamp
-
-**Section-empty fallback:**
-
-If the email is configured but no matching pages were created on `$DATE_LABEL`, include the section with a single line: `No new pages created by <email> on <DATE_LABEL>.` This signals that the scan ran.
-
-If `notion-search` fails entirely, note the failure inline and continue to Step 4.
-
 ### Step 4: Scan Partner Conversations
 
 For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range` filter for the previous calendar day.
@@ -387,7 +360,7 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 1. **Every repo name is a markdown link.** Search the draft for bare repo names. If a repo is mentioned without `[name](https://github.com/<org>/<name>)`, fix it.
 2. **Every PR/issue number is a link.** Search for bare `#<number>` patterns. Every match must be `[#<number>](<url>)` with the actual URL.
 3. **Every release tag is a link.** Search for bare version strings like `v1.2.3` in release contexts. Each must link to the GitHub release page.
-4. **Every Notion page title is a link.** In the Keyword Monitor, Favorites Activity, Pages I Created, and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response. In Favorites Activity specifically, every child-page entry must also link its parent favorite (e.g., `(under [Parent Title](parent-url))`).
+4. **Every Notion page title is a link.** In the Keyword Monitor, Favorites Activity, and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response. In Favorites Activity specifically, every child-page entry must also link its parent favorite (e.g., `(under [Parent Title](parent-url))`).
 5. **Every GitHub user mention is a link.** Search for bare `@<handle>` patterns - each must link to `https://github.com/<handle>`.
 6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
 7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
@@ -497,12 +470,6 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 # Favorites Activity
 
 <for each favorited page (and any child page found one level deep, capped at 50 per favorite) edited on DATE_LABEL: 2-4 sentence narrative summary, page title as a markdown link, what changed, when (last_edited_time), and an Relevance line. Note child pages with their parent favorite, e.g. `[Child Title](url) (under [Parent](parent-url))`. Omit non-updated pages. If the favorites list is empty or unreachable, omit this section. If favorites are configured but had no updates, write: "No favorited pages or their child pages had updates on <DATE_LABEL>.">
-
----
-
-# Pages I Created
-
-<for each page created on DATE_LABEL by an email matching the "Track Pages Created By" config: page title as a markdown link, 1-3 sentence summary, Relevance, created_at timestamp. Omit if no email is configured. If email is configured but no matching pages: "No new pages created by <email> on <DATE_LABEL>.">
 
 ---
 
