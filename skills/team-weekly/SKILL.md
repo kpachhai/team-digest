@@ -190,6 +190,10 @@ Write plain Markdown for the dry-run file (no Notion-flavored `<callout>`, `<det
 - The auto-generated footer is the LAST block. Do NOT replace it with a "Known limitations" / "Caveats" / meta-section about the run; section-level inline notes belong inside their section, not at the end.
 - Do NOT invent closing meta-sections about run hygiene. If a daily fetch failed, note it inline in the Day-by-Day Index, not as a closing callout.
 
+**Executive Summary (mandatory).** After the header callout, before "Week at a Glance" stats, include an `## Executive Summary` section. Same rules as `/team-digest`'s Executive Summary: 5-8 bullets, each leading with a bold callout (project, theme, or topic) followed by a one-line plain-English statement of what shifted across the week and why it matters. Every bullet links to the relevant theme section below for drill-down. Cover a mix: top GitHub themes, the week's releases, partner momentum, the most consequential Notion pages, industry-news standouts. The Outsider Test applies - lead with the user-visible change, no insider jargon without translation.
+
+**Top Picks: Notion Pages Worth Reading (when applicable).** The weekly inherits the daily's Top Picks idea. After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading This Week` section IF AND ONLY IF the week produced at least one Notion page worth highlighting. Selection: aggregate the Top Picks from each daily digest plus the strongest items from the week's Notion Content Pulse, dedupe by page ID, rank by team-profile relevance + cross-day momentum (a page that came up multiple days ranks higher), pick top 3-5. Format: same as the daily's Top Picks.
+
 
 
 ```
