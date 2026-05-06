@@ -155,6 +155,10 @@ for skill_dir in "$SCRIPT_DIR"/skills/*/; do
     target_dir="$HOME/.claude/skills/$skill_name"
     mkdir -p "$target_dir"
     cp "$skill_dir/SKILL.md" "$target_dir/SKILL.md"
+    # Marker file - lets update.sh detect skills installed from this repo
+    # without false-positive string matching against unrelated skills that
+    # happen to mention "team-digest" in their body.
+    touch "$target_dir/.team-digest-managed"
     echo "[OK] Installed /$skill_name -> $target_dir/SKILL.md"
 
     # Copy lib/ helpers if the skill has them. The skill body invokes

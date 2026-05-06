@@ -85,6 +85,10 @@ for skill_dir in "$SCRIPT_DIR"/skills/*/; do
     target_dir="$HOME/.claude/skills/$skill_name"
     mkdir -p "$target_dir"
     cp "$skill_dir/SKILL.md" "$target_dir/SKILL.md"
+    # Marker file - lets the stale-skill check below distinguish team-digest's
+    # own skills from any other skill that happens to mention "team-digest"
+    # in its body (which would false-positive on a string-match heuristic).
+    touch "$target_dir/.team-digest-managed"
 
     # Sync lib/ helpers if the skill has them. Mirror the lib/ contents
     # so removed helpers in the repo get cleaned up at the install path.
@@ -120,8 +124,10 @@ for installed_skill in "$HOME"/.claude/skills/*/SKILL.md; do
   if [ -d "$SCRIPT_DIR/skills/$skill_name" ]; then
     continue
   fi
-  # Only flag skills that look like they came from team-digest
-  if grep -q "team-digest" "$installed_skill" 2>/dev/null; then
+  # Only flag skills this repo actually installed (marker file present).
+  # Skills installed from elsewhere - dotfiles, other plugins, third-party
+  # marketplaces - are left alone even if they happen to reference team-digest.
+  if [ -f "$HOME/.claude/skills/$skill_name/.team-digest-managed" ]; then
     echo "[WARN] /$skill_name is installed but no longer in the repo. Remove manually if no longer needed:"
     echo "       rm -rf $HOME/.claude/skills/$skill_name"
   fi
