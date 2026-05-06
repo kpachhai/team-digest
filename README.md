@@ -64,8 +64,7 @@ Both write to the SAME Notion database, distinguished by the `Digest Type` prope
 2. **Industry News** - public RSS/Atom feeds plus GitHub commit-watching for spec sets that don't publish RSS. Configured via `rss_feeds` in `config.json`. Items dated to the digest day are grouped by category in an **Industry News** section.
 3. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords. One narrative summary per matched page with linked title, matched keywords, and relevance.
 4. **Notion Favorites** - reads a user-curated list of Notion page URLs from a **Favorites** heading on the Notion config page (since Notion's API does not expose sidebar Favorites). For each favorite, fetches `last_edited_time`; if the page was edited on the digest day it gets a summary. Single-level child descent: if a favorite is an *index* page, the digest also fetches each linked page (one hop, capped at 50 children) and includes those edited that day.
-5. **Pages I Created** - searches Notion for pages **created** on the digest day where `created_by.person.email` matches the email under the **Track Pages Created By** heading on the Notion config page. Catches new strategy docs, one-off notes, and meeting pages that don't match keywords.
-6. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
+5. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
 
 Pages found through multiple sources are deduplicated by page ID across sections; the user explicitly cares about Favorites, so a favorite that ALSO matched a keyword stays in the Favorites section with a back-link rather than being silently dropped.
 
@@ -209,9 +208,6 @@ See [docs/configuration.md](docs/configuration.md).
     |           For favorited *index* pages: also fetch one-level-deep children
     |           (capped at 50 per parent).
     |
-    +---> [3.6] notion-search created_date_range = DATE_LABEL,
-    |           filter by created_by.person.email
-    |
     +---> [4]  notion-search partner-conversation title patterns
     |
     v
@@ -303,7 +299,6 @@ The digest architecture is designed to add new data sources without changing exi
 | GitHub org activity          | Shipped | `lib/fetch-github-prs.sh` / `fetch-github-issues.sh` / `fetch-github-releases.sh` - `gh` CLI + Python parsing |
 | Notion keyword monitor       | Shipped | `notion-search` MCP scoped to `created_date_range`                                                            |
 | Notion Favorites + 1-hop     | Shipped | Favorites list on the Notion config page; per-favorite `notion-fetch` + child-page descent (cap 50)           |
-| Pages I created              | Shipped | `notion-search` filtered by `created_by.person.email` matching a config-page email                            |
 | Notion meeting notes         | Shipped | `notion-search` MCP filtered by configurable title patterns                                                   |
 | RSS / Atom feeds             | Shipped | `lib/fetch-rss.sh` - curl + Python stdlib XML; handles RSS 2.0 and Atom in one pass                           |
 | GitHub spec-set commits      | Shipped | `lib/fetch-gh-commits.sh` - `gh api commits` with optional path filter (e.g., a public spec repo)             |

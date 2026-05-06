@@ -111,13 +111,6 @@ The Notion config page holds the live, team-editable settings. The page ID is st
 
 > **Access model.** The Notion-hosted MCP (the OAuth-based connector Anthropic ships) inherits workspace-wide access from your OAuth grant. You do NOT need to share each favorited page (or its children) with an integration manually - access is whatever your authenticated Notion session can see. If the digest logs `(not accessible)` on a favorite, the cause is almost always a deleted page, a moved page, a malformed URL, or a page in a workspace you yourself cannot read - treat it as a real signal, not expected setup friction.
 
-**Track Pages Created By** - A list of Notion user emails. The digest scans the workspace for pages created on the digest day where `created_by.person.email` matches one of these emails, and surfaces them in a dedicated "Pages I Created" section. Useful for catching new strategy docs, one-off notes, or fresh meeting pages that don't match keywords or partner patterns.
-
-- Add a heading **Track Pages Created By** on the config page
-- Under a sub-heading **Email** (or directly under the main heading), paste a bullet list of Notion user emails - one per line
-- Empty or missing section means this scan is skipped (the section is silently omitted from the digest)
-- Multi-team digest: list multiple emails to surface pages created by any teammate
-
 **Organization** - The GitHub org to scan.
 
 **Scan Window** - How far back to scan (default: 24 hours).

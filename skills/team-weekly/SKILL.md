@@ -138,7 +138,7 @@ Aggregate the Industry News sections across all daily digests. **Deduplicate by 
 
 **Theme F - Favorites movement**
 
-Aggregate the "Favorites Activity" sections across all daily digests. **Pages that updated on 2+ days** get a callout - they are actively in flight. **Single-day updates** get a one-line bullet. Use the page URLs the dailies used so the reader can drill in. If "Pages I Created" sections fired across the week, list those too with the same multi-day-vs-single-day split.
+Aggregate the "Favorites Activity" sections across all daily digests. **Pages that updated on 2+ days** get a callout - they are actively in flight. **Single-day updates** get a one-line bullet. Use the page URLs the dailies used so the reader can drill in.
 
 **Theme G - Day-by-Day Index**
 
