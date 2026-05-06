@@ -433,6 +433,10 @@ Use the `Write` tool to write the content (no Notion-flavored `<callout>` / `<de
 - Use `**bold**` for bold, `- item` for bullet lists
 - Do NOT use `\n` inside content - use separate blocks
 - Do NOT try to fetch the Notion markdown spec at runtime
+- **Emoji must be standard Unicode characters (📊, ℹ️, 📈, ⚠️, 📌, 🤝)**, NEVER `:shortcode:` form (`:memo:`, `:rocket:`, `:warning:`). Notion's API rejects shortcodes with `validation_error: Custom emoji ":xxx:" not found in this workspace`, forcing a retry. The same applies to the page-level icon - either omit it or use a Unicode character; never pass a `:shortcode:` value.
+- **Do NOT wrap inline code in bold.** Patterns like `**``repo-name``**` produce `**** ` artifacts in the rendered output because the bold and code spans collide. Pick one: either bold (`**repo-name**`) or code (`` `repo-name` ``). For repo names that are also markdown links, prefer the linked form `[repo-name](url)` and skip bold/code entirely.
+- **The auto-generated footer is the LAST block of the page.** It is the closing callout that documents what was scanned and the data window. Never replace it with a "Known limitations" / "Caveats" / "Notes about this run" callout, never omit it. Section-level inline notes (e.g., `(Phase B descent skipped)` or `(gh search hit the 100-result cap)`) belong inside their respective sections, not as a closing callout.
+- **Do NOT add meta-sections about run hygiene.** The output structure below is the contract. Do not invent extra closing sections like "Known limitations for this run", "Caveats", "What this digest does not cover", or any other meta-narrative about the digest's own production. If a source returned no data, that's already handled by the section-empty fallbacks per source. If a source partially failed, note it inline at the section, not at the end.
 
 **Content structure:**
 
