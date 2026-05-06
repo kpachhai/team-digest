@@ -411,6 +411,61 @@ Use the `Write` tool to write the content (no Notion-flavored `<callout>` / `<de
 - **The auto-generated footer is the LAST block of the page.** It is the closing callout that documents what was scanned and the data window. Never replace it with a "Known limitations" / "Caveats" / "Notes about this run" callout, never omit it. Section-level inline notes (e.g., `(Phase B descent skipped)` or `(gh search hit the 100-result cap)`) belong inside their respective sections, not as a closing callout.
 - **Do NOT add meta-sections about run hygiene.** The output structure below is the contract. Do not invent extra closing sections like "Known limitations for this run", "Caveats", "What this digest does not cover", or any other meta-narrative about the digest's own production. If a source returned no data, that's already handled by the section-empty fallbacks per source. If a source partially failed, note it inline at the section, not at the end.
 
+#### Executive Summary (mandatory first content block)
+
+Every digest opens with an **Executive Summary** under an `## Executive Summary` heading, immediately after the header callout. Purpose: a reader who only skims this section should leave with the day's headlines.
+
+**Format:**
+
+- 5 to 8 bullet points
+- Each bullet is one specific change with stakes - not "lots of activity in X"
+- Lead each bullet with a bold callout (the project, repo, or topic) followed by a one-line plain-English statement of what changed and why it matters
+- Every bullet links to the relevant section below for drill-down (e.g., the priority-repo section, the release, the Notion page, the partner conversation)
+- Cover a mix: priority-repo headlines, releases, major Notion design docs created today, partner conversations of substance, notable Industry News items
+- Skip routine maintenance (dep bumps, README touch-ups, test refactors) - the per-section narratives already cover those
+- Apply the same Plain-English Description Rules: write for an outsider, lead with the user-visible change, no insider jargon without translation
+- The audience is your future self skimming the page in 30 seconds - what would you most want to surface?
+
+**Anti-examples:**
+
+- ❌ "Lots of activity in `hiero-json-rpc-relay`" - too vague; what specifically?
+- ❌ "5 PRs merged across the org" - count without content
+- ❌ "Quiet day on consensus-node" - belongs in the per-repo narrative, not the headlines
+
+**Good examples:**
+
+- ✅ "**`hiero-json-rpc-relay` Pectra-readiness work continued** - the relay now keeps concurrent transactions in submission order ([#5371](url) merged), and a separate type-handling fix for the new fork landed ([#5370](url))."
+- ✅ "**Major design doc landed in Notion** - the [JSON-RPC Relay → Block Node Port](url) plan was authored, mapping the path to deprecate the Node.js relay in favor of an in-process Java plugin. Canonical reference for partners asking 'when can I run an in-process EVM endpoint?'"
+- ✅ "**`solo` v0.72.0 released** - the local Hiero/Hedera dev network deployment tool cut a new release; partners using HIP-1137 or HIP-1261 features locally still hit a regression ([#4228](url))."
+
+**Section-empty fallback:** the Executive Summary is mandatory - if the day was genuinely quiet (e.g., a holiday with zero activity), write a single bullet acknowledging it: "- Quiet day across all sources: no priority-repo activity, no releases, no Notion pages created, no partner conversations."
+
+#### Top Picks: Notion Pages Worth Reading
+
+After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading` section IF AND ONLY IF the day produced at least one Notion page worth highlighting.
+
+**Selection logic:**
+
+1. Take the union of pages found via Notion Keyword Monitor (Step 3) and Favorites Activity (Step 3.5). De-duplicate by page ID.
+2. Exclude pages whose title starts with "Team Daily Digest", "Team Weekly Digest", "SA Daily Digest" - the digest's own output should never be in Top Picks.
+3. Rank remaining pages by relevance to the team profile's "What's Relevant" / "High Priority" criteria. A page that touches multiple high-priority themes from the profile ranks higher than a page that touches one. A page with a clear stake (architecture decision, partner impact, breaking change) ranks higher than a page with a routine status update.
+4. Pick the top 3-5. If fewer than 3 pages survive selection, pick all of them. If zero, omit the section entirely.
+
+**Format per pick:**
+
+```markdown
+- **[<Page Title>](<notion-url>)** - 2-3 sentence summary of what the page contains AND why it's worth reading right now (which profile theme it touches, what decision/change it represents). Include one or two key facts from the page that would help the reader decide whether to drill in.
+```
+
+**Anti-examples:**
+
+- ❌ Listing every keyword-matched page (that's what the Notion Keyword Monitor section is for)
+- ❌ Including the digest's own output pages
+- ❌ One-sentence summaries that just restate the title
+- ❌ More than 5 picks - if everything is a top pick, nothing is
+
+**Why this section exists:** the Notion Keyword Monitor below catches every keyword hit; that's a complete list. Top Picks is the curated subset for someone who only has 5 minutes - the 3-5 pages that, if you read nothing else in Notion today, you should still see.
+
 **Content structure:**
 
 ```
@@ -419,6 +474,22 @@ Use the `Write` tool to write the content (no Notion-flavored `<callout>` / `<de
 <N> repos active | <N> PRs updated | <N> issues updated | <N> releases
 Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 </callout>
+
+---
+
+## Executive Summary
+
+- **<Bold lead>** - <one-line plain-English change with stake, with link to drill-down section>
+- **<Bold lead>** - <...>
+(5-8 bullets total)
+
+---
+
+## Top Picks: Notion Pages Worth Reading
+
+- **[<Page Title>](<notion-url>)** - <2-3 sentence summary explaining what the page is + why it's worth reading + one or two key facts>
+- **[<Page Title>](<notion-url>)** - <...>
+(3-5 picks; omit the entire section if zero pages qualify)
 
 ---
 
