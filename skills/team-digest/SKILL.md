@@ -30,6 +30,7 @@ This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-
 
 ## Important Runtime Notes
 
+- **DO NOT construct Notion page URLs from page titles.** Every Notion link in the digest MUST come from the `url` field of a `notion-search` or `notion-fetch` MCP response. URLs like `https://www.notion.so/Some-Page-Title` or `https://www.notion.so/Jake-Kea` that you derive from a title are invalid - Notion does not serve pages at title-derived slugs. If you do not have the URL from an MCP response, write the title as plain text with `(link unavailable)` instead. This rule applies to every section: Keyword Monitor, Favorites, Partner Conversations, Executive Summary, Top Picks.
 - **DO NOT use `readMcpResource` or `ReadMcpResourceTool`** to fetch Notion markdown specs. The output format is fully defined in this skill. The MCP server name format varies between sessions and will cause errors.
 - **DO NOT read persisted tool result files** (the `/tool-results/` paths). Process command output directly within the same Bash command. Persisted files may have prefix lines that break JSON parsing.
 - **DO NOT use `cat` to read files then parse them in a separate step.** Always pipe or process in a single command chain.
@@ -284,8 +285,19 @@ Run keyword searches in parallel batches (2-3 keywords per search query to reduc
 
 **Exclusions:** Skip any page whose title starts with "Team Daily Digest" (our own output).
 
+**Notion Link Registry (mandatory - do this immediately after each search call):**
+
+After EVERY `notion-search` response, before moving on, extract and record the URL for every page returned. The `notion-search` MCP tool includes a `url` (or `public_url`) field for each result - that exact value is what you must use when linking the page anywhere in the digest. Build and maintain a running registry in your context:
+
+```
+Page ID | Title | URL (from MCP response)
+<id>    | <title> | <exact URL from notion-search or notion-fetch response>
+```
+
+**You MUST fetch each matched page with `notion-fetch` to get its canonical URL if `notion-search` does not return one.** Do NOT proceed to writing until you have a URL for every page in the registry.
+
 For each unique page found:
-- Fetch full page content using the `notion-fetch` MCP tool
+- Fetch full page content using the `notion-fetch` MCP tool; extract the `url` field from the response and add it to the registry
 - Write a narrative summary explaining what the page contains
 - List which keywords matched
 - Add a "relevance" note explaining why this matters for the team
@@ -301,7 +313,7 @@ This step covers the user's curated list of "Favorites" pages - documents they c
 **Phase A - Fetch each favorite (parallel):**
 
 1. Call `notion-fetch` with the URL or ID. The MCP tool accepts both forms; no need to parse the 32-char hex from the URL manually.
-2. From the response, read `last_edited_time` (an ISO-8601 UTC timestamp on the page object).
+2. From the response, read `last_edited_time` (an ISO-8601 UTC timestamp on the page object) AND the page's canonical `url` field. Add the `{page_id, title, url}` tuple to the Notion Link Registry immediately.
 3. Compare the date portion of `last_edited_time` (in UTC) against `$DATE_LABEL`. If they match, the favorite itself was edited during the digest window - mark it as a "qualifying parent."
 4. If the page was archived (response includes `archived: true`), skip it silently along with any descent.
 5. If `notion-fetch` returns an error (page not found, page deleted, user lacks permission), log a one-line failure note like `(Favorite <ID>: not accessible - check the URL or your access)` and continue.
@@ -343,13 +355,16 @@ For each partner pattern from configuration, search the Notion workspace using t
 
 **Deduplication:** Skip pages already covered in the keyword monitor section. Track by page ID.
 
+**URL capture (mandatory - same rule as Step 3):** After every `notion-search` response, immediately extract the `url` field for each result and add it to the Notion Link Registry. After every `notion-fetch` response, extract and record the canonical `url` field. Use ONLY these registry values when linking meeting pages in the Partner Conversations section. Never construct a Notion URL from a meeting note title (e.g., `https://www.notion.so/Jake-Kea` constructed from the title "Jake <> Kea" is WRONG).
+
 For each meeting/conversation page found:
-- Fetch full page content using the `notion-fetch` MCP tool
+- Fetch full page content using the `notion-fetch` MCP tool; extract the `url` from the response and record it in the registry
 - Identify partner/company names discussed
 - **Group results by company/partner** (not by page)
 - Summarize key discussion points
 - Extract and list action items with checkboxes
 - Note any follow-ups or deadlines mentioned
+- Link the meeting page title using the URL from the registry: `[<title>](<registry-url>)`
 
 If partner scanning fails, note the failure and continue.
 
@@ -360,7 +375,7 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 1. **Every repo name is a markdown link.** Search the draft for bare repo names. If a repo is mentioned without `[name](https://github.com/<org>/<name>)`, fix it.
 2. **Every PR/issue number is a link.** Search for bare `#<number>` patterns. Every match must be `[#<number>](<url>)` with the actual URL.
 3. **Every release tag is a link.** Search for bare version strings like `v1.2.3` in release contexts. Each must link to the GitHub release page.
-4. **Every Notion page title is a link.** In the Keyword Monitor, Favorites Activity, and Partner Conversations sections, every page title must be `[<title>](<notion-url>)` using the URL from the MCP response. In Favorites Activity specifically, every child-page entry must also link its parent favorite (e.g., `(under [Parent Title](parent-url))`).
+4. **Every Notion page title is a link using a URL from the Notion Link Registry.** In the Keyword Monitor, Favorites Activity, and Partner Conversations sections, every page title must be `[<title>](<notion-url>)`. The URL MUST be the exact value extracted from a `notion-search` or `notion-fetch` MCP response and stored in the registry - never constructed from the page title. Scan the draft for any Notion URL that matches the pattern `notion.so/<title-slug>` (a slug derived from the page title) - these are fabricated and MUST be replaced with the registry value, or removed if no registry entry exists. If a page has no URL in the registry, write the title as plain text followed by `(link unavailable)` rather than inventing a URL. In Favorites Activity specifically, every child-page entry must also link its parent favorite (e.g., `(under [Parent Title](parent-url))`).
 5. **Every GitHub user mention is a link.** Search for bare `@<handle>` patterns - each must link to `https://github.com/<handle>`.
 6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
 7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
@@ -588,7 +603,7 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 - Person names that are NOT GitHub handles (e.g., partner names mentioned in meeting notes) do NOT get links.
 - The first time you mention any specific entity in a section, it must be linked. Subsequent mentions in the same section may be plain text if context makes the reference unambiguous, but linking again is preferred.
 - When the `gh` helper output contains a `url` field for a PR/issue/release, USE IT. Do not reconstruct URLs manually.
-- For Notion pages found via `notion-search` or `notion-fetch`, the response includes a `url` (or `public_url`) field. Use that exact value.
+- For Notion pages found via `notion-search` or `notion-fetch`, the response includes a `url` (or `public_url`) field. Store it in the Notion Link Registry (Step 3) and use ONLY that exact value - never derive a URL from the page title. A URL like `https://www.notion.so/Some-Page-Title` that you constructed from a title is WRONG and will point to a nonexistent page. If you do not have the URL from the MCP response, write the title as plain text with `(link unavailable)` rather than fabricating a link.
 
 ### Plain-English Description Rules
 
