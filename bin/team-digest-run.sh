@@ -25,7 +25,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 LOG="${TEAM_DIGEST_LOG:-$HOME/.local/log/team-digest.log}"
 RAW_LOG="${TEAM_DIGEST_RAW_LOG:-$HOME/.local/log/team-digest-raw.jsonl}"
-MODEL="${TEAM_DIGEST_MODEL:-claude-opus-4-7}"
+MODEL="${TEAM_DIGEST_MODEL:-claude-sonnet-4-6}"
 
 mkdir -p "$(dirname "$LOG")" "$(dirname "$RAW_LOG")"
 echo "" >> "$LOG"
