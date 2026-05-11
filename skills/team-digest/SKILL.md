@@ -385,7 +385,69 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
 8. **Every Industry News title or commit SHA is a link.** Items in the Industry News section must each be `[<title>](<link>)` (RSS) or `[<short-sha>](<commit-url>)` (commit). No bare titles or SHAs. Summaries must have HTML tags stripped - search the section for `<p>`, `<img>`, `<a `, and similar; if any are present, render the prose as plain text instead.
 
-If any of these checks fail, fix the draft before proceeding to Step 5. Bare entity references, unexplained jargon, and broken Mermaid diagrams are the three most common readability bugs - this audit is the gate that prevents all three from reaching Notion.
+If any of checks 1-8 fail, fix the draft before proceeding.
+
+### Part B: Quality Scaffold (mandatory - complete after the link checks above)
+
+These three audits are the difference between a digest that reads like a log dump and one a non-technical person can actually use. Complete each one explicitly - state your findings in plain text before moving to Step 5.
+
+#### Quality check A: Diagram audit
+
+For EACH priority repo section, scan the PRs and issues that appeared on `$DATE_LABEL` and check whether any of these triggers fired:
+
+| Trigger | Example PR/issue descriptions that match |
+|---|---|
+| New component, service, module, or smart contract introduced | "add X service", "introduce XFacet", "scaffold X module", "FactoryFacet added", "new XHelper class" |
+| Existing component split or extracted | "extract X from Y", "split X into A and B", "move X out of Y into its own module" |
+| Components merged or consolidated | "merge X and Y", "consolidate X into Y", "fold X into Z" |
+| Data flow or dependency changed between services | "X now calls Y", "remove dependency on Z", "route X through Y instead of Z" |
+| Component restructured or migrated to a new pattern | "restructure X", "refactor X into layers", "migrate X to new pattern", "move X into the store layer" |
+| Architecture documented in a PR | "add ADR for X", "document X architecture", "architecture diagram for X" |
+| New integration point between two previously unconnected systems | "X now integrates with Y", "X emits events consumed by Y", "wire X to Y" |
+| Bug fix that reveals an unexpected interaction between components | "fix X where Y incorrectly assumed Z after A was changed" |
+
+**For every repo where at least one trigger fired, a diagram is required.** Add it now if missing. Use `graph TD` with `direction LR` subgraphs for square layout; single-line node labels only (no `\n`).
+
+State your findings explicitly before writing Step 5 - one line per priority repo:
+```
+hiero-consensus-node: trigger "move X into store layer" fired → diagram REQUIRED → added
+asset-tokenization-studio: trigger "new FactoryFacet introduced" fired → diagram REQUIRED → added
+hiero-json-rpc-relay: no trigger matched → no diagram needed
+solo: trigger "new silent mode changes how solo interacts with CI" fired → diagram REQUIRED → added
+```
+
+If you added a diagram, re-run check 7 above on it (no `\n` in labels).
+
+#### Quality check B: Executive Summary specificity gate
+
+Re-read each Executive Summary bullet. For each one, verify it passes both questions:
+- **Q1 - Specific:** Does it name a concrete change - not "various improvements", "continued work on", "lots of activity in X", "dependency updates across the org"?
+- **Q2 - Consequence:** Does it state the effect or why it matters to a reader - not just what happened, but what it means?
+
+If a bullet fails either question, rewrite it before proceeding.
+
+Then scan the entire Executive Summary for the pattern `` **` `` (bold immediately followed by a backtick). These produce `**** ` rendering artifacts in Notion. Replace every match:
+- ❌ `` **`hiero-consensus-node`** architecture docs`` → artifacts on render
+- ✅ `**[hiero-consensus-node](https://github.com/hiero-ledger/hiero-consensus-node) architecture docs**`
+
+Use the linked form `[repo-name](url)` whenever possible - it provides navigation and avoids the collision entirely.
+
+#### Quality check C: Industry News clarity
+
+For each item in the Industry News section, verify it has two parts:
+1. **What happened** - plain English, not a raw RSS title or feed description verbatim
+2. **Why it matters** - one phrase explaining relevance to Hedera/EVM ecosystem work
+
+Required format: `[title](link) - <plain-English what happened>; relevant because <why it matters for our work>`
+
+- ❌ `[EIP-7981 reference implementation](url) - Update EIP-7981 reference implementation by Toni Wahrstatter` - raw commit message
+- ✅ `[EIP-7981 reference implementation](url) - the reference code for validator credential rotation was updated; relevant because Hedera's Pectra compatibility work will need to handle this credential mechanism`
+
+If you cannot construct a genuine "why it matters" for an item, drop it rather than padding with noise. Two relevant items beats five padded ones.
+
+---
+
+Only proceed to Step 5 after: all triggered diagrams are present and checked for `\n` labels, every Executive Summary bullet passes Q1 and Q2, and every Industry News item has both parts.
 
 ### Step 5: Write the Combined Digest
 

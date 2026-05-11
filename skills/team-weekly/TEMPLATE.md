@@ -1,9 +1,10 @@
 # Team Weekly Digest - Output Template
 
-This file defines the canonical output format for `/team-weekly`.
-Edit this file to change how weekly digests look. The SKILL.md reads this file in Step 5
-as the output contract. Keep `<PLACEHOLDER>` notation intact - these are substituted at
-write time. Notion-flavored Markdown syntax is used throughout.
+This file is the canonical output format for `/team-weekly`.
+Edit this file to change how weekly digests look. The skill reads it in Step 5 as the output contract.
+`<PLACEHOLDER>` values are substituted at write time. Notion-flavored Markdown syntax throughout.
+
+Inline annotations (lines starting with `NOTE:`) are instructions to the model - do not render them.
 
 ---
 
@@ -20,7 +21,7 @@ write time. Notion-flavored Markdown syntax is used throughout.
 9. Industry News Roundup (omit if no items)
 10. Favorites Movement (omit if no Favorites Activity in any daily)
 11. Day-by-Day Index
-12. Footer callout (ALWAYS the last block)
+12. Footer callout (ALWAYS last)
 
 ---
 
@@ -37,7 +38,7 @@ write time. Notion-flavored Markdown syntax is used throughout.
 # Week at a Glance
 
 - <N> daily digests processed (<first weekday> to <last weekday>)
-- <N> priority repos with sustained activity (3+ days of PRs)
+- <N> priority repos with sustained activity (3+ days of PRs or issues)
 - <N> releases shipped across the week
 - <N> partners with conversations recorded
 - <N> favorited pages with multi-day updates
@@ -46,27 +47,64 @@ write time. Notion-flavored Markdown syntax is used throughout.
 
 ## Executive Summary
 
-- **<Bold project or theme>** - <one-line plain-English statement of what shifted across the week and why it matters; link to the relevant theme section below>
-- **<Bold project or theme>** - <...>
-(5-8 bullets total. Cover: top sustained GitHub themes, notable releases, partner momentum, consequential Notion pages, industry-news standouts. Write for an outsider - no insider jargon without translation.)
+NOTE: 5-8 bullets covering the WEEK's signal - not a repeat of individual daily headlines.
+NOTE: Each bullet must name a cross-week THEME or SHIFT, not a single day's event.
+NOTE: Same two-question gate as the daily: Q1 - specific? Q2 - consequence/why it matters?
+NOTE: Same bold+code rule: use **[repo-name](url)** or **plain bold**, never **`code`**.
+NOTE:
+NOTE: BAD:  - **`asset-tokenization-studio`** security audit - Audit fixes continued throughout the week.
+NOTE:       (fails Q1: which findings? fails Q2: so what for partners?)
+NOTE: GOOD: - **[asset-tokenization-studio](url) closed its external security audit sprint** - 12 findings merged this week,
+NOTE:       including a critical admin-role lockout bug (FIND-111) and a nonce-sequencing vulnerability (FIND-073).
+NOTE:       Partners using ATS as a tokenization baseline should hold mainnet deployments until the audit is complete.
+NOTE:
+NOTE: BAD:  - **Guardian** had lots of activity - AI Toolkit scaffold merged, various PRs merged.
+NOTE:       (fails Q1 and Q2)
+NOTE: GOOD: - **[Guardian](url) adds an AI automation layer** - the Guardian AI Toolkit scaffold merged, introducing
+NOTE:       Docker Compose infrastructure and repo structure for AI-driven policy creation. First step toward
+NOTE:       reducing the manual policy authoring burden for sustainability use cases.
+
+- **<plain bold or [linked name](url)>** - <specific cross-week theme>; <consequence for partners or the team>
+- **<plain bold or [linked name](url)>** - <...>
+(5-8 bullets; cover top sustained GitHub themes, releases, partner momentum shifts, consequential Notion pages, industry news standouts)
 
 ---
 
 ## Top Picks: Notion Pages Worth Reading This Week
 
-- **[<Page Title>](<notion-url from MCP>)** - <2-3 sentence summary: what it contains, why it's relevant this week, one or two key facts>
+NOTE: 3-5 pages. Aggregate Top Picks from all dailies + Notion Content Pulse. Dedupe by page ID.
+NOTE: Rank by team-profile relevance + cross-day momentum (page appearing on multiple days ranks higher).
+NOTE: Omit section if zero pages qualify.
+NOTE: Each entry: 2-3 sentences - WHAT + WHY WORTH READING THIS WEEK + one concrete fact.
+
+- **[<Page Title>](<notion-url from MCP>)** - <what the page is about>. <why it's relevant this week - cross-day context, what decision it supports>. <one concrete fact>
 - **[<Page Title>](<notion-url from MCP>)** - <...>
-(3-5 picks from the union of each daily's Top Picks + Notion Content Pulse; ranked by profile relevance + cross-day momentum; omit the section when zero qualify)
 
 ---
 
 # Top GitHub Themes
 
-<Paragraph 1: the 2-3 repos with the most sustained cross-week activity. What were they collectively building? Link the most significant individual PRs.>
+NOTE: 2-3 paragraphs synthesizing the repos with SUSTAINED activity (3+ days of PRs or issues).
+NOTE: A repo with 1 PR on Monday is noise; a repo with PRs every day is signal.
+NOTE: Lead each paragraph with the user-visible theme, not the repo name or PR numbers.
+NOTE: Reference the most significant individual PRs; link every one.
+NOTE:
+NOTE: BAD:  "hiero-consensus-node had 15 PRs this week including #25382, #25381, #25380..."
+NOTE: GOOD: "The Hedera consensus layer (hiero-consensus-node) published five architecture reference documents this week -
+NOTE:        covering restart procedures, event routing, and cryptographic state management. These are the first formal
+NOTE:        ADRs for the consensus subsystem and will directly support SA deep-dives with enterprise partners on
+NOTE:        network reliability guarantees."
+NOTE:
+NOTE: End the section with a one-line "Quieter this week" callout for expected repos that were absent.
+NOTE: Only include repos the team profile lists as high-priority AND that had no PRs this week.
 
-<Paragraph 2: architectural changes, if any. Reference specific merged ADRs or design docs. Do not re-render Mermaid diagrams from the dailies - reference them by name and date.>
+<Paragraph 1: top sustained theme with user-visible framing and linked PRs>
 
-<Quieter this week: **<repo>** - no activity recorded despite being a key repo per the team profile. (Only include when the team profile lists the repo as high-priority and no PRs appeared in the week.)>
+<Paragraph 2: second sustained theme, if any>
+
+<Paragraph 3: architectural changes, if any. Reference diagrams from the daily digests by name - do NOT re-render them.>
+
+*Quieter this week: **[<repo>](<url>)** - no activity recorded despite being a key integration repo.*
 
 ---
 
@@ -74,73 +112,83 @@ write time. Notion-flavored Markdown syntax is used throughout.
 
 <table header-row="true">
 <tr><td>Repo</td><td>Version</td><td>Date</td><td>Notes</td></tr>
-<tr><td>[<repo>](<repo-url>)</td><td>[<tag>](<release-url>)</td><td><YYYY-MM-DD></td><td><1-sentence summary></td></tr>
+<tr><td>[<repo>](<repo-url>)</td><td>[<tag>](<release-url>)</td><td><YYYY-MM-DD></td><td><1-sentence: what changed for users of this release></td></tr>
 </table>
 
-(If no releases across the week: "No releases this week.")
+NOTE: If no releases across the week: "No releases this week." (omit the table)
 
 ---
 
 # Partner Momentum
 
-## <Company Name> (N days)
+NOTE: Companies appearing in 2+ daily digests get a 1-2 sentence "what's moving" summary.
+NOTE: Companies appearing once get a single-line entry in the "Single touch" list.
+NOTE: "Open threads" = action items that surfaced in multiple dailies (escalation candidates).
 
-<1-2 sentence "what's moving" summary for companies that appeared in 2+ daily digests>
+## <Company Name> (<N> days)
 
-(Single-touch companies: list names in a one-liner at the end: "Single touch: Company A (Tue), Company B (Thu).")
+<1-2 sentences: what is moving with this partner this week, what is the main topic or decision>
 
-**Open threads:** <action items that appeared in multiple dailies - most likely escalation candidates>
+(Single touch: Company A (Day), Company B (Day).)
 
-(Omit this entire section if no partner conversations were found across the week.)
+**Open threads:** <action items that appeared on multiple days - most likely to need follow-up>
+
+NOTE: Omit this section if no partner conversations appeared across the week.
 
 ---
 
 # Notion Content Pulse
 
-(Top 3-5 keywords by frequency - how many days they appeared across the week.)
+NOTE: Top 3-5 keywords by frequency (number of days they appeared).
+NOTE: Omit keywords that appeared only once - already covered in that daily.
+NOTE: Each entry explains WHAT documents used the keyword and WHY that keyword theme is significant this week.
 
-- **<keyword>** - appeared <N> days (<days list>); most relevant pages: [<page>](<url>) (<day>), [<page>](<url>) (<day>)
-- **<keyword>** - <...>
+- **<keyword>** - appeared <N> days (<day list>); most relevant pages: [<page>](<url>) (<day>), [<page>](<url>) (<day>)
+  *What this means: <1-sentence interpretation - why is this keyword appearing repeatedly this week?>*
 
-(Omit keywords that appeared on only one day - covered by that day's daily. If all keywords appeared only once, write "No repeated keyword themes this week - see individual daily digests for details.")
+NOTE: If all keywords appeared only once: "No repeated keyword themes this week - see individual daily digests."
 
 ---
 
 # Industry News Roundup
 
+NOTE: Aggregate from all daily digests. Deduplicate by URL (same post can appear in multiple dailies due to feed lag).
+NOTE: Same two-part format as the daily: [title](link) - <plain-English what happened>; relevant because <why it matters>
+NOTE: Do NOT copy raw RSS descriptions or commit messages verbatim.
+NOTE: Group by category. Omit category subsections with zero items. Omit entire section if all categories had zero items.
+
 ## <category-label>
 
-- [<title>](<link>) - <source> (<day>)
-
-(Deduplicate by URL across all 7 dailies - the same post can appear in multiple dailies due to RSS feed lag. Group by category. Omit category subsection when it has zero items across the week. Omit the entire Industry News Roundup section when all categories had zero items.)
+- [<title>](<link>) - <plain-English what happened>; relevant because <why it matters for our Hedera/EVM work> (<day>)
 
 ---
 
 # Favorites Movement
 
-(Pages from the Favorites list with multi-day updates get highlighted callouts; single-day updates get bullets.)
+NOTE: Pages with multi-day updates get highlighted callouts. Single-day updates get bullets.
+NOTE: Only include pages that appeared in Favorites Activity in at least one daily digest this week.
+NOTE: Omit this section if no Favorites Activity appeared in any daily.
 
 <callout icon="📌" color="yellow_bg">
-**[<Page Title>](<notion-url>)** updated on <Day1> and <Day2> - <2-sentence summary of the cross-day activity>
+**[<Page Title>](<notion-url>)** updated on <Day1> and <Day2>
+<2-sentence summary of what the cross-day activity means - what is actively changing about this page/topic>
 </callout>
 
 - **[<Page Title>](<notion-url>)** - updated <Day>, <date>: <1-sentence summary>
 
-(Omit this section if no Favorites Activity appeared in any daily digest.)
-
 ---
 
 # Day-by-Day Index
+
+NOTE: One line per day in the window. Note gaps explicitly.
 
 - Monday, <date>: [<daily digest title>](<daily-page-url>)
 - Tuesday, <date>: [<daily digest title>](<daily-page-url>)
 - Wednesday, <date>: [<daily digest title>](<daily-page-url>)
 - Thursday, <date>: [<daily digest title>](<daily-page-url>)
 - Friday, <date>: [<daily digest title>](<daily-page-url>)
-- Saturday, <date>: [<daily digest title>](<daily-page-url>) (or: "no digest run")
-- Sunday, <date>: [<daily digest title>](<daily-page-url>) (or: "no digest run")
-
-(List all 7 days in the window. For missing days write: "<Weekday>, <date>: no daily digest run")
+- Saturday, <date>: [<daily digest title>](<daily-page-url>) *(or: "no digest run")*
+- Sunday, <date>: [<daily digest title>](<daily-page-url>) *(or: "no digest run")*
 
 ---
 
@@ -151,22 +199,24 @@ write time. Notion-flavored Markdown syntax is used throughout.
 
 ---
 
-## FORMAT RULES (reference only - do not render in output)
+## FORMAT RULES (human reference - do not render in output)
 
 ### Weekly vs. daily
-- The weekly is a SYNTHESIS, not a copy. Cross-day signal (sustained activity, recurring themes,
-  multi-touch partners) is the point. Single-day items are already in the daily.
-- Do not re-summarize content already well-covered in a daily. Link to the daily for drill-down.
-- Mermaid diagrams from the dailies are referenced by name ("architecture diagram in the
-  2026-05-07 hiero-block-node section"), not re-rendered.
+- Synthesize, don't copy. Cross-day signal is the point - sustained activity, recurring themes, multi-touch partners.
+- Don't re-summarize content already in a daily. Link to the daily for drill-down.
+- Mermaid diagrams from the dailies are referenced by name, not re-rendered.
 
-### Notion API constraints (same as daily)
-- Callout emoji: standard Unicode only (📈 ℹ️ 📊 ⚠️ 📌). Never `:shortcode:` form.
-- No bold+code collision.
-- The footer callout is ALWAYS the last block.
+### Notion API hard constraints (same as daily)
+- Callout emoji: standard Unicode only. Never `:shortcode:`.
+- Bold+code collision: `` **`name`** `` = `` **** `` artifact. Use `**[name](url)**` or `**name**`.
+- No `\n` inside Mermaid node labels.
+- Footer callout is ALWAYS the last block.
 - No meta-sections about run hygiene.
 
 ### Links (same as daily)
 - All Notion links from MCP responses only. Never construct from page titles.
-- All repo/PR/release links from gh CLI JSON output.
-- Daily digest page links come from the `url` property of the `notion-query-data-sources` results.
+- Daily digest page links from `url` property of `notion-query-data-sources` results.
+
+### Quality (same gates as daily, applied at Step 4.5 Part B)
+- Executive Summary bullets: must pass Q1 (specific cross-week theme) and Q2 (consequence)
+- Industry News items: must have plain-English "what happened" + "why it matters"
