@@ -38,7 +38,7 @@ After symlinking, you can invoke `team-digest-run.sh` from anywhere.
 |---|---|---|
 | `TEAM_DIGEST_LOG` | `~/.local/log/team-digest.log` | Human-readable streaming log |
 | `TEAM_DIGEST_RAW_LOG` | `~/.local/log/team-digest-raw.jsonl` | Raw `claude -p --output-format stream-json` events |
-| `TEAM_DIGEST_MODEL` | `claude-opus-4-7` | Override the model used by `claude -p` |
+| `TEAM_DIGEST_MODEL` | `claude-sonnet-4-6` | Override the model used by `claude -p` |
 
 ### What you'll see streaming in real time
 
