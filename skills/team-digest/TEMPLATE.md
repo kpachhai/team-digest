@@ -1,9 +1,10 @@
 # Team Daily Digest - Output Template
 
-This file defines the canonical output format for `/team-digest`.
-Edit this file to change how digests look. The SKILL.md reads this file in Step 5 as
-the output contract. Keep `<PLACEHOLDER>` notation intact - these are substituted at
-write time. Notion-flavored Markdown syntax is used throughout.
+This file is the canonical output format for `/team-digest`.
+Edit this file to change how digests look. The skill reads it in Step 5 as the output contract.
+`<PLACEHOLDER>` values are substituted at write time. Notion-flavored Markdown syntax throughout.
+
+Inline annotations (lines starting with `NOTE:`) are instructions to the model - do not render them.
 
 ---
 
@@ -12,13 +13,13 @@ write time. Notion-flavored Markdown syntax is used throughout.
 1. Header callout
 2. Executive Summary
 3. Top Picks: Notion Pages Worth Reading (omit if zero qualify)
-4. Per-org blocks (one per org in config; priority repos + other active repos)
+4. Per-org blocks (priority repos + other active repos, one block per org)
 5. Releases
 6. Industry News (omit if no items from any feed)
 7. Notion Keyword Monitor
-8. Favorites Activity (omit if Favorites not configured)
+8. Favorites Activity (omit if not configured)
 9. Partner Conversations
-10. Footer callout (ALWAYS the last block)
+10. Footer callout (ALWAYS last)
 
 ---
 
@@ -35,44 +36,93 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 ## Executive Summary
 
-- **<Bold project or topic>** - <one-line plain-English change with stakes; include a markdown link to the drill-down section or PR below>
-- **<Bold project or topic>** - <...>
-(5-8 bullets total. Cover a mix: priority-repo highlights, releases, consequential Notion pages, partner conversations of substance, notable industry news. Skip routine dep bumps and maintenance.)
+NOTE: 5-8 bullets. Each bullet must pass two tests before you write it:
+NOTE: Q1 - Is it SPECIFIC? No "various improvements", "continued work on", "lots of activity", "dependency updates".
+NOTE: Q2 - Does it state the CONSEQUENCE? Not just what happened, but what effect it has or why a reader should care.
+NOTE: Lead with a plain-English bold phrase - NOT **`repo-name`** (produces artifacts). Use **[repo-name](url)** or **plain bold**.
+NOTE:
+NOTE: BAD:  - **`hiero-consensus-node`** architecture documentation - Three docs opened as PRs.
+NOTE:       (fails Q1: what docs? fails Q2: so what? also has bold+code collision)
+NOTE: GOOD: - **[hiero-consensus-node](url) publishes three architecture docs** - Restart, Event Creator, and Signed State Management
+NOTE:       ADRs are now in review; these become the canonical reference for partners asking about consensus reliability guarantees.
+NOTE:
+NOTE: BAD:  - **`solo`** gains new features - MDC logging and silent mode added.
+NOTE:       (fails Q2: what does that enable?)
+NOTE: GOOD: - **[solo](url) becomes CI-scriptable** - a new `SOLO_SILENT_MODE` env flag disables interactive output, enabling
+NOTE:       headless use in partner CI pipelines. Partners who currently can't automate solo can do so once this merges.
+
+- **<plain bold or [linked name](url)>** - <specific change in plain English>; <consequence or why it matters to a partner/reader>
+- **<plain bold or [linked name](url)>** - <...>
+(5-8 bullets; cover priority-repo highlights, releases, Notion design docs, partner conversations, industry news standouts)
 
 ---
 
 ## Top Picks: Notion Pages Worth Reading
 
-- **[<Page Title>](<notion-url from MCP>)** - <2-3 sentence summary: what it contains, why it's worth reading right now, one or two key facts>
+NOTE: 3-5 pages from Notion Keyword Monitor + Favorites Activity. Omit section if zero qualify.
+NOTE: Each entry: page title as a link, 2-3 sentences covering WHAT the page is + WHY it's worth reading NOW + one key fact.
+NOTE: Omit pages whose title starts with "Team Daily Digest", "Team Weekly Digest", "SA Daily Digest".
+
+- **[<Page Title>](<notion-url from MCP>)** - <what the page is about>. <why it's relevant right now - which team priority it touches, what decision it represents>. <one concrete fact that helps the reader decide whether to open it>
 - **[<Page Title>](<notion-url from MCP>)** - <...>
-(3-5 picks; omit this entire section when zero Notion pages qualify)
 
 ---
 
-# <org-name-1>
+# <org-name>
 
 ## Priority Repos
 
 ### [<repo-name>](https://github.com/<org>/<repo>)
 
-<Paragraph 1: what merged - lead with user-visible change, then cite PR numbers as links.>
+NOTE: Paragraph 1 - what MERGED. Lead with the user-visible change, not the PR number.
+NOTE: BAD:  "[#1096](url) merged: ensures DEFAULT_ADMIN_ROLE is granted to token owner during deployment."
+NOTE: GOOD: "A critical deployment bug was fixed: previously, if the token owner address was omitted during contract setup,
+NOTE:       admin functions were permanently locked with no recovery path. Fixed in [#1096](url)."
+NOTE:
+NOTE: Paragraph 2 (optional) - what is OPEN and worth watching. Only include open PRs with real advisory relevance.
+NOTE:
+NOTE: DIAGRAM: Check the Quality Scaffold (Step 4.5 Part B, Quality check A) for whether this repo triggered a diagram.
+NOTE: If a trigger fired, include a Mermaid diagram here showing the architectural change.
+NOTE: Use graph TD with direction LR subgraphs for square layout. Single-line node labels only - no \n.
+NOTE:
+NOTE: DIAGRAM EXAMPLE (new FactoryFacet introduced in asset-tokenization-studio):
+NOTE:
+NOTE: ```mermaid
+NOTE: graph TD
+NOTE:   subgraph Before
+NOTE:     direction LR
+NOTE:     Owner --> TokenFacet
+NOTE:     TokenFacet --> HTS
+NOTE:   end
+NOTE:   subgraph After
+NOTE:     direction LR
+NOTE:     Owner --> FactoryFacet
+NOTE:     FactoryFacet --> TokenFacet
+NOTE:     TokenFacet --> HTS
+NOTE:   end
+NOTE: ```
 
-<Paragraph 2: what is open / still in review - open PRs and issues worth watching.>
+<Paragraph 1: what merged - plain English lead sentence, then cite PR numbers as links>
 
-**Relevance:** <why this matters to the team; use the team profile as the lens>
+<Paragraph 2: open PRs worth watching - only include those with real advisory relevance>
+
+<Mermaid diagram if a diagram trigger fired - see Quality check A>
+
+**Relevance:** <why this matters to the team; use the team profile as the lens - integration impact, SDK changes, partner-facing APIs, breaking changes, content opportunities>
 
 ---
 
-(Repeat ### block for each priority repo with activity)
+(Repeat ### for each priority repo with activity)
 
 ## Other Active Repos
 
+NOTE: Every repo with at least one PR/issue/release in the window. No silent drops.
+NOTE: Notable Activity column: plain English 1-2 sentences. Link every PR/issue number.
+
 <table header-row="true">
 <tr><td>Repo</td><td>PRs</td><td>Issues</td><td>Releases</td><td>Notable Activity</td></tr>
-<tr><td>[<repo>](https://github.com/<org>/<repo>)</td><td><N merged / N open, or -></td><td><N open, or -></td><td>[<tag>](<release-url>) or -</td><td><1-2 sentence plain-English summary with linked PR/issue numbers></td></tr>
+<tr><td>[<repo>](https://github.com/<org>/<repo>)</td><td><N merged / N open, or -></td><td><N open, or -></td><td>[<tag>](<release-url>) or -</td><td><plain-English 1-2 sentence summary with linked PR/issue numbers></td></tr>
 </table>
-
-(Every repo with at least one PR, issue, or release in the date window must appear here. No silent drops.)
 
 ---
 
@@ -82,50 +132,66 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 
 <table header-row="true">
 <tr><td>Repo</td><td>Tag</td><td>Date</td><td>Notes</td></tr>
-<tr><td>[<repo>](<repo-url>)</td><td>[<tag>](<release-url>)</td><td><YYYY-MM-DD></td><td><1-sentence plain-English summary of what changed></td></tr>
+<tr><td>[<repo>](<repo-url>)</td><td>[<tag>](<release-url>)</td><td><YYYY-MM-DD></td><td><1-sentence plain-English: what changed for users of this release></td></tr>
 </table>
 
-(If no releases on DATE_LABEL: omit the table and write "No new releases on <DATE_LABEL>.")
+NOTE: If no releases: "No new releases on <DATE_LABEL>." (do not write the table)
 
 ---
 
 # Industry News
 
+NOTE: Required format per item: [title](link) - <plain-English what happened>; relevant because <why it matters for our Hedera/EVM work>
+NOTE: DO NOT copy the raw RSS description or commit message verbatim as the summary.
+NOTE: If you cannot write a genuine "relevant because" clause for an item, drop it.
+NOTE:
+NOTE: BAD:  - [EIP-7981 update](url) - Update EIP-7981 reference implementation by Toni Wahrstatter
+NOTE: GOOD: - [EIP-7981 reference implementation updated](url) - the reference code for validator credential rotation was revised;
+NOTE:         relevant because Hedera's Pectra compatibility work will need to handle this credential mechanism
+NOTE:
+NOTE: BAD:  - [Hedera Blog: Token Studio v3](url) - Token Studio version 3 is now available with new features.
+NOTE: GOOD: - [Hedera Token Studio v3 released](url) - adds batch token operations and a drag-and-drop policy builder;
+NOTE:         relevant because partners building tokenization tools can upgrade workflows without custom contract code
+
 ## <category-label>
 
-- [<title>](<link>) - <1-2 sentence summary, HTML stripped>
+- [<title>](<link>) - <plain-English what happened>; relevant because <why it matters for our Hedera/EVM work>
 
-(For github:// commit-watch entries: - [<short-sha>](<commit-url>): <commit subject> by <author>)
-
-(Group items by category from config. Omit a category subsection when it has zero items. Omit the entire Industry News section when ALL categories returned zero items for DATE_LABEL.)
+NOTE: For github:// commit-watch entries:
+NOTE: - [<short-sha>](<commit-url>): <plain-English what changed in the spec>; relevant because <why it matters>
+NOTE:
+NOTE: Group by category from config. Omit a category subsection with zero items.
+NOTE: Omit the entire Industry News section when ALL categories returned zero items.
 
 ---
 
 # Notion Keyword Monitor
 
-(Pages created on DATE_LABEL that match configured keywords. Each page ID appears at most once.)
+NOTE: Pages created on DATE_LABEL matching configured keywords. Each page ID appears at most once.
+NOTE: Write a 2-4 sentence narrative per page: what it is, which keywords matched, why it matters for the team.
+NOTE: Every page title is a link using the URL from the MCP response - never construct URLs from titles.
 
 **[<Page Title>](<notion-url from MCP>)**
-<2-4 sentence narrative: what the page contains, which keywords matched>
+<2-4 sentence narrative: what this page is about and what it contains>
 *Keywords matched: <keyword1>, <keyword2>*
-*Relevance: <team-profile-driven advisory note>*
+*Relevance: <team-profile-driven note - what action or awareness this warrants>*
 
-(Repeat for each unique page. If zero keyword hits: "No keyword matches for <DATE_LABEL>.")
+NOTE: If zero keyword hits: "No keyword matches for <DATE_LABEL>."
 
 ---
 
 # Favorites Activity
 
-(Favorited pages and their direct child pages that were edited on DATE_LABEL.)
+NOTE: Pages from the Favorites list (and their direct child pages) edited on DATE_LABEL.
+NOTE: Phase B only ran if at least one favorite was a qualifying parent (edited on DATE_LABEL).
+NOTE: For child pages, note the parent: "(under [Parent Title](parent-url))"
 
 **[<Page Title>](<notion-url from MCP>)** - last edited <last_edited_time>
 <2-4 sentence summary of what changed or what the page contains>
 **Relevance:** <why this update matters to the team>
 
-(For child pages, note the parent: "(under [<Parent Favorite Title>](<parent-url>))")
-
-(If Favorites is configured but nothing updated: "No favorited pages or their child pages had updates on <DATE_LABEL>.")
-(Omit this entire section when the Favorites list is empty or unreachable.)
+NOTE: If Favorites configured but nothing updated: "No favorited pages or their child pages had updates on <DATE_LABEL>."
+NOTE: Omit this entire section when the Favorites list is empty or unreachable.
 
 ---
 
@@ -134,13 +200,13 @@ Data window: <DATE_LABEL> 00:00 - 23:59 UTC
 ## <Company Name>
 
 **[<Meeting Note Title>](<notion-url from MCP>)** - <date/time>
-<2-4 sentence summary of key discussion points>
+<2-4 sentence summary of the key discussion points - what was discussed, what decisions were made, what friction surfaced>
 
 Action items:
-- <action item>
-- <action item>
+- [ ] <action item with owner if named>
+- [ ] <action item>
 
-(Group by company. If zero partner conversations found: "No partner conversations found on <DATE_LABEL>.")
+NOTE: Group by company. If zero partner conversations found: "No partner conversations found on <DATE_LABEL>."
 
 ---
 
@@ -149,28 +215,25 @@ Action items:
 </callout>
 ```
 
+NOTE: For backfill runs, add inside the footer callout:
+NOTE: "This is a backfill run; Notion keyword results reflect pages created on <DATE_LABEL> only (pages edited but not created on that date are not captured by Notion MCP search)."
+
 ---
 
-## FORMAT RULES (reference only - do not render in output)
+## FORMAT RULES (human reference - do not render in output)
 
-### Notion API constraints
-- Callout emoji: standard Unicode only (📊 ℹ️ 📈 ⚠️ 📌 🤝). Never `:shortcode:` form - Notion rejects them.
-- No bold+code collision: pick **bold** OR `code`, never `` **`both`** ``.
+### Notion API hard constraints
+- Callout emoji: standard Unicode only (📊 ℹ️ 📈 ⚠️ 📌 🤝). Never `:shortcode:` - Notion rejects them with a validation error.
+- Bold+code collision: `` **`name`** `` renders as `**** ` artifacts. Use `**[name](url)**` or `**name**` instead. Never combine bold and backtick.
 - No `\n` inside Mermaid node labels - Notion silently truncates after the newline.
-- The footer callout is ALWAYS the last block. Never append meta-sections after it.
+- The footer callout is ALWAYS the last block. No meta-sections after it.
+- No "Known limitations", "Caveats", or run-hygiene sections.
 
 ### Links
-- All Notion page links use the exact URL from a `notion-search` or `notion-fetch` MCP response.
-  Never construct a Notion URL from a page title (e.g. `notion.so/Some-Page-Title` is wrong).
-  If no URL is available from an MCP response, write the title as plain text + "(link unavailable)".
-- All repo/PR/issue/release/user links use the exact URL from the `gh` CLI JSON output.
+- All Notion page links use the exact URL from a `notion-search` or `notion-fetch` MCP response. Never construct from title.
+- All repo/PR/issue/release/user links use the exact URL from gh CLI JSON output.
 
-### Sections
-- Do not add meta-sections about run hygiene ("Known limitations", "Caveats", etc.).
-- Section-level inline notes (e.g., "(gh cap hit - some PRs not shown)") belong inside the section, not at the end.
-- If a section has no data (e.g., no industry news), omit it entirely rather than writing "None today."
-  Exception: Notion Keyword Monitor and Favorites Activity each have explicit fallback lines defined above.
-
-### Backfill note
-When running for a past date, add this line inside the footer callout:
-"This is a backfill run; Notion keyword results reflect pages created on <DATE_LABEL> only (pages edited but not created on that date are not captured by Notion MCP search)."
+### Quality gates (enforced in Step 4.5 Part B before writing)
+- Diagrams: required for every priority repo where a structural trigger fired (8 triggers listed in Quality check A)
+- Executive Summary bullets: must pass Q1 (specific) and Q2 (consequence) before writing
+- Industry News items: must have plain-English "what happened" + "why it matters" before writing
