@@ -194,78 +194,7 @@ Write plain Markdown for the dry-run file (no Notion-flavored `<callout>`, `<det
 
 **Top Picks: Notion Pages Worth Reading (when applicable).** The weekly inherits the daily's Top Picks idea. After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading This Week` section IF AND ONLY IF the week produced at least one Notion page worth highlighting. Selection: aggregate the Top Picks from each daily digest plus the strongest items from the week's Notion Content Pulse, dedupe by page ID, rank by team-profile relevance + cross-day momentum (a page that came up multiple days ranks higher), pick top 3-5. Format: same as the daily's Top Picks.
 
-
-
-```
-<callout icon="📈" color="purple_bg">
-**Team Weekly Digest** | <WEEK_LABEL> | <WEEK_START> to <WEEK_END>
-<N> daily digests processed | <N> repos active | <N> releases | <N> partner conversations
-</callout>
-
----
-
-# Week at a Glance
-
-- N daily digests processed (Mon-Sun)
-- N priority repos with sustained activity (3+ days)
-- N releases shipped (linked below)
-- N partners with conversations across the week
-- N favorited pages with multi-day movement
-
----
-
-# Top GitHub Themes
-
-<2-3 paragraph synthesis from Theme A. Link every PR, issue, repo. End with one-line "Quieter this week" callout.>
-
----
-
-# Releases This Week
-
-<table header-row="true">
-<tr><td>Repo</td><td>Version</td><td>Date</td><td>Notes</td></tr>
-<tr><td>[<repo>](repo-url)</td><td>[<tag>](release-url)</td><td><date></td><td><short note></td></tr>
-</table>
-
----
-
-# Partner Momentum
-
-<grouped by company. Multi-touch companies get 1-2 sentence "what's moving" summary; single-touch in a one-line "Single touch" footer. End with "Open threads" - action items spanning multiple days.>
-
----
-
-# Notion Content Pulse
-
-<top 3-5 keywords by frequency, with linked example pages>
-
----
-
-# Industry News Roundup
-
-<grouped by category, deduplicated. One line per item: - [<title>](<link>) - <source>>
-
----
-
-# Favorites Movement
-
-<multi-day pages first as callouts, single-day as bullets. Same dedup as Industry News.>
-
----
-
-# Day-by-Day Index
-
-- Monday, <date>: [<daily title>](daily-page-url)
-- Tuesday, <date>: [<daily title>](daily-page-url)
-- ...
-- (gaps noted: "Wednesday, <date>: no daily digest run")
-
----
-
-<callout icon="ℹ️" color="gray_bg">
-**Auto-generated** by Team Weekly Digest | Synthesized from N daily digests | Week: <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)
-</callout>
-```
+**Output format contract:** Read `~/.claude/skills/team-weekly/TEMPLATE.md` with the Read tool. It contains every section, its order, all Notion-flavored syntax blocks, and the Format Rules. Substitute all `<PLACEHOLDER>` values with actual data. The "FORMAT RULES" section at the bottom is a human reference only - do not render it in the Notion page.
 
 ## Style Rules
 

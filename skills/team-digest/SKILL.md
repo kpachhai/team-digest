@@ -202,6 +202,8 @@ Each helper writes a plain-text summary to stdout. PR and issue helpers group by
 
 If a helper exits non-zero (e.g., the org is unreachable or `gh` rate-limit hit), log the failure inline in the digest as `(<org>: PR scan failed - <message>)` and continue with the next source. Do not abort the entire digest on one source failure - per the partial-digest rule.
 
+**100-result cap:** When a helper emits a WARNING line about hitting the `--limit` cap (100 results), accept the partial data as-is and add a one-line inline note in that section: `(gh cap hit - some activity may not be shown)`. Do NOT re-invoke the helper with different filters. The cost of a retry exceeds the value of the missing tail-end items.
+
 **Critical: do not save helper output to intermediate files. Capture stdout into the conversation context directly so the narrative-writing step can reference it.**
 
 **Output structure - organize by org, then by priority:**
@@ -321,11 +323,13 @@ This step covers the user's curated list of "Favorites" pages - documents they c
 
 Emit all favorite `notion-fetch` calls in one message so they run concurrently.
 
-**Phase B - Descend one level (parallel, capped):**
+**Phase B - Descend one level (conditional, parallel, capped):**
 
-For each favorite, take its collected child page references and call `notion-fetch` on each in parallel. Apply these limits:
+**This phase only runs when at least one favorite was marked as a qualifying parent in Phase A** (i.e., its `last_edited_time` date matched `$DATE_LABEL`). If Phase A found zero qualifying parents, skip Phase B entirely and proceed to Phase C with an empty child list. This prevents fetching dozens of child pages from large index favorites on days when nothing is actively being edited.
 
-- **Cap at 50 children per favorite.** If a favorite has more than 50 unique child page references (e.g., a giant index page), fetch the first 50 and add a one-line note `(<favorite title>: 50-child cap reached, N pages skipped)` to the Favorites section.
+For each **qualifying parent favorite** (and only those), take its collected child page references and call `notion-fetch` on each in parallel. Apply these limits:
+
+- **Cap at 15 children per favorite.** If a qualifying parent has more than 15 unique child page references, fetch the first 15 and add a one-line note `(<favorite title>: 15-child cap reached, N pages skipped)` to the Favorites section.
 - **Single hop only.** Do NOT recurse into the children's children. Loops or deep trees would explode the cost.
 - **Deduplicate across favorites.** If two different favorites both link to the same child page, fetch it once.
 - **Apply the same `last_edited_time == $DATE_LABEL` filter** to each child. Children not edited that day are silently dropped.
@@ -426,6 +430,10 @@ Use the `Write` tool to write the content (no Notion-flavored `<callout>` / `<de
 - **The auto-generated footer is the LAST block of the page.** It is the closing callout that documents what was scanned and the data window. Never replace it with a "Known limitations" / "Caveats" / "Notes about this run" callout, never omit it. Section-level inline notes (e.g., `(Phase B descent skipped)` or `(gh search hit the 100-result cap)`) belong inside their respective sections, not as a closing callout.
 - **Do NOT add meta-sections about run hygiene.** The output structure below is the contract. Do not invent extra closing sections like "Known limitations for this run", "Caveats", "What this digest does not cover", or any other meta-narrative about the digest's own production. If a source returned no data, that's already handled by the section-empty fallbacks per source. If a source partially failed, note it inline at the section, not at the end.
 
+#### Output format contract
+
+Read `~/.claude/skills/team-digest/TEMPLATE.md` with the Read tool. It contains the canonical section order, all Notion-flavored syntax blocks, and the Format Rules (Notion API constraints, linking rules, backfill notes). Substitute all `<PLACEHOLDER>` values with the actual data. The "FORMAT RULES" section at the bottom of TEMPLATE.md is a human reference only - do not render it in the Notion page.
+
 #### Executive Summary (mandatory first content block)
 
 Every digest opens with an **Executive Summary** under an `## Executive Summary` heading, immediately after the header callout. Purpose: a reader who only skims this section should leave with the day's headlines.
@@ -481,94 +489,7 @@ After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading
 
 **Why this section exists:** the Notion Keyword Monitor below catches every keyword hit; that's a complete list. Top Picks is the curated subset for someone who only has 5 minutes - the 3-5 pages that, if you read nothing else in Notion today, you should still see.
 
-**Content structure:**
-
-```
-<callout icon="📊" color="blue_bg">
-**Team Daily Digest** | <DATE_LABEL>
-<N> repos active | <N> PRs updated | <N> issues updated | <N> releases
-Data window: <DATE_LABEL> 00:00 - 23:59 UTC
-</callout>
-
----
-
-## Executive Summary
-
-- **<Bold lead>** - <one-line plain-English change with stake, with link to drill-down section>
-- **<Bold lead>** - <...>
-(5-8 bullets total)
-
----
-
-## Top Picks: Notion Pages Worth Reading
-
-- **[<Page Title>](<notion-url>)** - <2-3 sentence summary explaining what the page is + why it's worth reading + one or two key facts>
-- **[<Page Title>](<notion-url>)** - <...>
-(3-5 picks; omit the entire section if zero pages qualify)
-
----
-
-# <org-name>
-
-## Priority Repos
-
-### [<repo-name>](https://github.com/<org>/<repo>)
-<2-4 paragraph synthesized narrative. Every PR, issue, release, repo, or @handle reference inside the narrative is a markdown link. First mention of any project/component/acronym gets a 3-7 word plain-English expansion. See Linking Rules and Plain-English Description Rules in the Style Rules section.>
-<Mermaid diagram if architectural change occurred>
-
-**Relevance:** <why this matters to the team - integration impact, architecture decisions, SDK changes, partner-facing APIs, breaking changes>
-
----
-
-(repeat for each priority repo with activity)
-
-## Other Active Repos
-
-<table header-row="true">
-<tr><td>Repo</td><td>Notable Activity</td></tr>
-<tr><td>[<repo-name>](https://github.com/<org>/<repo>)</td><td><plain-English summary - what changed, what it affects, why it matters - with PR/issue numbers as links></td></tr>
-</table>
-
-(every repo with at least one PR/issue/release in the date window MUST appear; no aggregation, no silent drops)
-
----
-
-(repeat org section for each org)
-
-# Releases
-
-<releases listed with linked tag names: [v1.2.3](release-url) - <repo> - <plain-English release summary>, or "No new releases">
-
----
-
-# Industry News
-
-<grouped by category. Each category has a `## <category>` subheading and a bullet list of items - RSS posts as `- [title](link) - 1-2 sentence summary`, GitHub commits as `- [short-sha](commit-url): subject by author`. Strip HTML tags from RSS summaries. Omit the entire section if every feed returned 0 items for DATE_LABEL.>
-
----
-
-# Notion Keyword Monitor
-
-<narrative summaries of keyword-matched pages>
-
----
-
-# Favorites Activity
-
-<for each favorited page (and any child page found one level deep, capped at 50 per favorite) edited on DATE_LABEL: 2-4 sentence narrative summary, page title as a markdown link, what changed, when (last_edited_time), and an Relevance line. Note child pages with their parent favorite, e.g. `[Child Title](url) (under [Parent](parent-url))`. Omit non-updated pages. If the favorites list is empty or unreachable, omit this section. If favorites are configured but had no updates, write: "No favorited pages or their child pages had updates on <DATE_LABEL>.">
-
----
-
-# Partner Conversations
-
-<grouped by company with discussion summaries and action items>
-
----
-
-<callout icon="ℹ️" color="gray_bg">
-**Auto-generated** by Team Daily Digest | Scanned <N> repos in <org> | Data window: <DATE_LABEL> 00:00 - 23:59 UTC
-</callout>
-```
+**Content structure:** See `~/.claude/skills/team-digest/TEMPLATE.md` (loaded via the Read tool at the start of Step 5 above). The template defines every section, its order, Notion-flavored syntax, and the Format Rules (Notion API constraints, linking rules, backfill notes).
 
 ## Style Rules
 
