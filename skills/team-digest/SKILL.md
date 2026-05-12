@@ -58,7 +58,7 @@ eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG")"
 
 If the user did not pass a date arg, invoke the helper with no arg and it defaults to yesterday in UTC. If the helper exits non-zero (invalid date format), surface its stderr to the user and stop.
 
-Use `$START` as the `--updated` filter for GitHub and `$DATE_LABEL` as the `start_date` for Notion searches.
+Pass both `$START` and `$END` to GitHub helpers (the `START..END` range pins the window to exactly that UTC day). Use `$DATE_LABEL` as both `start_date` and `end_date` in all Notion `created_date_range` filters.
 
 ### Backfill Limitations
 
@@ -193,9 +193,9 @@ Scan **each org** from `config.github.orgs` for activity during the target date 
 **For each org, invoke these three helpers in parallel:**
 
 ```bash
-bash ~/.claude/skills/team-digest/lib/fetch-github-prs.sh      <org> "$START"
-bash ~/.claude/skills/team-digest/lib/fetch-github-issues.sh   <org> "$START"
-bash ~/.claude/skills/team-digest/lib/fetch-github-releases.sh <org> "$START"
+bash ~/.claude/skills/team-digest/lib/fetch-github-prs.sh      <org> "$START" "$END"
+bash ~/.claude/skills/team-digest/lib/fetch-github-issues.sh   <org> "$START" "$END"
+bash ~/.claude/skills/team-digest/lib/fetch-github-releases.sh <org> "$START" "$END"
 ```
 
 Each helper writes a plain-text summary to stdout. PR and issue helpers group by repo with `## <repo> (<N>)` headers, then per-item lines with `[STATE] #<number> <title>`, author handle, URL, and a 200-char description excerpt. The releases helper emits one line per release: `<repo>: <tag> - <name> (<YYYY-MM-DD>) <html_url>`.
@@ -278,7 +278,7 @@ Each helper returns a JSON array of items dated to `$DATE_LABEL`. Empty arrays (
 
 For each keyword group from configuration, search the Notion workspace:
 - Use the `notion-search` MCP tool with `query_type: "internal"`
-- Filter to pages created on the previous calendar day using `created_date_range: { start_date: "<DATE_LABEL>" }`
+- Filter to pages created on the previous calendar day using `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }`
 - Set `page_size: 10` and `max_highlight_length: 300`
 
 Run keyword searches in parallel batches (2-3 keywords per search query to reduce API calls).
@@ -355,7 +355,7 @@ If every favorite (and every descended child) was either inaccessible, archived,
 
 ### Step 4: Scan Partner Conversations
 
-For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range` filter for the previous calendar day.
+For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }` to strictly bound results to that UTC day.
 
 **Deduplication:** Skip pages already covered in the keyword monitor section. Track by page ID.
 

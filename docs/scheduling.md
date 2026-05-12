@@ -92,15 +92,17 @@ Create `~/Library/LaunchAgents/com.team-digest.team-digest.plist`:
     <string>/Users/YOUR_USERNAME/.local/bin/team-digest-run.sh</string>
   </array>
 
-  <!-- Weekdays at 8:00 AM local time -->
+  <!-- Every day at 01:00 UTC. TimeZone key (macOS 12+) pins the schedule to UTC
+       so the trigger time does not drift with DST or timezone changes.
+       Omitting the Weekday key means launchd fires every day (Sun-Sat). -->
+  <key>TimeZone</key>
+  <string>UTC</string>
+
   <key>StartCalendarInterval</key>
-  <array>
-    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
-  </array>
+  <dict>
+    <key>Hour</key><integer>1</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
 
   <key>StandardOutPath</key>
   <string>/Users/YOUR_USERNAME/.local/log/team-digest-launchd.log</string>
@@ -152,7 +154,7 @@ tail -f ~/.local/log/team-digest.log
 Same script works under cron. Add to `crontab -e`:
 
 ```
-0 8 * * 1-5 /home/YOUR_USERNAME/.local/bin/team-digest-run.sh > /dev/null 2>&1
+0 1 * * * /home/YOUR_USERNAME/.local/bin/team-digest-run.sh > /dev/null 2>&1
 ```
 
 The script handles its own logging via `TEAM_DIGEST_LOG` and `TEAM_DIGEST_RAW_LOG`. Cron will not fire missed runs on a sleeping machine - same caveat as launchd.
@@ -165,7 +167,7 @@ If you have a self-hosted runner with `claude` and `gh` configured, add a workfl
 name: Team Daily Digest
 on:
   schedule:
-    - cron: '0 13 * * 1-5'  # weekdays at 13:00 UTC
+    - cron: '0 1 * * *'  # every day at 01:00 UTC
   workflow_dispatch:
     inputs:
       date:

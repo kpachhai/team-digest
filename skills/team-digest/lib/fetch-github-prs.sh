@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # fetch-github-prs.sh - fetch PRs updated in the date window for an org.
 #
-# Usage: fetch-github-prs.sh <org> <start-iso>
-#   e.g. fetch-github-prs.sh your-org 2026-05-04T00:00:00Z
+# Usage: fetch-github-prs.sh <org> <start-iso> <end-iso>
+#   e.g. fetch-github-prs.sh your-org 2026-05-04T00:00:00Z 2026-05-04T23:59:59Z
 #
 # Output: human-readable summary on stdout, grouped by repo. Each PR line
 # includes state, number, title, author handle, html_url, and a 200-char
@@ -10,8 +10,9 @@
 
 set -euo pipefail
 
-ORG="${1:?usage: fetch-github-prs.sh <org> <start-iso>}"
-START="${2:?usage: fetch-github-prs.sh <org> <start-iso>}"
+ORG="${1:?usage: fetch-github-prs.sh <org> <start-iso> <end-iso>}"
+START="${2:?usage: fetch-github-prs.sh <org> <start-iso> <end-iso>}"
+END="${3:?usage: fetch-github-prs.sh <org> <start-iso> <end-iso>}"
 
 _py=$(mktemp /tmp/gh-prs-XXXXXX.py)
 trap 'rm -f "$_py"' EXIT
@@ -47,7 +48,7 @@ PY
 
 gh search prs \
   --owner="$ORG" \
-  --updated=">=$START" \
+  --updated="${START}..${END}" \
   --json repository,title,state,author,number,body,url,labels \
   --limit 100 \
   | python3 "$_py"
