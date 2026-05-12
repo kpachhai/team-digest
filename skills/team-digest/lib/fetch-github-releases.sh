@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # fetch-github-releases.sh - fetch releases published in the date window for an org.
 #
-# Usage: fetch-github-releases.sh <org> <start-iso>
-#   e.g. fetch-github-releases.sh your-org 2026-05-04T00:00:00Z
+# Usage: fetch-github-releases.sh <org> <start-iso> <end-iso>
+#   e.g. fetch-github-releases.sh your-org 2026-05-04T00:00:00Z 2026-05-04T23:59:59Z
 #
 # Output: one line per release on stdout, format:
 #   <repo>: <tag-name> - <release-name> (<YYYY-MM-DD>) <html_url>
@@ -18,8 +18,9 @@
 
 set -euo pipefail
 
-ORG="${1:?usage: fetch-github-releases.sh <org> <start-iso>}"
-START="${2:?usage: fetch-github-releases.sh <org> <start-iso>}"
+ORG="${1:?usage: fetch-github-releases.sh <org> <start-iso> <end-iso>}"
+START="${2:?usage: fetch-github-releases.sh <org> <start-iso> <end-iso>}"
+END="${3:?usage: fetch-github-releases.sh <org> <start-iso> <end-iso>}"
 
 errcount=0
 errfile=$(mktemp)
@@ -34,11 +35,12 @@ while IFS= read -r repo; do
     continue
   fi
   # Filter via jq with --arg for safe value passing. The jq program
-  # selects releases at-or-after $start and emits the formatted line.
+  # selects releases within the UTC window and emits the formatted line.
   printf '%s' "$json" | jq -r \
     --arg start "$START" \
+    --arg end   "$END" \
     --arg repo  "$repo" \
-    '[.[] | select(.published_at >= $start)]
+    '[.[] | select(.published_at >= $start and .published_at <= $end)]
      | .[]
      | "\($repo): \(.tag_name) - \(.name // "no title") (\(.published_at[:10])) \(.html_url)"'
 done < <(gh api "orgs/$ORG/repos" --paginate --jq '.[].name')
