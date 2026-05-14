@@ -1,0 +1,25 @@
+#!/bin/sh
+# PII pre-commit guard (self-contained - no external repo dependencies).
+#
+# Scanner + pattern config live at .githooks/ inside THIS repo. Each
+# fork or clone gets the protection independently; no dotfiles or other
+# repo dependencies. Identity-specific patterns (real name, emails)
+# come from ~/.config/devkit/identity.json at scan time if present;
+# absent on forker machines, only structural patterns apply.
+#
+# To install on a fresh clone:
+#   chmod +x .githooks/pii-scan.sh
+#   cp .githooks/pre-commit .git/hooks/pre-commit  # (this file, if shipped at .githooks/)
+#
+# To bypass once (rarely correct): git commit --no-verify
+# To disable permanently: remove this hook file.
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+SCANNER="${REPO_ROOT}/.githooks/pii-scan.sh"
+
+if [ -x "$SCANNER" ]; then
+  if ! "$SCANNER" --staged; then
+    exit 1
+  fi
+fi
+exit 0
