@@ -35,6 +35,8 @@ This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-
 - **DO NOT read persisted tool result files** (the `/tool-results/` paths). Process command output directly within the same Bash command. Persisted files may have prefix lines that break JSON parsing.
 - **DO NOT use `cat` to read files then parse them in a separate step.** Always pipe or process in a single command chain.
 - **GitHub data fetching uses helpers in `lib/`.** Do not re-implement `gh search prs ... | python3 -c ...` inline. The helper scripts (`fetch-github-prs.sh`, `fetch-github-issues.sh`, `fetch-github-releases.sh`) are the single source of truth for GitHub data extraction. They live at `~/.claude/skills/team-digest/lib/<helper>.sh` after `setup.sh` / `update.sh` runs.
+- **DO NOT dispatch Notion MCP calls (`notion-fetch`, `notion-search`, `notion-create-pages`, `notion-update-page`, `notion-query-data-sources`) to `Agent` subagents.** Claude.ai-hosted MCP tools (Notion, Gmail, Calendar) are only available in the main Claude Code session - subagents have a separate tool registry that does NOT include them. Every Notion MCP call MUST be made directly in the main session. If you need to parallelize Notion searches, use multiple parallel MCP tool calls in a single message, not subagents.
+- **DO NOT silently fall back to a dry-run write when Notion MCP tools are unavailable.** The dry-run path is reserved for the explicit `--dry-run` flag. If `$DRY_RUN` is NOT set but Notion MCP schemas cannot be loaded (see Step 0.5), STOP the run with a clear error message - do not write a dry-run file as a workaround. Silent dry-run on failure breaks the cron / launchd contract: the user expects either a Notion page or a loud failure, never a silent file in `/tmp`.
 
 ## Time Window
 
@@ -162,7 +164,29 @@ The JSON returned by `lib/load-config.sh team-digest` contains:
 
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest, and its **Project Glossary** drives the first-mention expansion rule (see Plain-English Description Rules in the Style Rules section). If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns) and explain jargon from your own knowledge.
 
-Then fetch the database page using `notion-fetch` with the `database_id` to discover the internal `data_source_id` (the `collection://...` URL in the response). Extract the data source URL from the `data-source-url` attribute in the response.
+The database `notion-fetch` call to discover the internal `data_source_id` is deferred to AFTER Step 0.5 below, because that call requires the Notion MCP schemas to be loaded first.
+
+### Step 0.5: Load Notion MCP tool schemas (mandatory pre-flight)
+
+The headless `claude -p` session registers `mcp__claude_ai_Notion__*` tools as **deferred tools** - their names are known but their JSON schemas are NOT loaded into the live tool registry by default. Calling them without first loading the schemas will fail with `InputValidationError`. You MUST explicitly load the schemas via `ToolSearch` BEFORE any Notion call (Steps 1, 3, 3.5, 4, 5).
+
+Run this `ToolSearch` call now:
+
+```
+ToolSearch query="select:mcp__claude_ai_Notion__notion-fetch,mcp__claude_ai_Notion__notion-search,mcp__claude_ai_Notion__notion-create-pages,mcp__claude_ai_Notion__notion-update-page,mcp__claude_ai_Notion__notion-query-data-sources" max_results=5
+```
+
+**Expected result:** an array of 5 `tool_reference` entries naming each tool. After this returns successfully, the five tools become callable for the remainder of the session.
+
+**Retry-once-on-empty:** if the result is `No matching deferred tools found` or an array with fewer than 5 tool_reference entries, the Notion MCP failed to register its tools (likely a transient claude.ai MCP startup race or auth refresh). Do NOT proceed and do NOT use `Agent` to work around it (subagents cannot access claude.ai-hosted MCPs). Make exactly ONE more `ToolSearch` call with the same `select:` query. If the retry also returns empty or partial, STOP the run with this error to the user:
+
+> Notion MCP tools failed to register in the deferred-tools registry after one retry. The headless `claude -p` session cannot write to Notion this run. Verify Notion connectivity with `claude mcp list` and check the user's claude.ai OAuth status. The cron run is aborting - no dry-run will be written.
+
+Exit with a non-zero result. The cron / launchd job will see the failure and the user can investigate. **Do NOT auto-fallback to writing a dry-run file** - that masks the real failure and breaks the cron contract.
+
+If `$DRY_RUN` IS explicitly set by the user (via `--dry-run` flag) AND every Notion call in Steps 1-4 is skippable for a dry-run scenario, you may continue without Notion tools - but only if `$DRY_RUN` was user-requested, never as a fallback.
+
+**After Step 0.5 succeeds**, fetch the database page using `notion-fetch` with the `database_id` to discover the internal `data_source_id` (the `collection://...` URL in the response). Extract the data source URL from the `data-source-url` attribute in the response. This was the final piece of Step 0 work, deferred until after the schemas were loaded.
 
 ### Step 1: Read Notion Configuration
 
