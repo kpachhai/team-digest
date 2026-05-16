@@ -131,6 +131,40 @@ eval "$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | bash 
 
 It reads `~/.config/team-digest/config.json`, validates that the `team-digest` key and required Notion IDs exist, and prints the digest's config object as JSON on stdout. On failure (file missing, key missing, empty IDs) it exits non-zero with a clear message on stderr.
 
+**If the helper succeeds (config file exists with non-empty Notion IDs) AND the argument is `setup`:** this is a re-run on an already-configured machine. Detect-and-verify the existing Notion pages before assuming the config is healthy:
+
+1. Load the Notion MCP tool schemas via Step 0.5 (the existing ToolSearch call). This is required to call `notion-fetch`.
+2. Call `notion-fetch` on the `config_page_id` AND `database_id` from config, in parallel (one message with two tool calls).
+3. Branch on the results:
+
+   **Both fetches succeed:** the existing setup is healthy. Print:
+   > Already configured.
+   > - Config page: `<title from fetch response>` (<URL>)
+   > - Database:    `<title from fetch response>` (<URL>)
+   >
+   > To re-bootstrap (creates new Notion pages, overwrites config.json), delete `~/.config/team-digest/config.json` first.
+   > To view the current config without changes, run `/team-digest config`.
+
+   Then STOP. Do not re-prompt; do not modify any files.
+
+   **Either fetch fails** (404, permission denied, deleted page, transient network error): the config points to inaccessible pages. Print a 3-way prompt:
+   > Existing config points to inaccessible Notion pages.
+   > - config_page_id: `<last 8 chars>` → `<success or error summary>`
+   > - database_id:    `<last 8 chars>` → `<success or error summary>`
+   >
+   > What would you like to do?
+   > [1] re-bootstrap — create new Notion pages and overwrite the config file
+   > [2] provide replacement IDs manually
+   > [3] cancel
+   >
+   > Enter 1, 2, or 3:
+
+   - On `1`: fall through to the Bootstrap Flow subsection below. Before creating new pages, print: "About to overwrite `~/.config/team-digest/config.json` and orphan the old Notion pages (if they still exist). Type 'yes' to confirm:" and require the literal string `yes`. Any other input → STOP.
+   - On `2`: jump to the existing prompt-for-IDs flow further below ("ask for the Notion config page ID", "ask for the Notion database ID"). Replace the old IDs in `config.json` with the new values.
+   - On `3` or any other input: STOP.
+
+This detect-and-verify branch is only reached when the argument is `setup`. A normal digest run (`/team-digest` without `setup`) hitting unreachable pages surfaces the error in the relevant step (e.g., Step 1's config-page fetch) and aborts; it does not trigger this recovery prompt — recovery is opt-in via `setup`.
+
 **If the helper exits with status 1 (config file missing) and this is an interactive local run:** trigger the first-time setup flow automatically:
 
 1. Tell the user this is first-time setup for the Team Daily Digest
