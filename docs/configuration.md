@@ -94,6 +94,28 @@ You only need two IDs, and both are found the same way:
 
 The internal `data_source_id` (needed by the Notion MCP API to write pages) is derived automatically at runtime - you never need to look it up.
 
+### Bootstrap your Notion workspace
+
+If you don't already have Notion pages for the digest, the `setup` flow can create them for you:
+
+```bash
+/team-digest setup
+```
+
+When prompted "Do you already have Notion pages set up, or should I create them? [existing/new]", choose `new`. The skill will:
+
+1. Create a parent page titled "Team Digest Workspace" at the workspace level (it lands in your Notion sidebar's Private section by default).
+2. Create a "Team Digest Config" child page under the parent, prefilled with starter defaults — keywords (`AI`, `agent`, `MCP`, `API`), a comprehensive partner-pattern list, and a placeholder Favorites section. A yellow callout at the top reminds you to customize before your first real run.
+3. Create a "Team Digest Entries" database under the parent, with the exact 6-property schema the skill writes to (`Digest Title`, `date`, `Digest Type`, `Repos Active`, `Keywords Matched`, `Status`). Do not modify the property names — the skills write specific values.
+4. Write a starter team profile to `~/.config/team-digest/profiles/team-digest.md` (only if the file doesn't already exist — `setup.sh` may have installed one earlier; bootstrap respects it).
+5. Write `~/.config/team-digest/config.json` with the two new Notion IDs (preserving any other digest-profile keys you already had).
+
+**Workspace-level fallback:** if Notion rejects creating a workspace-level page (some MCP versions require an explicit parent), the skill will prompt you to paste a Notion parent page ID. Pick any page you have edit access to; the new artifacts will be created as children.
+
+**Re-running `setup` is safe.** If your `config.json` already points to working Notion pages, `setup` detects that and stops with an "Already configured" message. If the stored IDs point to deleted or inaccessible pages, `setup` offers three options: re-bootstrap (create fresh pages and overwrite config), provide replacement IDs manually, or cancel.
+
+**Edit before your first real run.** The defaults are useful for proving the pipeline works but won't surface team-specific content. Edit the Notion config page (keywords for what your team monitors, partner patterns for how you label meetings, favorites for documents you watch) and the local profile file (your team's role, priorities, glossary, and relevance heuristics) before running `/team-digest` for real.
+
 ### Joining an Existing Team
 
 If the Notion database and config page already exist (a teammate set them up), ask them for the three IDs and paste them into your `config.json`. You do not need to create new Notion resources.

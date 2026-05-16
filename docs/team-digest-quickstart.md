@@ -25,14 +25,17 @@ Restart Claude Code if a session is already open.
 /team-digest
 ```
 
-On first run, the skill will ask you for two Notion IDs:
+On first run, the skill asks: "Do you already have Notion pages set up, or should I create them? [existing/new]"
 
-1. **Config page ID** - the Notion page with keywords and partner patterns
-2. **Database ID** - the Notion database where digest pages are written
+- **If you have Notion pages already** (a teammate shared them, or you set them up yourself), choose `existing`. The skill prompts for two IDs:
+  1. **Config page ID** - the Notion page with keywords and partner patterns
+  2. **Database ID** - the Notion database where digest pages are written
 
-Both are the 32-char hex string from the Notion page URL: `notion.so/<this-id>`. Ask your team lead for these if you don't have them.
+  Both are the 32-char hex string from the Notion page URL: `notion.so/<this-id>`.
 
-The skill saves your config to `~/.config/team-digest/config.json` and pre-fills GitHub orgs and default keywords. Run `/team-digest` again to produce your first digest.
+- **If your Notion workspace is fresh**, choose `new`. The skill auto-creates a "Team Digest Workspace" parent page with a config page (prefilled with starter defaults) and the entries database. See [docs/configuration.md](configuration.md#bootstrap-your-notion-workspace) for what gets created and where to find it in your Notion sidebar.
+
+Either path saves your config to `~/.config/team-digest/config.json` and pre-fills GitHub orgs and default keywords. Run `/team-digest` again to produce your first digest.
 
 ## Commands
 
