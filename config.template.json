@@ -8,6 +8,8 @@
       "database_id_help": "32-char hex from the Notion database URL (notion.so/<this-id>)"
     },
     "github": {
+      "token": "",
+      "token_help": "Optional GitHub PAT. Resolution order: $GH_TOKEN / $GITHUB_TOKEN env vars → this field → gh auth status fallback. Required scopes: public_repo (or repo for private orgs) + read:discussion. Leave empty to use your existing gh CLI auth.",
       "orgs": [
         {
           "name": "your-org",
