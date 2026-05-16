@@ -65,6 +65,17 @@ The digest is designed to produce partial output on failure. If a section shows 
 - **Notion keywords failed:** Check that Notion MCP is connected and authenticated
 - **Partner conversations failed:** Same as keywords - check Notion MCP
 
+### Bootstrap failed partway through
+
+`/team-digest setup` (when you choose `new`) creates four artifacts in order: Notion parent page, Notion config page, Notion database, local config.json. The local profile file is written only if it doesn't already exist. There is no atomic rollback — if a later step fails, earlier artifacts stay. Recovery depends on where it failed:
+
+- **Parent page created, config page failed:** delete the orphan parent page in Notion UI, then re-run `/team-digest setup`.
+- **Parent + config page created, database failed:** delete both pages in Notion UI, then re-run.
+- **All Notion pages created, profile file write failed:** the confirmation message will show the Notion URLs. Create `~/.config/team-digest/profiles/team-digest.md` manually (copy from `profiles/team-digest.template.md` in the repo). No need to re-run `setup`.
+- **All Notion pages and profile created, config.json write failed:** the error message will print the two IDs. Paste them manually into `~/.config/team-digest/config.json` under the `team-digest.notion` block. No need to re-run.
+
+If you've already started `setup` once and want to abandon and try fresh: delete the parent page in Notion (which cascades to its children), `rm ~/.config/team-digest/config.json`, and re-run `setup`.
+
 ### Duplicate digest pages
 
 If the automation ran and you also ran `/team-digest` manually, you will get two digest pages for the same day. The database has a "Status" property - automated runs are "Auto", which you can use to filter.
