@@ -4,3 +4,5 @@ config.json
 # Personalized team profiles (gitignored; templates committed as *.template.md)
 profiles/*.md
 !profiles/*.template.md
+
+docs/superpowers
