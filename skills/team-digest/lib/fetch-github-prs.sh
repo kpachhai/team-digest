@@ -5,8 +5,9 @@
 #   e.g. fetch-github-prs.sh your-org 2026-05-04T00:00:00Z 2026-05-04T23:59:59Z
 #
 # Output: human-readable summary on stdout, grouped by repo. Each PR line
-# includes state, number, title, author handle, html_url, and a 200-char
-# description excerpt. The skill consumes this output as plain text.
+# includes state, number, title, author handle, html_url, and a 150-char
+# description excerpt (markdown links/images/comments stripped before truncation).
+# The skill consumes this output as plain text.
 
 set -euo pipefail
 
@@ -17,7 +18,7 @@ END="${3:?usage: fetch-github-prs.sh <org> <start-iso> <end-iso>}"
 _py=$(mktemp /tmp/gh-prs-XXXXXX.py)
 trap 'rm -f "$_py"' EXIT
 cat > "$_py" <<'PY'
-import json, sys
+import json, re, sys
 
 data = json.load(sys.stdin)
 if not data:
@@ -35,7 +36,13 @@ for repo in sorted(repos):
     prs = repos[repo]
     print(f'## {repo} ({len(prs)} PRs)')
     for pr in prs:
-        body = (pr.get('body') or '')[:200].replace('\n', ' ').strip()
+        raw_body = pr.get('body') or ''
+        # Strip markdown noise before truncating so the 150-char excerpt
+        # carries information density, not formatting.
+        body = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', raw_body)     # [text](url) -> text
+        body = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', body)             # ![alt](url) -> (drop)
+        body = re.sub(r'<!--.*?-->', '', body, flags=re.DOTALL)      # HTML comments -> (drop)
+        body = body[:150].replace('\n', ' ').strip()
         author = (pr.get('author') or {}).get('login', '?')
         state = pr.get('state', '?').upper()
         print(f'  [{state}] #{pr["number"]} {pr["title"]}')

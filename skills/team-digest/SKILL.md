@@ -329,7 +329,7 @@ Each helper returns a JSON array of items dated to `$DATE_LABEL`. Empty arrays (
 For each keyword group from configuration, search the Notion workspace:
 - Use the `notion-search` MCP tool with `query_type: "internal"`
 - Filter to pages created on the previous calendar day using `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }`
-- Set `page_size: 10` and `max_highlight_length: 300`
+- Set `page_size: 10` and `max_highlight_length: 150`
 
 Run keyword searches in parallel batches (2-3 keywords per search query to reduce API calls).
 
@@ -349,7 +349,7 @@ Page ID | Title | URL (from MCP response)
 **You MUST fetch each matched page with `notion-fetch` to get its canonical URL if `notion-search` does not return one.** Do NOT proceed to writing until you have a URL for every page in the registry.
 
 For each unique page found:
-- Fetch full page content using the `notion-fetch` MCP tool; extract the `url` field from the response and add it to the registry
+- **If the `notion-search` highlight is ≥ 100 chars, skip `notion-fetch` and use the highlight directly as the summary source.** Add the `url` from the search result to the Notion Link Registry. Note in the page entry: `(summary from search highlight; full page not fetched for token efficiency)`. **If the highlight is < 100 chars**, call `notion-fetch` to get the full page; record the `url` from the fetch response in the registry; write a narrative summary from the full content. The Favorites section (Step 3.5) ALWAYS calls `notion-fetch` because favorites are explicitly curated — this skip rule applies only to keyword-matched pages.
 - Write a narrative summary explaining what the page contains
 - List which keywords matched
 - Add a "relevance" note explaining why this matters for the team
@@ -379,7 +379,7 @@ Emit all favorite `notion-fetch` calls in one message so they run concurrently.
 
 For each **qualifying parent favorite** (and only those), take its collected child page references and call `notion-fetch` on each in parallel. Apply these limits:
 
-- **Cap at 15 children per favorite.** If a qualifying parent has more than 15 unique child page references, fetch the first 15 and add a one-line note `(<favorite title>: 15-child cap reached, N pages skipped)` to the Favorites section.
+- **Cap at 5 children per favorite.** If a qualifying parent has more than 5 unique child page references, fetch the first 5 and add a one-line note `(<favorite title>: 5-child cap reached, N pages skipped)` to the Favorites section.
 - **Single hop only.** Do NOT recurse into the children's children. Loops or deep trees would explode the cost.
 - **Deduplicate across favorites.** If two different favorites both link to the same child page, fetch it once.
 - **Apply the same `last_edited_time == $DATE_LABEL` filter** to each child. Children not edited that day are silently dropped.

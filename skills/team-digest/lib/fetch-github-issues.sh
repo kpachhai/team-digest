@@ -6,7 +6,8 @@
 #
 # Output: human-readable summary on stdout, grouped by repo. Each issue
 # line includes state, number, title, author handle, html_url, and a
-# 200-char description excerpt.
+# 150-char description excerpt (markdown links/images/comments stripped
+# before truncation).
 
 set -euo pipefail
 
@@ -17,7 +18,7 @@ END="${3:?usage: fetch-github-issues.sh <org> <start-iso> <end-iso>}"
 _py=$(mktemp /tmp/gh-issues-XXXXXX.py)
 trap 'rm -f "$_py"' EXIT
 cat > "$_py" <<'PY'
-import json, sys
+import json, re, sys
 
 data = json.load(sys.stdin)
 if not data:
@@ -35,7 +36,13 @@ for repo in sorted(repos):
     issues = repos[repo]
     print(f'## {repo} ({len(issues)} issues)')
     for issue in issues:
-        body = (issue.get('body') or '')[:200].replace('\n', ' ').strip()
+        raw_body = issue.get('body') or ''
+        # Strip markdown noise before truncating so the 150-char excerpt
+        # carries information density, not formatting.
+        body = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', raw_body)     # [text](url) -> text
+        body = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', body)             # ![alt](url) -> (drop)
+        body = re.sub(r'<!--.*?-->', '', body, flags=re.DOTALL)      # HTML comments -> (drop)
+        body = body[:150].replace('\n', ' ').strip()
         author = (issue.get('author') or {}).get('login', '?')
         state = issue.get('state', '?').upper()
         print(f'  [{state}] #{issue["number"]} {issue["title"]}')
