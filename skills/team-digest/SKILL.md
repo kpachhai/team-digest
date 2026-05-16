@@ -1,6 +1,6 @@
 ---
 name: team-digest
-description: Team Daily Digest - scans GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /team-digest [YYYY-MM-DD | setup | config]
+description: Team Daily Digest - scans GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /team-digest [YYYY-MM-DD | --dry-run | --from-file <path> | setup | config]
 user-invocable: true
 ---
 
@@ -15,18 +15,21 @@ Manually run the Team Daily Digest pipeline on demand. Scans a specific day's ac
 - `/team-digest 2026-04-20` - digest for a specific date
 - `/team-digest --dry-run` - run the full pipeline but write the markdown to a local file instead of creating the Notion page (safe for refactor validation - does not overwrite an existing daily digest)
 - `/team-digest 2026-04-20 --dry-run` - both date and dry-run
+- `/team-digest --from-file /tmp/team-digest-dry-runs/team-digest-2026-05-15-v1.md` - upload a previously saved safety file to Notion, skipping the full data-gather pipeline (token-efficient recovery after a timeout)
+- `/team-digest 2026-05-15 --from-file /path/to/file.md` - same, with explicit date override
 - `/team-digest setup` - first-time setup or update your Notion IDs
 - `/team-digest config` - show current config (Notion IDs, orgs, keywords)
 
-The flags `--dry-run` and date arg can appear in any order. The dry-run output goes to `/tmp/team-digest-dry-runs/team-digest-<DATE_LABEL>-v<N>.md`, versioned so repeated runs do not clobber each other. The path is ephemeral on purpose - dry runs are throwaway validation artifacts, not history. If you need to keep one, copy it elsewhere.
+The flags `--dry-run`, `--from-file`, and date arg can appear in any order. The dry-run / safety-backup output goes to `/tmp/team-digest-dry-runs/team-digest-<DATE_LABEL>-v<N>.md`, versioned so repeated runs do not clobber each other. These files are ephemeral - cleared on reboot. If you need to keep one, copy it elsewhere.
 
 Use this when:
 - Testing the digest before enabling automation
 - Re-running after a failed automated run (use `--dry-run` first if you want to preview without overwriting)
+- Recovering after a Notion write timeout: the safety file at `/tmp/team-digest-dry-runs/` contains the assembled content; use `--from-file` to upload it without re-gathering data
 - Running an ad-hoc digest outside the normal schedule
 - Backfilling a missed day (e.g., `/team-digest 2026-04-18`)
 
-This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-digest repo (or copy/symlink it to `~/.local/bin/`). That entry point uses `claude -p` headlessly with the Notion MCP tools allow-listed - same skill, same output, same `--dry-run` flag.
+This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-digest repo (or copy/symlink it to `~/.local/bin/`). That entry point uses `claude -p` headlessly with the Notion MCP tools allow-listed - same skill, same output, same flags.
 
 ## Important Runtime Notes
 
@@ -85,9 +88,27 @@ The skill argument is a single string after `/team-digest`. Parse it as zero or 
 
 - A `YYYY-MM-DD` date → captured as `$DATE_ARG`
 - The literal `--dry-run` → set `$DRY_RUN=1`
+- `--from-file <path>` → set `$FROM_FILE` to the path token that follows the flag; this activates upload-only mode (see subcommand below)
 - The literal `setup` or `config` → handle as a subcommand (below)
 
 Order does not matter: `/team-digest 2026-05-04 --dry-run` and `/team-digest --dry-run 2026-05-04` are equivalent. Anything else is an error.
+
+`--from-file` and `--dry-run` are mutually exclusive; if both are present, stop with an error.
+
+#### Subcommand: `--from-file <path>` (upload-only mode)
+
+When `$FROM_FILE` is set, skip the full data-gather pipeline (Steps 1-4) and jump directly to the Notion write. This is the token-efficient recovery path for when a previous run assembled the content but the Notion write timed out.
+
+Flow:
+1. Load config (Step 0 Load Config below) - still needed for `database_id` and `data_source_id`.
+2. Load Notion MCP schemas (Step 0.5) - required to call `notion-create-pages`.
+3. Fetch `data_source_id` from the database (the deferred part of Step 0).
+4. Read `$FROM_FILE` using the Read tool. The file contains Notion-flavored markdown assembled by a previous run.
+5. Extract `$DATE_LABEL` from the filename if no `$DATE_ARG` was provided. Safety file names follow the pattern `team-digest-YYYY-MM-DD-vN.md`; extract the `YYYY-MM-DD` portion. If extraction fails and no `$DATE_ARG` was given, stop with an error asking the user to pass the date explicitly.
+6. Check whether a digest page already exists for that date (same existence check as the full pipeline - search for "Team Daily Digest <DATE_LABEL>"). If one exists, stop with a warning rather than creating a duplicate.
+7. Call `notion-create-pages` with the file content as the page body and standard properties (`Digest Title`, `date:Date:start`, `Digest Type: Combined`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline).
+8. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
+9. On failure, tell the user the source file is still at `$FROM_FILE` and they can try again.
 
 #### Subcommand: `setup`
 
@@ -475,7 +496,7 @@ Only proceed to Step 5 after: all triggered diagrams are present and checked for
 
 ### Step 5: Write the Combined Digest
 
-**If `$DRY_RUN` is set:** do NOT call `notion-create-pages`. Instead, write the assembled markdown content (everything inside the **Content structure** block below, with `<DATE_LABEL>` and counts substituted) to a versioned local file:
+**FIRST: Always write a safety backup file** before doing anything else in this step - even before the dry-run check. This ensures the assembled content is never lost to a Notion API timeout or stream error.
 
 ```bash
 DRY_DIR="/tmp/team-digest-dry-runs"
@@ -485,13 +506,22 @@ N=1
 while [ -f "$DRY_DIR/team-digest-${DATE_LABEL}-v${N}.md" ]; do
   N=$((N + 1))
 done
-DRY_PATH="$DRY_DIR/team-digest-${DATE_LABEL}-v${N}.md"
-# Use the Write tool (not echo) to write the assembled content to $DRY_PATH.
+SAFETY_PATH="$DRY_DIR/team-digest-${DATE_LABEL}-v${N}.md"
+# Use the Write tool (not echo) to write the assembled content to $SAFETY_PATH.
 ```
 
-Use the `Write` tool to write the content (no Notion-flavored `<callout>` / `<details>` / `<table header-row>` tags - convert them to plain Markdown for the file: blockquote for callouts, headings for sections, GFM tables for tables). The dry-run output is meant for human review and diffing, not Notion. Then echo the path to the user (`Dry-run output: <path>`) and stop. Skip the rest of Step 5.
+Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep all `<callout>`, `<details>`, `<table header-row>` tags exactly as they would appear in the Notion page). This is intentional: the safety file doubles as the source for `--from-file` recovery, so it must be in the same format as what `notion-create-pages` receives. It is ephemeral - cleared on reboot.
 
-**If `$DRY_RUN` is NOT set:** create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
+After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
+
+**If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path.)
+
+**If `$DRY_RUN` is NOT set:** proceed to create the Notion page. If the `notion-create-pages` call fails (stream timeout, API error, or any other error), tell the user:
+> Notion write failed. Assembled content is saved at `<SAFETY_PATH>`. Re-run with:
+> `bin/team-digest-run.sh <DATE_LABEL> --from-file <SAFETY_PATH>`
+Then stop - do NOT silently retry or write another file.
+
+Create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
 
 **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 0>" }`
 
