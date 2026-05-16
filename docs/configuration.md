@@ -56,9 +56,28 @@ If `rss_feeds` is missing or empty, the Industry News section is silently omitte
 
 ### GitHub authentication
 
-The skill uses your local `gh` CLI authentication. Run `gh auth login` once (any scope is fine for public repos; for private repos you need at least `repo` read access). The `bin/team-digest-run.sh` headless entry point also inherits your local `gh` auth - cron and launchd both work without any token configuration.
+The skill resolves which GitHub token to use in this order, highest priority first:
 
-If `gh auth status` fails when the digest runs, the skill aborts with an actionable error rather than producing a partial digest. There is no token-in-config fallback.
+1. **`$GH_TOKEN` or `$GITHUB_TOKEN` env var** — if either is set, it wins. Useful for one-off runs or CI where you want to override config without editing files.
+2. **`github.token` field in `config.json`** — an optional PAT stored alongside your other team-digest settings. Empty string means "skip and fall through to (3)." This is the recommended option for cron and launchd, since the env-var approach requires you to wrap the cron entry with the token export.
+3. **`gh auth login` fallback** — your local `gh` CLI session. The `bin/team-digest-run.sh` headless entry point inherits this auth, so simple setups work with no token configuration at all.
+
+The helper at `skills/team-digest/lib/resolve-gh-token.sh` performs this resolution; both `/team-digest` and `/team-weekly` invoke it in Step 0 (right after `load-config.sh`).
+
+**Required scopes:** `public_repo` (or `repo` for private orgs) plus `read:discussion`. Any token that works for `gh search prs` and `gh search issues` is sufficient.
+
+**Setting `github.token` in `config.json`:**
+
+```json
+"github": {
+  "token": "ghp_yourtokenhere",
+  "orgs": [...]
+}
+```
+
+Leave the field empty (`"token": ""`) to use the env-var or `gh auth` fallback. The template at `config.template.json` ships with an empty value so new installs default to the `gh` CLI flow.
+
+If none of the three sources yields a usable token and `gh auth status` also fails, the skill aborts with an actionable error rather than producing a partial digest.
 
 ### Finding Notion IDs
 

@@ -49,9 +49,9 @@ If Notion MCP is unavailable, the digest will still produce the GitHub section a
 
 ### GitHub rate limiting
 
-`gh` uses your authenticated session - the same auth from `gh auth login`. Authenticated users get 5,000 core API requests/hour and 30 search requests/hour, well within limits for a daily digest run. The `bin/team-digest-run.sh` headless wrapper inherits the same auth, so cron and launchd runs are also authenticated.
+`gh` uses whichever token resolved first from this chain: `$GH_TOKEN` / `$GITHUB_TOKEN` env vars → `github.token` field in `config.json` → `gh auth login` session. Authenticated users get 5,000 core API requests/hour and 30 search requests/hour, well within limits for a daily digest run. The `bin/team-digest-run.sh` headless wrapper inherits the same resolution, so cron and launchd runs are also authenticated.
 
-If `gh auth status` fails when the digest tries to run, the skill aborts with a clear error rather than producing a partial digest. There is no token-in-config fallback - run `gh auth login` to fix.
+If none of the three sources yields a usable token and `gh auth status` also fails, the skill aborts with a clear error rather than producing a partial digest. To fix: either run `gh auth login`, set `github.token` in `~/.config/team-digest/config.json`, or export `GH_TOKEN` in the shell where you invoke the digest. See [docs/configuration.md](configuration.md#github-authentication) for the full resolution rules and required scopes.
 
 To check your current rate limit status:
 ```bash

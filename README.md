@@ -87,7 +87,7 @@ Critically, `/team-weekly` does NOT re-scan GitHub, Notion, or RSS - the dailies
 **Prerequisites:**
 
 - [Claude Code](https://claude.ai/code) installed and authenticated
-- [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`)
+- [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`), OR a GitHub PAT set via the `GH_TOKEN` env var or the `github.token` field in `config.json` (see [docs/configuration.md](docs/configuration.md#github-authentication) for the full resolution order)
 - Notion MCP server connected in Claude Code (Settings > MCP Servers > Notion)
 
 **Install:**
