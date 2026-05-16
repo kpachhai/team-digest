@@ -405,7 +405,7 @@ If every favorite (and every descended child) was either inaccessible, archived,
 
 ### Step 4: Scan Partner Conversations
 
-For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }` to strictly bound results to that UTC day.
+For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }` to strictly bound results to that UTC day. Set `max_highlight_length: 150` for token-efficiency parity with Step 3 — the highlight is only used to decide whether the meeting page is worth synthesizing in full via `notion-fetch`; long highlights waste tokens without changing the routing decision.
 
 **Deduplication:** Skip pages already covered in the keyword monitor section. Track by page ID.
 
