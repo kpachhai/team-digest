@@ -1,6 +1,6 @@
 ---
 name: team-weekly
-description: Team Weekly Digest - synthesizes the past week (or any custom date range) of Team Daily Digests into a rollup summary, written to the same Notion database. Usage - /team-weekly [YYYY-MM-DD | --from F --to T | --dry-run | config]
+description: Team Weekly Digest - synthesizes the past week (or any custom date range) of Team Daily Digests into a rollup summary, written to the same Notion database. Usage - /team-weekly [YYYY-MM-DD | --from F --to T | --dry-run | --from-file <path> | config]
 user-invocable: true
 ---
 
@@ -20,11 +20,12 @@ This skill is the "rollup" companion to `/team-digest`. It reads structured prop
 - `/team-weekly --dry-run` - run the full pipeline but write the markdown to a local file instead of creating a Notion page
 - `/team-weekly 2026-05-07 --dry-run` - the ISO-week mode + dry run
 - `/team-weekly --from 2026-04-25 --to 2026-05-03 --dry-run` - custom range + dry run
+- `/team-weekly --from-file /tmp/team-digest-dry-runs/team-weekly-2026-W19-v1.md` - upload a previously saved safety file to Notion, skipping the full synthesis pipeline (token-efficient recovery after a timeout); a date, ISO-week arg, or `--from`/`--to` range must accompany this flag so the week window can be computed for Notion properties
 - `/team-weekly config` - show the current config (Notion IDs and team-digest reuse)
 
-The flags can appear in any order. Mixing a positional date with `--from`/`--to` is an error - pick one mode. `--from` and `--to` must appear together (specifying only one is an error). Dry-run output goes to `/tmp/team-digest-dry-runs/team-weekly-<WEEK_LABEL>-v<N>.md`, ephemeral by design (compare once, discard). For custom ranges, `WEEK_LABEL` becomes `<from>_to_<to>` (e.g., `2026-04-25_to_2026-05-03`) so the file name stays informative.
+The flags can appear in any order. Mixing a positional date with `--from`/`--to` is an error - pick one mode. `--from` and `--to` must appear together (specifying only one is an error). `--from-file` and `--dry-run` are mutually exclusive. Dry-run / safety-backup output goes to `/tmp/team-digest-dry-runs/team-weekly-<WEEK_LABEL>-v<N>.md`, ephemeral by design (cleared on reboot). For custom ranges, `WEEK_LABEL` becomes `<from>_to_<to>` (e.g., `2026-04-25_to_2026-05-03`) so the file name stays informative.
 
-This skill also runs from the terminal via `bin/team-weekly-run.sh` in the team-digest repo. Same skill, same `--dry-run` flag.
+This skill also runs from the terminal via `bin/team-weekly-run.sh` in the team-digest repo. Same skill, same flags.
 
 ## Important Runtime Notes
 
@@ -43,14 +44,32 @@ Parse the skill argument as zero or more of:
 - A `YYYY-MM-DD` date → captured as `$DATE_ARG` (snaps to the ISO week containing it)
 - `--from YYYY-MM-DD --to YYYY-MM-DD` → captured as `$FROM` and `$TO` (arbitrary date range, inclusive)
 - The literal `--dry-run` → set `$DRY_RUN=1`
+- `--from-file <path>` → set `$FROM_FILE` to the path token that follows the flag; activates upload-only mode (see subcommand below)
 - The literal `config` → handle as a subcommand (below)
 
 Order does not matter. **Validation rules:**
 
 - `--from` and `--to` must appear together. Specifying one without the other is an error.
 - A positional date arg cannot coexist with `--from`/`--to`. Pick one mode and surface a clear error if both are given.
+- `--from-file` and `--dry-run` are mutually exclusive.
+- `--from-file` requires at least one week-context arg (`$DATE_ARG`, or `--from`/`--to`) so `WEEK_LABEL`, `WEEK_START`, and `WEEK_END` can be computed for the Notion page properties.
 
 The window-resolution helper (`compute-week-window.sh`) handles all three valid forms (no-arg, single date, --from/--to range) and validates each. Pass `$DATE_ARG`, `$FROM`, `$TO` through to it as-is.
+
+#### Subcommand: `--from-file <path>` (upload-only mode)
+
+When `$FROM_FILE` is set, skip the full synthesis pipeline (Steps 1-4) and jump directly to the Notion write. This is the token-efficient recovery path for when a previous run assembled the content but the Notion write timed out.
+
+Flow:
+1. Load config (Step 0 Load config below) - still needed for `database_id` and `data_source_id`.
+2. Run `compute-week-window.sh` with the provided date/range args to set `$WEEK_LABEL`, `$WEEK_START`, `$WEEK_END`. This is needed for Notion page properties.
+3. Load Notion MCP schemas (Step 0.5) - required to call `notion-create-pages`.
+4. Fetch `data_source_id` from the database (same `notion-fetch` call as Step 2).
+5. Read `$FROM_FILE` using the Read tool. The file contains Notion-flavored markdown assembled by a previous run.
+6. Check whether a weekly digest already exists for `$WEEK_LABEL` (search for "Team Weekly Digest <WEEK_LABEL>"). If one exists, stop with a warning rather than creating a duplicate.
+7. Call `notion-create-pages` with the file content as the page body and standard properties. For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline).
+8. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
+9. On failure, tell the user the source file is still at `$FROM_FILE` and they can try again.
 
 #### Subcommand: `config`
 
@@ -178,7 +197,7 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 
 ### Step 5: Write the weekly digest
 
-**If `$DRY_RUN` is set:** do NOT call `notion-create-pages`. Instead, write the assembled markdown to a versioned local file:
+**FIRST: Always write a safety backup file** before doing anything else in this step - even before the dry-run check. This ensures the assembled content is never lost to a Notion API timeout or stream error.
 
 ```bash
 DRY_DIR="/tmp/team-digest-dry-runs"
@@ -187,13 +206,22 @@ N=1
 while [ -f "$DRY_DIR/team-weekly-${WEEK_LABEL}-v${N}.md" ]; do
   N=$((N + 1))
 done
-DRY_PATH="$DRY_DIR/team-weekly-${WEEK_LABEL}-v${N}.md"
-# Use the Write tool to write the assembled content to $DRY_PATH.
+SAFETY_PATH="$DRY_DIR/team-weekly-${WEEK_LABEL}-v${N}.md"
+# Use the Write tool to write the assembled content to $SAFETY_PATH.
 ```
 
-Write plain Markdown for the dry-run file (no Notion-flavored `<callout>`, `<details>`, `<table header-row>` tags). Convert callouts to blockquotes, sections to headings, GFM tables for tabular data. Echo the path to the user (`Dry-run output: <path>`) and stop.
+Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep all `<callout>`, `<details>`, `<table header-row>` tags exactly as they would appear in the Notion page). This is intentional: the safety file doubles as the source for `--from-file` recovery, so it must be in the same format as what `notion-create-pages` receives. It is ephemeral - cleared on reboot.
 
-**If `$DRY_RUN` is NOT set:** create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
+After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
+
+**If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path.)
+
+**If `$DRY_RUN` is NOT set:** proceed to create the Notion page. If the `notion-create-pages` call fails (stream timeout, API error, or any other error), tell the user:
+> Notion write failed. Assembled content is saved at `<SAFETY_PATH>`. Re-run with:
+> `bin/team-weekly-run.sh <DATE_OR_RANGE_ARGS> --from-file <SAFETY_PATH>`
+Then stop - do NOT silently retry or write another file.
+
+Create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
 
 **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 2>" }`
 

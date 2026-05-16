@@ -6,15 +6,25 @@
 # the terminal. From inside Claude Code, just type /team-weekly instead.
 #
 # Usage:
-#   team-weekly-run.sh                          # last full ISO week (Mon-Sun)
-#   team-weekly-run.sh 2026-05-07               # the ISO week containing this date
-#   team-weekly-run.sh --from F --to T          # arbitrary date range, F to T inclusive
-#   team-weekly-run.sh --dry-run                # write to /tmp/team-digest-dry-runs/, skip Notion
-#   team-weekly-run.sh 2026-05-07 --dry-run     # ISO-week mode + dry run
-#   team-weekly-run.sh --from F --to T --dry-run # custom range + dry run
+#   team-weekly-run.sh                               # last full ISO week (Mon-Sun)
+#   team-weekly-run.sh 2026-05-07                    # the ISO week containing this date
+#   team-weekly-run.sh --from F --to T               # arbitrary date range, F to T inclusive
+#   team-weekly-run.sh --dry-run                     # write safety file, skip Notion
+#   team-weekly-run.sh 2026-05-07 --dry-run          # ISO-week mode + dry run
+#   team-weekly-run.sh --from F --to T --dry-run     # custom range + dry run
+#   team-weekly-run.sh 2026-05-07 --from-file /tmp/team-digest-dry-runs/team-weekly-2026-W19-v1.md
+#                                                    # upload saved safety file, skip synthesis
+#   team-weekly-run.sh --from F --to T --from-file /tmp/.../file.md
+#                                                    # same with custom range
+#   team-weekly-run.sh --help                        # this message
+#
+# --from-file is the token-efficient recovery path: when a previous run assembled
+# the weekly digest but the Notion write timed out, use --from-file to upload the
+# saved safety file without re-running the full synthesis pipeline. A date or
+# --from/--to range is required alongside --from-file so week properties can be set.
 #
 # Logs:
-#   $TEAM_DIGEST_LOG (default ~/.local/log/team-weekly.log)         - human-readable
+#   $TEAM_DIGEST_LOG (default ~/.local/log/team-weekly.log)           - human-readable
 #   $TEAM_DIGEST_RAW_LOG (default ~/.local/log/team-weekly-raw.jsonl) - raw stream-json events
 #
 # Override the model with TEAM_DIGEST_MODEL=claude-...
@@ -34,7 +44,7 @@ echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG"
 
 # Allow-list the tools the skill needs. Notion MCP tools are required
 # for Step 2 (query data source), Step 3 (fetch each daily), and Step 5
-# (write the weekly page).
+# (write the weekly page). Read is needed for --from-file mode.
 ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-fetch"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-search"
@@ -79,18 +89,21 @@ run_claude() {
 }
 
 # ---- Argument parsing ------------------------------------------------------
-# Supported forms (order is flexible, except --from/--to must each have a value):
+# Supported forms (order is flexible, except --from/--to/--from-file must each have a value):
 #   team-weekly-run.sh
 #   team-weekly-run.sh YYYY-MM-DD
 #   team-weekly-run.sh --from YYYY-MM-DD --to YYYY-MM-DD
 #   team-weekly-run.sh --dry-run
 #   team-weekly-run.sh YYYY-MM-DD --dry-run
 #   team-weekly-run.sh --from F --to T --dry-run
+#   team-weekly-run.sh 2026-05-07 --from-file /path/to/file.md
+#   team-weekly-run.sh --from F --to T --from-file /path/to/file.md
 
 DATE_ARG=""
 DRY_RUN=""
 FROM=""
 TO=""
+FROM_FILE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -114,15 +127,23 @@ while [ $# -gt 0 ]; do
       fi
       shift 2
       ;;
+    --from-file)
+      FROM_FILE="${2:-}"
+      if [ -z "$FROM_FILE" ]; then
+        echo "ERROR: --from-file requires a file path argument." | tee -a "$LOG"
+        exit 1
+      fi
+      shift 2
+      ;;
     -h|--help)
-      sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
       if echo "$1" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
         DATE_ARG="$1"
       else
-        echo "ERROR: unrecognized argument '$1'. Use YYYY-MM-DD, --from/--to, or --dry-run." | tee -a "$LOG"
+        echo "ERROR: unrecognized argument '$1'. Use YYYY-MM-DD, --from/--to, --dry-run, or --from-file <path>." | tee -a "$LOG"
         exit 1
       fi
       shift
@@ -141,12 +162,27 @@ if { [ -n "$FROM" ] || [ -n "$TO" ]; } && [ -n "$DATE_ARG" ]; then
   echo "ERROR: cannot mix a positional date arg with --from/--to. Pick one mode." | tee -a "$LOG"
   exit 1
 fi
+if [ -n "$FROM_FILE" ] && [ -n "$DRY_RUN" ]; then
+  echo "ERROR: --from-file and --dry-run are mutually exclusive." | tee -a "$LOG"; exit 1
+fi
+if [ -n "$FROM_FILE" ] && [ -z "$DATE_ARG" ] && [ -z "$FROM" ]; then
+  echo "ERROR: --from-file requires a date or --from/--to range so week properties can be set." | tee -a "$LOG"
+  echo "  Examples:" | tee -a "$LOG"
+  echo "    team-weekly-run.sh 2026-05-07 --from-file /path/to/file.md" | tee -a "$LOG"
+  echo "    team-weekly-run.sh --from 2026-04-28 --to 2026-05-04 --from-file /path/to/file.md" | tee -a "$LOG"
+  exit 1
+fi
+if [ -n "$FROM_FILE" ] && [ ! -f "$FROM_FILE" ]; then
+  echo "ERROR: --from-file path does not exist: $FROM_FILE" | tee -a "$LOG"
+  exit 1
+fi
 
 # ---- Build the prompt ------------------------------------------------------
 PROMPT="/team-weekly"
 [ -n "$DATE_ARG" ] && PROMPT="$PROMPT $DATE_ARG"
 [ -n "$FROM" ] && [ -n "$TO" ] && PROMPT="$PROMPT --from $FROM --to $TO"
 [ -n "$DRY_RUN" ] && PROMPT="$PROMPT $DRY_RUN"
+[ -n "$FROM_FILE" ] && PROMPT="$PROMPT --from-file $FROM_FILE"
 
 echo "Running: $PROMPT" | tee -a "$LOG"
 run_claude "$PROMPT"
