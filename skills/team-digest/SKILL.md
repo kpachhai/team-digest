@@ -168,11 +168,15 @@ This detect-and-verify branch is only reached when the argument is `setup`. A no
 **If the helper exits with status 1 (config file missing) and this is an interactive local run:** trigger the first-time setup flow automatically:
 
 1. Tell the user this is first-time setup for the Team Daily Digest
-2. Explain they need two Notion IDs - both are the 32-char hex string from Notion page URLs (`notion.so/<this-id>`)
-3. Ask for the **Notion config page ID** (the page with keywords and partner patterns)
-4. Ask for the **Notion database ID** (the database where digest pages are written)
-5. Create the directory `~/.config/team-digest/` if it doesn't exist
-6. Write `~/.config/team-digest/config.json` with this structure:
+2. **Existing-vs-new prompt.** Ask: "Do you already have Notion pages set up for team-digest, or should I create them for you? Enter `existing` or `new`:"
+   - On `existing`: continue with the prompt-for-IDs flow below (steps 3-10 of this list).
+   - On `new`: jump to the **Bootstrap Flow** subsection below.
+   - On any other input: re-prompt once. Two invalid inputs → STOP.
+3. Explain they need two Notion IDs - both are the 32-char hex string from Notion page URLs (`notion.so/<this-id>`)
+4. Ask for the **Notion config page ID** (the page with keywords and partner patterns)
+5. Ask for the **Notion database ID** (the database where digest pages are written)
+6. Create the directory `~/.config/team-digest/` if it doesn't exist
+7. Write `~/.config/team-digest/config.json` with this structure:
 
 ```json
 {
@@ -203,9 +207,204 @@ This detect-and-verify branch is only reached when the argument is `setup`. A no
 }
 ```
 
-7. If the config file already exists with other digest keys, merge the new `team-digest` key into the existing file rather than overwriting it.
-8. Confirm the config was created and tell the user they can now run `/team-digest` to produce their first digest.
-9. **Stop here** (do not continue to the digest pipeline on first-time setup).
+8. If the config file already exists with other digest keys, merge the new `team-digest` key into the existing file rather than overwriting it.
+9. Confirm the config was created and tell the user they can now run `/team-digest` to produce their first digest.
+10. **Stop here** (do not continue to the digest pipeline on first-time setup).
+
+#### Bootstrap Flow (reached from existing-vs-new `new` choice, or from Branch A `[1] re-bootstrap` choice above)
+
+This flow creates the Notion artifacts the team-digest pipeline requires: a parent page, a config page (with starter defaults), a database (with the 6-property schema), a local profile file, and writes `config.json`. All Notion MCP calls happen in the main Claude Code session — they cannot be dispatched to subagents.
+
+Pre-flight: ensure Notion MCP schemas are loaded (Step 0.5's ToolSearch — if not already done, run it now).
+
+**Step C.1: Create the workspace-level parent page.**
+
+Call `notion-create-pages` with:
+- `parent`: OMIT (workspace-level — pages land in user's Private section)
+- `pages`: array with one entry:
+  - `properties`: `{ "title": "Team Digest Workspace" }`
+  - `icon`: `"📊"`
+  - `content`: `"<callout icon=\"📊\" color=\"blue\">This is the Team Digest workspace. The Config page below holds your keywords, partner patterns, and favorites. The Entries database collects daily and weekly digest pages produced by /team-digest and /team-weekly.</callout>"`
+
+Capture the returned `page_id` as `parent_page_id`.
+
+**If the call fails** (MCP rejects the omit-parent case or returns any error): print the error, then prompt:
+> Workspace-level page creation failed. Please paste a Notion parent page ID (32-char hex from any page URL you have access to — the new artifacts will be created as children of that page):
+
+Validate the input is 32 hex characters (with or without dashes). Use as `parent_page_id`. Retry once on invalid input; second invalid → STOP.
+
+**Step C.2: Create the config page as a child of the parent.**
+
+Call `notion-create-pages` with:
+- `parent`: `{ "type": "page_id", "page_id": "<parent_page_id>" }`
+- `pages`: array with one entry:
+  - `properties`: `{ "title": "Team Digest Config" }`
+  - `icon`: `"⚙️"`
+  - `content`: the markdown body below (copy verbatim):
+
+```
+<callout icon="✏️" color="yellow">These are starter defaults. Edit before your first real digest run — keywords and partner patterns drive what the daily digest surfaces.</callout>
+
+## Keywords
+
+- AI
+- agent
+- MCP
+- API
+
+## Partner Patterns
+
+- Meeting with
+- Sync with
+- Call with
+- Catch up with
+- Discussion
+- Deep dive
+- Check-in with
+- Follow up with
+- Debrief
+
+## Favorites
+
+<callout icon="ℹ️" color="gray">Add Notion page URLs to monitor here, one per line. The digest scans for edits to these pages plus one level of child-page descent.</callout>
+```
+
+Capture the returned `page_id` as `config_page_id`. **If this call fails:** STOP. Print the MCP error and tell the user: "Parent page exists at <parent URL>; delete it manually before retrying."
+
+**Step C.3: Create the database as a child of the parent.**
+
+Call `notion-create-database` with:
+- `parent`: `{ "page_id": "<parent_page_id>" }`
+- `title`: `"Team Digest Entries"`
+- `description`: `"Daily and weekly digest pages produced by /team-digest and /team-weekly. Schema must not be modified — the skills write specific property names."`
+- `schema`: exactly this DDL string (including the double-quotes around column names):
+
+```
+CREATE TABLE ("Digest Title" TITLE, "date" DATE, "Digest Type" SELECT('Combined':blue, 'Weekly':purple), "Repos Active" NUMBER, "Keywords Matched" MULTI_SELECT(), "Status" SELECT('Auto':green, 'Manual':yellow))
+```
+
+Capture the returned database `id` as `database_id`. The response also includes a `data_source_id` in a `<data-source>` tag — ignore it for config purposes (the existing skill discovers `data_source_id` at runtime by calling `notion-fetch` on `database_id` in Step 0, so storing it in config would be redundant).
+
+**If this call fails:** STOP. Print the MCP error and tell the user: "Config page created at <config URL>; database creation failed. Delete the orphan config page and the parent page manually, then retry."
+
+**Step C.4: Write the starter profile file (skip if exists).**
+
+The profile may already exist (`setup.sh` copies `profiles/team-digest.template.md` to `~/.config/team-digest/profiles/team-digest.md` during repo install). Bootstrap MUST NOT overwrite an existing profile — any customizations the user made would be lost.
+
+Check existence first; only write if missing:
+
+```bash
+PROFILE=~/.config/team-digest/profiles/team-digest.md
+if [ -f "$PROFILE" ]; then
+  echo "Profile already exists at $PROFILE — leaving it as-is."
+else
+  mkdir -p ~/.config/team-digest/profiles
+  cat > "$PROFILE" <<'MARKDOWN'
+# Team Profile
+
+> Edit before your first real digest run. The profile drives "Relevance" sections throughout the daily and weekly digests.
+
+## Role
+
+Describe what your team does in 1-3 sentences. Example: "Solutions architects working with enterprise customers on integration design and architecture review for distributed systems."
+
+## Priorities
+
+What matters most to your team right now. Used to rank Top Picks and weight Executive Summary content.
+
+- Priority 1
+- Priority 2
+- Priority 3
+
+## Project Glossary
+
+Acronyms, codenames, and jargon that need first-mention expansion in the digest. Format: `term — expansion`.
+
+- HIP — Hedera Improvement Proposal
+- MCP — Model Context Protocol
+
+## Relevance heuristics
+
+Custom rules for what makes activity "relevant" to your team specifically. Used to write the per-section Relevance paragraphs.
+
+- Activity is relevant if: [your criteria]
+- Activity is NOT relevant if: [your exclusions]
+MARKDOWN
+fi
+```
+
+**If this write fails** (permission denied, disk full): DO NOT STOP. Print:
+> Notion pages created (URLs above); profile file write failed: `<error>`. Create `~/.config/team-digest/profiles/team-digest.md` manually using the template shown above.
+
+Then continue to Step C.5.
+
+**Step C.5: Write `config.json` preserving existing keys.**
+
+The user's config file may already exist with other digest profile keys (e.g., a separate `<other-team>-digest` block). Merge rather than overwrite. Use Python via the Bash tool for safe JSON merge. Substitute `<CONFIG_PAGE_ID>` and `<DATABASE_ID>` with the actual values captured in Steps C.2 and C.3 before running:
+
+```bash
+mkdir -p ~/.config/team-digest
+CONFIG=~/.config/team-digest/config.json
+NEW_TEAM_DIGEST='{
+  "notion": {
+    "config_page_id": "<CONFIG_PAGE_ID>",
+    "database_id": "<DATABASE_ID>"
+  },
+  "github": {
+    "token": "",
+    "orgs": [
+      {
+        "name": "your-org",
+        "priority_repos": [],
+        "scan_all": true
+      }
+    ]
+  },
+  "rss_feeds": [],
+  "defaults": {
+    "keywords": ["AI", "agent", "MCP", "API"],
+    "partner_patterns": [
+      "Meeting with", "Sync with", "Call with", "Catch up with",
+      "Discussion", "Deep dive", "Check-in with", "Follow up with", "Debrief"
+    ]
+  }
+}'
+
+python3 - "$CONFIG" "$NEW_TEAM_DIGEST" <<'PY'
+import json, os, sys
+config_path, new_block_json = sys.argv[1], sys.argv[2]
+new_block = json.loads(new_block_json)
+if os.path.exists(config_path):
+    with open(config_path) as f:
+        cfg = json.load(f)
+else:
+    cfg = {}
+cfg['team-digest'] = new_block
+with open(config_path, 'w') as f:
+    json.dump(cfg, f, indent=2)
+PY
+```
+
+**If this write fails:** DO NOT STOP. Print:
+> Notion pages created (URLs above); profile file created. `config.json` write failed: `<error>`. Paste these IDs manually into `~/.config/team-digest/config.json` under the `team-digest.notion` block:
+> - config_page_id: `<id>`
+> - database_id: `<id>`
+
+Then continue to Step C.6.
+
+**Step C.6: Print confirmation.**
+
+Tell the user:
+> Bootstrap complete.
+> - Notion parent: `<parent URL>` (workspace-level pages land in your Private section — look there if you don't see it in the sidebar)
+> - Config page:   `<config URL>` ← edit before first run
+> - Database:      `<database URL>`
+> - Profile file:  `~/.config/team-digest/profiles/team-digest.md` ← edit before first run
+> - Config file:   `~/.config/team-digest/config.json`
+>
+> Next: run `/team-digest` (defaults to yesterday's UTC date) to produce your first digest.
+
+**Stop here** (do not continue to the digest pipeline on first-time setup).
 
 If the argument was `setup`, use the same flow above but pre-fill the prompts with existing values so the user can see what's currently set and only change what they need.
 
