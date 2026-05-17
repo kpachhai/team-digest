@@ -115,6 +115,10 @@ _(10-HIP implementation-expansion cap reached; HIPs above this line did not get 
 
 ## Priority Repos
 
+NOTE: If any priority repos had ZERO activity in the date window, collapse them into a single line at the top of this section:
+NOTE: "Priority repos with no activity today: `<repo-a>`, `<repo-b>`."
+NOTE: Do NOT emit an H3 heading + "No activity on <DATE_LABEL>." paragraph for each silent priority repo. Then only emit H3 entries for priority repos WITH activity.
+
 ### [<repo-name>](https://github.com/<org>/<repo>)
 
 NOTE: Paragraph 1 - what MERGED. Lead with the user-visible change, not the PR number.
@@ -160,14 +164,23 @@ NOTE: ```
 ## Other Active Repos
 
 NOTE: Every repo with at least one PR/issue/release in the window. No silent drops.
-NOTE: Notable Activity column: plain English 1-2 sentences. Link every PR/issue number.
+NOTE: One H3 entry per repo. Counts go in the heading; each item is a sub-bullet.
+NOTE: Sub-bullet format: bold the user-visible change, then link the PR/issue, then "—" + one-clause why-it-matters when non-obvious.
+NOTE: Order items within a repo: merged/released first, then open PRs by signal strength, then issues.
+NOTE: Cap each repo at the top 3-5 items; trailing routine work goes in a final "+ N more" line linking the repo's PR list.
 
-<table header-row="true">
-<tr><td>Repo</td><td>PRs</td><td>Issues</td><td>Releases</td><td>Notable Activity</td></tr>
-<tr><td>[<repo>](https://github.com/<org>/<repo>)</td><td><N merged / N open, or -></td><td><N open, or -></td><td>[<tag>](<release-url>) or -</td><td><plain-English 1-2 sentence summary with linked PR/issue numbers></td></tr>
-</table>
+### [<repo-name>](https://github.com/<org>/<repo>) — <count summary>
+
+- **<bold lead: the user-visible change>** ([#<num>](<url>)) — <one-clause why-it-matters when non-obvious>
+- <next item, same shape>
+
+NOTE: "<count summary>" examples: "1 merged, 3 open", "5 open PRs, 2 open issues", "[v0.155.0-rc1](url) released, 1 open PR".
+NOTE: If a repo's only activity is one routine item (typo fix, CODEOWNERS, dep bump), the H3 heading + single bullet is fine.
+NOTE: For Mechanism A HIP annotations, sub-bullets that touch a HIP should include the linked `[HIP-N](url)` in the bold lead or follow with "(implements [HIP-N](url))".
 
 ---
+
+(Repeat ### for each repo with activity in this org)
 
 (Repeat # org block for each org in config.github.orgs)
 

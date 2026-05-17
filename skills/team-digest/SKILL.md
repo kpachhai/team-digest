@@ -882,6 +882,7 @@ Every digest opens with an **Executive Summary** under an `## Executive Summary`
 **Format:**
 
 - 5 to 8 bullet points
+- **Length cap: 50-90 words per bullet.** Each bullet is the headline plus one consequence clause. If you need three independent facts, write three bullets. The per-section narratives below carry the depth; the Executive Summary is for scan-speed signal.
 - Each bullet is one specific change with stakes - not "lots of activity in X"
 - Lead each bullet with a bold callout (the project, repo, or topic) followed by a one-line plain-English statement of what changed and why it matters
 - Every bullet links to the relevant section below for drill-down (e.g., the priority-repo section, the release, the Notion page, the partner conversation)
