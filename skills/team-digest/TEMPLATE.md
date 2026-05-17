@@ -70,6 +70,49 @@ NOTE: Omit pages whose title starts with "Team Daily Digest", "Team Weekly Diges
 
 # <org-name>
 
+<!-- For orgs in hip_tracking.implementation_orgs (default: hiero-ledger): -->
+## HIP Activity
+
+<!-- Tier 1 entry (status changed AND implementation activity today) -->
+### [HIP-<N>](<raw_url>) — <title>
+
+<callout icon="📈" color="blue">
+**Status: <prev_status> → <current_status>** · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)
+</callout>
+
+<2-3 sentence narrative drawing on the abstract_excerpt and explaining the change>
+
+**Implementation activity today:**
+
+- [<repo> #<num>](<url>) — <plain-English what the PR does>, by [@<author>](https://github.com/<author>) (<state>)
+- <N> commits in [<repo>](repo-url) referencing HIP-<N>: [<sha>](<commit-url>) "<subject>" by [@<author>](https://github.com/<author>)
+
+<!-- Tier 2 entry (HIP touched but no status change, no implementation activity) -->
+### [HIP-<N>](<raw_url>) — <title>
+
+Status: <status> · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)
+
+Minor edits to the abstract today; no implementation activity in the configured `implementation_orgs`.
+
+<!-- Tier 2b entry (proposal PR open against HIP repo, not yet on main) -->
+### [HIP-<N>](<pr_url>) — <title> (Proposed)
+
+<callout icon="📌" color="gray">
+**Status: Proposed (PR open)** · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)
+</callout>
+
+Proposed in [#<pr_num>](<pr_url>) against the HIP repository; not yet merged to main. <abstract_excerpt>
+
+<!-- Tier 3 overflow (>10 HIPs touched) -->
+### Other HIPs touched today
+
+- [HIP-<N>](<url>) — <title> (<status>, no status change)
+- ...
+
+_(10-HIP implementation-expansion cap reached; HIPs above this line did not get implementation-activity lookup.)_
+
+---
+
 ## Priority Repos
 
 ### [<repo-name>](https://github.com/<org>/<repo>)

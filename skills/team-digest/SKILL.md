@@ -535,6 +535,40 @@ The digest should group output under org-level headers:
 
 If scanning an org fails, note the failure and continue with the next org.
 
+### Step 2.3: Scan HIP Activity (Hedera/Hiero Improvement Proposals)
+
+**Gated on `TEAM_DIGEST_HIP_ENABLED=1`** (set automatically by Step 0 based on `hip_tracking.enabled` in config). If set to 0, skip this entire step.
+
+This step produces the HIP Activity section that appears under each org header in `hip_tracking.implementation_orgs` (default: `hiero-ledger`). It runs after the main GitHub scan so Phase 3 below can cross-link with PR data already in context.
+
+**Phase 1 — fetch updates:**
+
+```bash
+bash ~/.claude/skills/team-digest/lib/fetch-hip-updates.sh "$DATE_LABEL"
+```
+
+Capture stdout as JSON. Empty array `[]` → skip the rest of Step 2.3 (no HIP Activity section in output). Non-zero exit → log inline `(HIP source: <error>)` at the HIP Activity section position and continue with the rest of the digest.
+
+**Phase 2 — fetch implementation activity for top 10 HIPs (parallel):**
+
+Rank the HIP entries: status-changed first, then by HIP number ascending. Take the top `max_hips_with_implementation_expansion` (default 10).
+
+For each, dispatch in parallel (emit all Bash tool calls in one message):
+
+```bash
+bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$DATE_LABEL" "<comma-joined implementation_orgs>"
+```
+
+Capture each as JSON.
+
+**Phase 3 — cross-link with Step 2 data:**
+
+For each PR returned by Phase 2: if the same PR (by `url`) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-Phase-1))`.
+
+**Render the HIP Activity section** under each org header in `hip_tracking.implementation_orgs`, BEFORE the Priority Repos subsection. See the entry shapes in `TEMPLATE.md` for the exact format (Tier 1 / Tier 2 / Tier 2b / overflow).
+
+**Section-empty fallback:** if Phase 1 returned `[]` and no proposal PRs were found, omit the entire HIP Activity section (no "no HIPs today" filler).
+
 ### Step 2.5: Scan Industry News (RSS feeds + commit-watching for spec sets)
 
 This step covers public/external content the team should be aware of - blog posts, ecosystem announcements, EIP changes. Configured via the `rss_feeds` array in `config.json` (already loaded by `lib/load-config.sh` in Step 0).
@@ -687,8 +721,9 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 6. **First-mention expansions are present.** Spot-check that any project name, component, or acronym mentioned for the first time in a section is followed by a 3-7 word expansion (per the Plain-English Description Rules).
 7. **No `\n` inside Mermaid labels.** Search every Mermaid block (delimited by ` ```mermaid ` and ` ``` `) for the literal two-character sequence `\n` inside any node label. Mermaid line breaks do NOT render reliably in Notion - text after the `\n` is silently cut off, leaving readers with truncated diagrams. If a label is too long for one line, shorten it (drop the parenthetical, abbreviate, use a single key word) instead of splitting it. This rule is non-negotiable: a truncated diagram is worse than a verbose one because the reader does not know they are missing context.
 8. **Every Industry News title or commit SHA is a link.** Items in the Industry News section must each be `[<title>](<link>)` (RSS) or `[<short-sha>](<commit-url>)` (commit). No bare titles or SHAs. Summaries must have HTML tags stripped - search the section for `<p>`, `<img>`, `<a `, and similar; if any are present, render the prose as plain text instead.
+9. **Every `HIP-N` reference in prose is a markdown link.** Scan the draft for `\bHIP[-_ ]?\d+\b` and `\bhip[-_ ]?\d+\b` patterns NOT already wrapped in `[...](...)`. Every match must be `[HIP-N](https://github.com/hiero-ledger/hiero-improvement-proposals/blob/main/HIP/hip-N.md)`. The HIP Activity section's own subheadings (`### [HIP-1137](url) — ...`) are exempt; this check covers Executive Summary, priority-repo narratives, "Other Active Repos" notes, Industry News, and Partner Conversations action items. If `TEAM_DIGEST_HIP_ENABLED=0`, this check is a no-op.
 
-If any of checks 1-8 fail, fix the draft before proceeding.
+If any of checks 1-9 fail, fix the draft before proceeding.
 
 ### Part B: Quality Scaffold (mandatory - complete after the link checks above)
 

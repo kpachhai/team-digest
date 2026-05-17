@@ -21,6 +21,18 @@
     },
     "rss_feeds": [],
     "rss_feeds_help": "Public content sources monitored for items dated to the digest day. URLs starting with https:// are fetched as RSS/Atom via lib/fetch-rss.sh. URLs of the form github://<owner>/<repo>[/<path>] are fetched as commits via lib/fetch-gh-commits.sh - useful for spec sets that don't publish RSS but live in a public git repo. Add entries with the shape {\"name\": \"<display name>\", \"url\": \"<feed-or-github-url>\", \"category\": \"<grouping label>\"}.",
+    "hip_tracking": {
+      "enabled": true,
+      "enabled_help": "Set to false to disable the HIP Activity source and HIP cross-reference annotations. Useful for forkers who don't track Hedera/Hiero HIPs.",
+      "repo": "hiero-ledger/hiero-improvement-proposals",
+      "repo_help": "GitHub owner/repo for the HIP source. Default is the canonical Hiero HIP repository.",
+      "path": "HIP",
+      "path_help": "Subdirectory inside the HIP repo where hip-N.md files live. Note: singular HIP, not HIPS.",
+      "implementation_orgs": ["hiero-ledger"],
+      "implementation_orgs_help": "Orgs to search for HIP-referencing PRs/commits (Mechanism B). Defaults to hiero-ledger; add others if your team's integration repos reference HIPs.",
+      "max_hips_with_implementation_expansion": 10,
+      "max_hips_with_implementation_expansion_help": "Cap on how many of today's touched HIPs get full implementation-PR lookup. HIPs above this cap appear in an 'Other HIPs touched today' overflow list without implementation expansion."
+    },
     "defaults": {
       "keywords": [],
       "keywords_help": "Default keyword list used to scan Notion when the live config page is unreachable. Replace with your team's relevant terms.",
