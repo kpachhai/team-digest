@@ -140,6 +140,15 @@ bash ~/.claude/skills/team-digest/lib/refresh-hip-index.sh || true
 
 The `|| true` ensures a hard failure (no existing index AND API call fails) does not abort the digest — Mechanism A degrades gracefully to "no filter" when the index is missing.
 
+Export the HIP feature flag (consumed by `fetch-github-prs.sh` / `fetch-github-issues.sh` / future HIP helpers). Reads `hip_tracking.enabled` from config; defaults to enabled if the block is absent:
+
+```bash
+HIP_ENABLED=$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('hip_tracking',{}).get('enabled',True) else '0')")
+export TEAM_DIGEST_HIP_ENABLED="$HIP_ENABLED"
+```
+
+The env var controls whether HIP-related machinery runs. Defaults to true if `hip_tracking.enabled` is absent or true; false only if explicitly set to false in config.
+
 **If the helper succeeds (config file exists with non-empty Notion IDs) AND the argument is `setup`:** this is a re-run on an already-configured machine. Detect-and-verify the existing Notion pages before assuming the config is healthy:
 
 1. Load the Notion MCP tool schemas via Step 0.5 (the existing ToolSearch call). This is required to call `notion-fetch`.
