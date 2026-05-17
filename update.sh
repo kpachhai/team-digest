@@ -24,35 +24,100 @@ if [ ! -f "$CONFIG_FILE" ]; then
 fi
 
 # -------------------------------------------------------------------
-# 2. Check for new digest keys in template that are missing from config
+# 2. Sync config to global location with deep-merge
+#
+# The repo's config.json is gitignored (per-user state) and bootstrap writes
+# values like Notion IDs only to the GLOBAL config. A raw cp from repo to
+# global would clobber bootstrap-written values. Instead, deep-merge the
+# repo template into the global config with this rule: an empty value never
+# overwrites a non-empty value. This preserves bootstrap-written IDs while
+# still propagating user edits and template additions.
+#
+# Also surfaces new fields at any nesting depth (not just top-level) so the
+# user knows about new template fields after a git pull.
 # -------------------------------------------------------------------
 TEMPLATE_FILE="$SCRIPT_DIR/config.template.json"
-if command -v python3 &>/dev/null && [ -f "$TEMPLATE_FILE" ]; then
-  NEW_KEYS=$(python3 -c "
-import json
-with open('$TEMPLATE_FILE') as f:
-    template = json.load(f)
-with open('$CONFIG_FILE') as f:
-    config = json.load(f)
-new_keys = [k for k in template if k not in config and not k.startswith('_')]
-if new_keys:
-    print(', '.join(new_keys))
-" 2>/dev/null || echo "")
-
-  if [ -n "$NEW_KEYS" ]; then
-    echo "[NEW] Template has new digest keys not in your config: $NEW_KEYS"
-    echo "      Add them to config.json with your Notion IDs."
-    echo "      See config.template.json for the structure."
-    echo ""
-  fi
-fi
-
-# -------------------------------------------------------------------
-# 3. Sync config to global location
-# -------------------------------------------------------------------
 mkdir -p "$GLOBAL_CONFIG_DIR"
-cp "$CONFIG_FILE" "$GLOBAL_CONFIG_FILE"
-echo "[OK] Config synced to $GLOBAL_CONFIG_FILE"
+
+python3 - "$CONFIG_FILE" "$GLOBAL_CONFIG_FILE" "$TEMPLATE_FILE" <<'PY'
+import json, os, sys
+
+repo_path, global_path, template_path = sys.argv[1], sys.argv[2], sys.argv[3]
+
+with open(repo_path) as f:
+    repo = json.load(f)
+
+if os.path.exists(global_path):
+    with open(global_path) as f:
+        existing = json.load(f)
+else:
+    existing = {}
+
+template = None
+if os.path.exists(template_path):
+    with open(template_path) as f:
+        template = json.load(f)
+
+
+def is_empty(v):
+    return v is None or v == "" or v == [] or v == {}
+
+
+def deep_merge(repo, existing):
+    """Merge repo into existing. Rule: an empty value never overwrites a
+    non-empty value. For dicts, recurse. For non-dict leaves, repo wins
+    unless repo's value is empty and existing's is not."""
+    if isinstance(repo, dict) and isinstance(existing, dict):
+        merged = {}
+        for k in dict.fromkeys(list(repo) + list(existing)):
+            if k in repo and k in existing:
+                merged[k] = deep_merge(repo[k], existing[k])
+            elif k in repo:
+                merged[k] = repo[k]
+            else:
+                merged[k] = existing[k]
+        return merged
+    if is_empty(repo) and not is_empty(existing):
+        return existing
+    return repo
+
+
+def find_new_paths(tmpl, cfg, prefix=""):
+    """Return dotted paths in tmpl that are missing from cfg. Skips keys
+    starting with underscore (treated as comments) and *_help sibling keys."""
+    paths = []
+    if isinstance(tmpl, dict):
+        for k, v in tmpl.items():
+            if k.startswith("_") or k.endswith("_help"):
+                continue
+            sub = f"{prefix}.{k}" if prefix else k
+            if not isinstance(cfg, dict) or k not in cfg:
+                paths.append(sub)
+            elif isinstance(v, dict) and isinstance(cfg.get(k), dict):
+                paths.extend(find_new_paths(v, cfg[k], sub))
+    return paths
+
+
+merged = deep_merge(repo, existing)
+
+if template is not None:
+    new_paths = find_new_paths(template, merged)
+    if new_paths:
+        sys.stderr.write(
+            "[NEW] Template has fields missing from your config:\n"
+        )
+        for p in new_paths:
+            sys.stderr.write(f"      - {p}\n")
+        sys.stderr.write(
+            "      See config.template.json for default values.\n\n"
+        )
+
+with open(global_path, "w") as f:
+    json.dump(merged, f, indent=2)
+    f.write("\n")
+PY
+
+echo "[OK] Config merged into $GLOBAL_CONFIG_FILE"
 
 # -------------------------------------------------------------------
 # 3b. Sync profiles (new templates -> local copies if missing; sync all to global)
