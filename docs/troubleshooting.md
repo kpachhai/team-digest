@@ -76,6 +76,61 @@ The digest is designed to produce partial output on failure. If a section shows 
 
 If you've already started `setup` once and want to abandon and try fresh: delete the parent page in Notion (which cascades to its children), `rm ~/.config/team-digest/config.json`, and re-run `setup`.
 
+### HIP section is empty when I expect content
+
+If the `## HIP Activity` section is missing from the digest on a day you know had HIP commits, run through these checks in order:
+
+1. Confirm the date actually had HIP commits:
+   ```bash
+   gh api -X GET repos/hiero-ledger/hiero-improvement-proposals/commits \
+     --field since=<DATE>T00:00:00Z \
+     --field until=<DATE>T23:59:59Z \
+     --field path=HIP \
+     --paginate \
+     --jq 'length'
+   ```
+   A `0` result means there was no HIP activity that day - the section is correctly omitted. Anything > 0 means continue to the next check.
+
+2. Check that `hip_tracking.enabled` is `true` in your config:
+   ```bash
+   bash skills/team-digest/lib/load-config.sh team-digest | jq '.hip_tracking.enabled'
+   ```
+   If this prints `false`, the section is correctly omitted. Edit `~/.config/team-digest/config.json` to set it to `true`.
+
+3. Check that the env-var override isn't disabling it:
+   ```bash
+   echo "TEAM_DIGEST_HIP_ENABLED=${TEAM_DIGEST_HIP_ENABLED:-unset}"
+   ```
+   If this prints `0`, unset it (`unset TEAM_DIGEST_HIP_ENABLED`) and re-run.
+
+4. Check that the known-HIPs index file exists and is non-empty:
+   ```bash
+   wc -l ~/.config/team-digest/hip-numbers.txt
+   ```
+   Empty or missing means Mechanism A annotations will be skipped (regex matches without an index can't be filtered for false positives). Force a refresh: `bash skills/team-digest/lib/refresh-hip-index.sh`.
+
+### Notion update step failed - recover with --from-file
+
+The daily and weekly skills split the Notion write into two MCP calls: `notion-create-pages` (creates the page with a placeholder body) followed by `notion-update-page` (writes the full content). This keeps each call within the Notion MCP timeout budget. If the second call fails after the first succeeds, the page exists in Notion with a placeholder body and the full content lives in the safety file at `/tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md`. Recover by re-running from the safety file:
+
+```bash
+bin/team-digest-run.sh <DATE_LABEL> --from-file /tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md
+```
+
+If you want a clean retry instead, delete the placeholder page in Notion first; the re-run will create a fresh page.
+
+### Known-HIPs index file is stale or missing
+
+The HIP cross-reference annotation (Mechanism A) filters regex matches against a local index of known HIP numbers at `~/.config/team-digest/hip-numbers.txt`. The index is refreshed at most weekly. If it's older than a week (or you suspect missing HIPs), force a refresh:
+
+```bash
+rm ~/.config/team-digest/hip-numbers.txt
+bash skills/team-digest/lib/refresh-hip-index.sh
+wc -l ~/.config/team-digest/hip-numbers.txt   # should be 100+ HIPs on the canonical Hiero repo
+```
+
+A non-empty index gates the `Linked HIPs:` annotation - without it, the helpers fall back to "no annotations" rather than risk surfacing false-positive HIP references. If the refresh helper itself fails, check `gh auth status` and that the configured `hip_tracking.repo` is reachable.
+
 ### Duplicate digest pages
 
 If the automation ran and you also ran `/team-digest` manually, you will get two digest pages for the same day. The database has a "Status" property - automated runs are "Auto", which you can use to filter.

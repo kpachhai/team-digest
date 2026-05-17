@@ -54,6 +54,34 @@ Each entry needs a `name` (display label), `url`, and `category` (grouping label
 
 If `rss_feeds` is missing or empty, the Industry News section is silently omitted from the digest. If any feed returns no items for the digest day, that source is silently skipped. If every feed returns nothing, the whole section is omitted (no "no news today" filler).
 
+### HIP tracking (`hip_tracking` block)
+
+The `hip_tracking` config block controls the HIP Activity source (Step 2.3 of the daily pipeline) and the HIP cross-reference annotations (Mechanism A) in `fetch-github-prs.sh` / `fetch-github-issues.sh`. The full feature surface is documented in [docs/hip-tracking.md](hip-tracking.md); this section is the reference for the config fields.
+
+Example block (the defaults from `config.template.json`):
+
+```json
+"hip_tracking": {
+  "enabled": true,
+  "repo": "hiero-ledger/hiero-improvement-proposals",
+  "path": "HIP",
+  "implementation_orgs": ["hiero-ledger"],
+  "max_hips_with_implementation_expansion": 10
+}
+```
+
+| Field | Default | When to override |
+|---|---|---|
+| `enabled` | `true` | Set to `false` to disable the HIP Activity source, the `Linked HIPs:` annotation in PR/issue helpers, the Pre-Write Link Audit check 9, and the weekly `HIP Movement This Week` theme. Forkers who don't track Hedera/Hiero HIPs should set this to `false`. |
+| `repo` | `hiero-ledger/hiero-improvement-proposals` | Override if you maintain your own improvement-proposal repository. Format is `<owner>/<repo>`. |
+| `path` | `HIP` | Subdirectory inside the HIP repo where `hip-N.md` files live. Note the singular `HIP`, not `HIPS` or `proposals` - confirmed by the canonical repo's tree. Override only if your repo uses a different subdirectory. |
+| `implementation_orgs` | `["hiero-ledger"]` | Orgs that Mechanism B searches for HIP-referencing PRs and commits. Add additional orgs if your team has integration repos in another GitHub org that reference HIPs. Each additional org adds one `gh search prs` + one `gh search commits` call per active HIP per day. |
+| `max_hips_with_implementation_expansion` | `10` | Cap on how many of the day's touched HIPs get full implementation-PR lookup (Mechanism B). HIPs above this cap appear in an `Other HIPs touched today` overflow list without expansion. Raise if your team routinely sees many active HIPs per day; lower to tighten the API budget. |
+
+A run-time override exists via the `TEAM_DIGEST_HIP_ENABLED` environment variable. If exported as `0` in the shell that runs the digest, the HIP source is skipped regardless of config. Useful for historical backfills where HIP scanning would be noise.
+
+If `hip_tracking` is missing from `config.json` entirely, the helpers fall back to the defaults above (enabled by default, on the canonical repo). Existing users who upgrade across iteration 1 do not need to edit their config unless they want to opt out or point at a different repo.
+
 ### GitHub authentication
 
 The skill calls `gh search` / `gh api` via the helpers in `skills/team-digest/lib/`. These commands use whatever token `gh` itself resolves — in this order, highest priority first:
