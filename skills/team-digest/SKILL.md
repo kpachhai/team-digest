@@ -101,14 +101,18 @@ When `$FROM_FILE` is set, skip the full data-gather pipeline (Steps 1-4) and jum
 
 Flow:
 1. Load config (Step 0 Load Config below) - still needed for `database_id` and `data_source_id`.
-2. Load Notion MCP schemas (Step 0.5) - required to call `notion-create-pages`.
+2. Load Notion MCP schemas (Step 0.5) - required to call `notion-create-pages` and `notion-update-page`.
 3. Fetch `data_source_id` from the database (the deferred part of Step 0).
 4. Read `$FROM_FILE` using the Read tool. The file contains Notion-flavored markdown assembled by a previous run.
 5. Extract `$DATE_LABEL` from the filename if no `$DATE_ARG` was provided. Safety file names follow the pattern `team-digest-YYYY-MM-DD-vN.md`; extract the `YYYY-MM-DD` portion. If extraction fails and no `$DATE_ARG` was given, stop with an error asking the user to pass the date explicitly.
-6. Check whether a digest page already exists for that date (same existence check as the full pipeline - search for "Team Daily Digest <DATE_LABEL>"). If one exists, stop with a warning rather than creating a duplicate.
-7. Call `notion-create-pages` with the file content as the page body and standard properties (`Digest Title`, `date:Date:start`, `Digest Type: Combined`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline).
-8. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
-9. On failure, tell the user the source file is still at `$FROM_FILE` and they can try again.
+6. Check whether a digest page already exists for that date (search for "Team Daily Digest - <DATE_LABEL>"). Three cases:
+   - **No existing page found:** fall through to step 7 (create + update via split-write).
+   - **Existing page found AND its body matches the placeholder** (`Digest content loading...` callout — the marker that Step 5.3 of the normal flow failed): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id. This is the placeholder-recovery path.
+   - **Existing page found AND its body has real content:** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the date already has a digest and the file is preserved at `$FROM_FILE`.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start`, `Digest Type: Combined`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+8. Call `notion-update-page` against `$NEW_PAGE_ID` with `command: "replace_content"`, `new_str` = the file content, `properties: {}`, `content_updates: []`. This is the split-write update step (same shape as Step 5.3 of the normal flow).
+9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
+10. On step 8 failure, tell the user the page exists at `$NEW_PAGE_URL` with the placeholder body, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` to retry the update step (the existence check in step 6 will detect the placeholder and route back to the update path).
 
 #### Subcommand: `setup`
 
@@ -751,22 +755,54 @@ After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user k
 
 **If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path.)
 
-**If `$DRY_RUN` is NOT set:** proceed to create the Notion page. If the `notion-create-pages` call fails (stream timeout, API error, or any other error), tell the user:
-> Notion write failed. Assembled content is saved at `<SAFETY_PATH>`. Re-run with:
+**If `$DRY_RUN` is NOT set:** proceed with the SPLIT-WRITE procedure to avoid the stream-timeout failure mode that hit single-call `notion-create-pages` writes when the body grew large. The split moves the heavy payload into a separate `notion-update-page` call so the small `notion-create-pages` call almost never fails, and a failure on the update step can be retried independently without losing the page.
+
+**Step 5.1: Create the page with a PLACEHOLDER body.**
+
+Call `notion-create-pages` with:
+
+- **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 0>" }`
+- **Properties:**
+  - Digest Title: `Team Daily Digest - <DATE_LABEL>`
+  - date:Date:start: `<DATE_LABEL>`
+  - Digest Type: `Combined`
+  - Repos Active: `<count of repos with activity>`
+  - Keywords Matched: `["keyword1", "keyword2", ...]` (JSON array of keywords that had hits)
+  - Status: `Auto`
+- **Content:** the literal one-line placeholder `<callout icon="⏳" color="gray">Digest content loading...</callout>` — nothing else. This call carries the metadata payload only; the body comes later.
+
+If THIS call fails (rare given the small payload), tell the user:
+> Notion page creation failed at the metadata step. Assembled content is saved at `<SAFETY_PATH>`. Re-run with:
 > `bin/team-digest-run.sh <DATE_LABEL> --from-file <SAFETY_PATH>`
-Then stop - do NOT silently retry or write another file.
+Then STOP - do NOT silently retry or write another safety file.
 
-Create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
+**Step 5.2: Extract `page_id` from the response.**
 
-**Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 0>" }`
+The `notion-create-pages` response includes a `pages` array. Take the first entry's `id` field as `$NEW_PAGE_ID`. Also extract the `url` field as `$NEW_PAGE_URL` for the success message at the end.
 
-**Properties:**
-- Digest Title: `Team Daily Digest - <DATE_LABEL>`
-- date:Date:start: `<DATE_LABEL>`
-- Digest Type: `Combined`
-- Repos Active: `<count of repos with activity>`
-- Keywords Matched: `["keyword1", "keyword2", ...]` (JSON array of keywords that had hits)
-- Status: `Auto`
+**Step 5.3: Replace the placeholder body with the full digest content.**
+
+Call `notion-update-page` with:
+
+- `page_id`: `$NEW_PAGE_ID`
+- `command`: `"replace_content"`
+- `new_str`: the full Notion-flavored Markdown body (same content as the safety file at `$SAFETY_PATH`)
+- `properties`: `{}` (empty — properties were already set in Step 5.1)
+- `content_updates`: `[]` (empty — not using update_content mode)
+
+This call carries the heavy payload but can retry independently because the page already exists with valid metadata.
+
+**Step 5.4: If `notion-update-page` fails** (timeout, API error, anything non-2xx): the page exists with the placeholder body, so the metadata properties are correct and only the content needs to be uploaded. Tell the user:
+
+> Page created with placeholder body; content update failed. The page exists at `$NEW_PAGE_URL`. Re-run with:
+> `bin/team-digest-run.sh <DATE_LABEL> --from-file <SAFETY_PATH>`
+> to populate the body from the safety file. Or delete the placeholder page in Notion and re-run from scratch.
+
+Then STOP. Do NOT silently retry; do NOT write another safety file.
+
+**Step 5.5: On full success, print the Notion page URL.**
+
+Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to the new digest.
 
 **Content** must use Notion-flavored Markdown. Key rules:
 - Use `<callout icon="..." color="...">` for callout blocks
