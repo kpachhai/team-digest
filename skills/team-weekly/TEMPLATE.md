@@ -16,12 +16,13 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 4. Top Picks: Notion Pages Worth Reading This Week (omit if zero qualify)
 5. Top GitHub Themes
 6. Releases This Week
-7. Partner Momentum (omit if no partner conversations across the week)
-8. Notion Content Pulse
-9. Industry News Roundup (omit if no items)
-10. Favorites Movement (omit if no Favorites Activity in any daily)
-11. Day-by-Day Index
-12. Footer callout (ALWAYS last)
+7. HIP Movement This Week (omit if no daily in the window had HIP Activity)
+8. Partner Momentum (omit if no partner conversations across the week)
+9. Notion Content Pulse
+10. Industry News Roundup (omit if no items)
+11. Favorites Movement (omit if no Favorites Activity in any daily)
+12. Day-by-Day Index
+13. Footer callout (ALWAYS last)
 
 ---
 
@@ -116,6 +117,26 @@ NOTE: Only include repos the team profile lists as high-priority AND that had no
 </table>
 
 NOTE: If no releases across the week: "No releases this week." (omit the table)
+
+---
+
+# HIP Movement This Week
+
+NOTE: Only emitted if any daily in the week had a HIP Activity section.
+NOTE: Skip the entire section if no HIPs were touched at all (no filler).
+
+<callout icon="📈" color="blue">
+**HIP-<N> advanced <prev_status> -> <current_status> across the week.**
+</callout>
+
+- **[HIP-<N>](<raw_url>) - <title>**
+  - Touched on Mon, Wed, Thu, Fri
+  - Status arc: Draft -> Last Call -> Accepted (advanced twice)
+  - Cross-repo implementation: [hiero-consensus-node](url) (Mon), [hiero-sdk-java](url) (Wed), [hiero-mirror-node](url) (Thu)
+
+_HIP-<M> implementation landed in `hiero-consensus-node` (Tue), `hiero-sdk-java` (Thu)._
+
+- Touched once this week: [HIP-<X>](url) (Mon, Draft), [HIP-<Y>](url) (Tue, Draft)
 
 ---
 
