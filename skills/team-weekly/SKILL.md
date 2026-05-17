@@ -87,6 +87,15 @@ Yes - this skill reads the **team-digest** config, not a separate `team-weekly` 
 
 **GitHub authentication:** see the matching section in `/team-digest`'s SKILL.md — env-var-only by design (`$GH_TOKEN` → `$GITHUB_TOKEN` → `gh auth login`). The skill never reads tokens from `config.json`.
 
+Export the HIP feature flag (consumed by Theme B.5 in Step 4 to gate the HIP Movement section):
+
+```bash
+HIP_ENABLED=$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('hip_tracking',{}).get('enabled',True) else '0')")
+export TEAM_DIGEST_HIP_ENABLED="$HIP_ENABLED"
+```
+
+Defaults to true if `hip_tracking.enabled` is absent or true; false only if explicitly set to false in config. Mirrors the daily skill's setup so HIP Movement This Week reads the same gate.
+
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md`. Used for the **Relevance** synthesis below. If absent, fall back to generic relevance heuristics.
 
 ### Step 0.5: Load Notion MCP tool schemas (mandatory pre-flight)
@@ -167,6 +176,40 @@ Identify the 3-5 repos with sustained activity across the week. A repo with 1 PR
 
 Collect every release mentioned in any daily digest's "Releases" section. Format as a single GFM table: `Repo | Version | Date | Notes`. Every entry must be linked: `[<tag>](release-url)` and `[<repo>](repo-url)`. Group rows by repo when a single repo had multiple releases.
 
+**Theme B.5 - HIP Movement This Week** _(rendered as `## HIP Movement This Week`)_
+
+Walks the `## HIP Activity` section in each daily digest fetched in Step 3 and synthesizes cross-day HIP signal. No new GitHub API calls - the weekly reads from dailies only.
+
+**Skip this theme entirely if `TEAM_DIGEST_HIP_ENABLED=0` in the run env, or if no daily in the window has a HIP Activity section.**
+
+Synthesis rules:
+
+1. Walk each daily's `## HIP Activity` section. Collect every HIP entry with (date, status, prev_status if present, count of implementation PRs/commits).
+2. **HIPs that appeared on 2+ days this week** -> multi-line entry (active work):
+   ```markdown
+   - **[HIP-<N>](url) - <title>**
+     - Touched on <list of weekday names>
+     - Status arc: <e.g. "Draft -> Last Call -> Accepted (advanced twice)"> _(only if status_changed across multiple days)_
+     - Cross-repo implementation: [<repo>](url) (<weekday>), [<repo>](url) (<weekday>), ...
+   ```
+3. **HIPs with at least one status transition this week** -> prominent callout regardless of touch count:
+   ```markdown
+   <callout icon="📈" color="blue">
+   **HIP-<N> advanced <prev_status> -> <current_status> across the week.**
+   </callout>
+   ```
+4. **HIPs with implementation activity spanning 2+ repos** -> "cross-repo work" callout (combines with rule 3 if both apply):
+   ```markdown
+   _HIP-<N> implementation landed in `<repo-1>` (<weekday>), `<repo-2>` (<weekday>), ..._
+   ```
+5. **Single-day HIPs** -> one-line bullet at the end of the section:
+   ```markdown
+   - Touched once this week: [HIP-<N>](url) (<weekday>, <status>), [HIP-<M>](url) (<weekday>, <status>), ...
+   ```
+6. Empty week (no HIPs touched at all) -> omit the theme entirely. No filler.
+
+The Executive Summary at the top of the weekly inherits the same rules as the daily Executive Summary (Step 5 update below): HIP status transitions across the week become first-class bullet candidates. Cross-day status arcs (e.g., "Draft -> Last Call -> Accepted across the week") are particularly valuable because a daily reader could miss the trajectory.
+
 **Theme C - Partner momentum**
 
 Aggregate partner conversations across the week. For each company that appeared in 2+ daily digests, write a 1-2 sentence "what's moving" summary. For companies that appeared once, list them in a "Single touch" line at the end of the section. Pull action items the dailies surfaced and check if any spanned multiple days (e.g., a Tuesday action item that resurfaced as a Friday follow-up). Surface those as "Open threads" - they are the most likely escalation candidates.
@@ -243,6 +286,14 @@ Create a new page in the Team Daily Digest database using the `notion-create-pag
 - Do NOT invent closing meta-sections about run hygiene. If a daily fetch failed, note it inline in the Day-by-Day Index, not as a closing callout.
 
 **Executive Summary (mandatory).** After the header callout, before "Week at a Glance" stats, include an `## Executive Summary` section. Same rules as `/team-digest`'s Executive Summary: 5-8 bullets, each leading with a bold callout (project, theme, or topic) followed by a one-line plain-English statement of what shifted across the week and why it matters. Every bullet links to the relevant theme section below for drill-down. Cover a mix: top GitHub themes, the week's releases, partner momentum, the most consequential Notion pages, industry-news standouts. The Outsider Test applies - lead with the user-visible change, no insider jargon without translation.
+
+**HIP-aware rule (inherits from daily).** HIP status transitions across the week are first-class Executive Summary bullet candidates. Cross-day status arcs ("Draft -> Last Call -> Accepted across the week") are especially valuable since a daily reader could miss the trajectory. Format:
+
+```markdown
+- **HIP-<N> advanced Draft -> Last Call -> Accepted across the week** - the [<title>](url) proposal moved through two status gates between Monday and Friday; implementation work also landed in [hiero-consensus-node](url) (Mon) and [hiero-sdk-java](url) (Wed). See HIP Movement This Week.
+```
+
+Skip if no HIP had a status transition this week.
 
 **Top Picks: Notion Pages Worth Reading (when applicable).** The weekly inherits the daily's Top Picks idea. After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading This Week` section IF AND ONLY IF the week produced at least one Notion page worth highlighting. Selection: aggregate the Top Picks from each daily digest plus the strongest items from the week's Notion Content Pulse, dedupe by page ID, rank by team-profile relevance + cross-day momentum (a page that came up multiple days ranks higher), pick top 3-5. Format: same as the daily's Top Picks.
 
