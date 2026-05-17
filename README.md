@@ -38,7 +38,7 @@ Sources (pluggable)                  Cadence              Output
 GitHub org PRs/issues/releases  ─┐
 Notion keywords                  │
 Notion Favorites + 1-hop descent ├── daily   ───────> Notion database
-Pages you created                │   (team-digest)         (one page per day,
+HIP repo activity                │   (team-digest)         (one page per day,
 Partner conversation patterns    │                        Digest Type=Combined)
 RSS/Atom blog feeds              │
 GitHub commits to spec sets     ─┘
