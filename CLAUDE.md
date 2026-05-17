@@ -48,6 +48,10 @@ team-digest/
 │   │       ├── fetch-github-releases.sh
 │   │       ├── fetch-rss.sh          # RSS/Atom feed → JSON of items dated to target
 │   │       ├── fetch-gh-commits.sh   # GitHub commits on a date (for spec sets w/o RSS)
+│   │       ├── fetch-hip-updates.sh  # HIPs touched on a date in the HIP repo (+ status detection)
+│   │       ├── fetch-hip-implementation-prs.sh  # Per-HIP cross-repo PR/commit search (Mechanism B)
+│   │       ├── extract-hip-refs.sh   # Extract HIP-N patterns from arbitrary text on stdin
+│   │       ├── refresh-hip-index.sh  # Maintain known-HIPs index for false-positive filtering
 │   │       └── README.md             # Helper inventory and conventions
 │   └── team-weekly/                    # Weekly rollup of dailies
 │       ├── SKILL.md                  # Reads dailies from Notion DB, synthesizes cross-day themes
