@@ -132,6 +132,14 @@ bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest
 
 It reads `~/.config/team-digest/config.json`, validates that the `team-digest` key and required Notion IDs exist, and prints the digest's config object as JSON on stdout. On failure (file missing, key missing, empty IDs) it exits non-zero with a clear message on stderr.
 
+Also refresh the known-HIPs index (at most once per week per machine; used by `lib/extract-hip-refs.sh` to filter false-positive HIP regex matches):
+
+```bash
+bash ~/.claude/skills/team-digest/lib/refresh-hip-index.sh || true
+```
+
+The `|| true` ensures a hard failure (no existing index AND API call fails) does not abort the digest — Mechanism A degrades gracefully to "no filter" when the index is missing.
+
 **If the helper succeeds (config file exists with non-empty Notion IDs) AND the argument is `setup`:** this is a re-run on an already-configured machine. Detect-and-verify the existing Notion pages before assuming the config is healthy:
 
 1. Load the Notion MCP tool schemas via Step 0.5 (the existing ToolSearch call). This is required to call `notion-fetch`.
@@ -425,6 +433,8 @@ Also read the team profile at `~/.config/team-digest/profiles/team-digest.md` us
 The database `notion-fetch` call to discover the internal `data_source_id` is deferred to AFTER Step 0.5 below, because that call requires the Notion MCP schemas to be loaded first.
 
 **GitHub authentication:** the skill calls `gh search` / `gh api` via the helpers in `lib/`. These commands honor whatever token `gh` has — in this order: `$GH_TOKEN` env var → `$GITHUB_TOKEN` env var → the credential `gh auth login` stored. To raise rate limits or access private repos beyond what your `gh auth login` token allows, export `GH_TOKEN=<your_PAT>` in the shell that runs the digest (or in the cron / launchd entry). Required PAT scopes: `public_repo` (or `repo` for private orgs) + `read:discussion`. The skill never reads tokens from `config.json` — env-var-only by design, to avoid storing secrets on disk.
+
+**Known-HIPs index:** `lib/refresh-hip-index.sh` maintains a local file at `~/.config/team-digest/hip-numbers.txt` listing every HIP number that exists in `hiero-ledger/hiero-improvement-proposals/HIP/`. Refreshed at most weekly. Used by `lib/extract-hip-refs.sh` to filter out false-positive HIP regex matches like typos or version strings. If the index file is missing AND the API call fails, the false-positive filter is disabled for this run (the digest still works, just with possible noise in `Linked HIPs:` annotations).
 
 ### Step 0.5: Load Notion MCP tool schemas (mandatory pre-flight)
 
