@@ -87,7 +87,7 @@ Critically, `/team-weekly` does NOT re-scan GitHub, Notion, or RSS - the dailies
 **Prerequisites:**
 
 - [Claude Code](https://claude.ai/code) installed and authenticated
-- [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`), OR a GitHub PAT set via the `GH_TOKEN` env var or the `github.token` field in `config.json` (see [docs/configuration.md](docs/configuration.md#github-authentication) for the full resolution order)
+- [GitHub CLI](https://cli.github.com) installed and authenticated (`gh auth login`). For higher API rate limits or private-org access, export `GH_TOKEN=<your_PAT>` in the shell that runs the digest — see [docs/configuration.md](docs/configuration.md#github-authentication) for details.
 - Notion MCP server connected in Claude Code (Settings > MCP Servers > Notion). If you don't already have Notion pages set up for the digest, `/team-digest setup` can create them for you — see [docs/configuration.md](docs/configuration.md#bootstrap-your-notion-workspace) for the full flow.
 
 **Install:**

@@ -56,28 +56,39 @@ If `rss_feeds` is missing or empty, the Industry News section is silently omitte
 
 ### GitHub authentication
 
-The skill resolves which GitHub token to use in this order, highest priority first:
+The skill calls `gh search` / `gh api` via the helpers in `skills/team-digest/lib/`. These commands use whatever token `gh` itself resolves — in this order, highest priority first:
 
-1. **`$GH_TOKEN` or `$GITHUB_TOKEN` env var** — if either is set, it wins. Useful for one-off runs or CI where you want to override config without editing files.
-2. **`github.token` field in `config.json`** — an optional PAT stored alongside your other team-digest settings. Empty string means "skip and fall through to (3)." This is the recommended option for cron and launchd, since the env-var approach requires you to wrap the cron entry with the token export.
-3. **`gh auth login` fallback** — your local `gh` CLI session. The `bin/team-digest-run.sh` headless entry point inherits this auth, so simple setups work with no token configuration at all.
+1. **`$GH_TOKEN` env var** — if set in the shell that runs the digest, `gh` uses it for every call.
+2. **`$GITHUB_TOKEN` env var** — same behavior as `GH_TOKEN`, picked up if `GH_TOKEN` is unset.
+3. **`gh auth login` credential** — the token `gh` stored in your OS keyring during the initial `gh auth login` flow.
 
-The helper at `skills/team-digest/lib/resolve-gh-token.sh` performs this resolution; both `/team-digest` and `/team-weekly` invoke it in Step 0 (right after `load-config.sh`).
+The skill **never reads tokens from `config.json`** — env-var-only by design, so secrets never live on disk in a repo-adjacent config file. This is an intentional design choice: storing PATs in JSON config files creates leak surfaces (accidental commits, shell-output exposure, log capture by subprocesses) that env vars do not.
 
-**Required scopes:** `public_repo` (or `repo` for private orgs) plus `read:discussion`. Any token that works for `gh search prs` and `gh search issues` is sufficient.
+**When to set `GH_TOKEN` explicitly:**
 
-**Setting `github.token` in `config.json`:**
+- Your default `gh auth login` token hit rate limits (5,000 core API calls/hour, 30 search calls/hour for authenticated users) and you want a fresh PAT with the same scopes.
+- You want richer per-PR / per-issue content via a PAT with `read:discussion` scope (gives access to GitHub Discussions, which the default `gh auth login` token often lacks).
+- You're targeting private organizations and need `repo` scope rather than `public_repo`.
+- You're running the digest from cron / launchd where the `gh` CLI keyring may not be accessible.
 
-```json
-"github": {
-  "token": "ghp_yourtokenhere",
-  "orgs": [...]
-}
+**Setting `GH_TOKEN`:**
+
+```bash
+# Interactive shell or one-off run:
+export GH_TOKEN=<your_PAT>
+bin/team-digest-run.sh
+
+# Or inline for a single invocation:
+GH_TOKEN=<your_PAT> bin/team-digest-run.sh
+
+# In cron / launchd: set the env var in the wrapper script (NOT in your shell profile if the cron context doesn't source it).
 ```
 
-Leave the field empty (`"token": ""`) to use the env-var or `gh auth` fallback. The template at `config.template.json` ships with an empty value so new installs default to the `gh` CLI flow.
+**Required PAT scopes:** `public_repo` (or `repo` for private orgs) plus `read:discussion`. Any token that works for `gh search prs`, `gh search issues`, and `gh api repos/...` is sufficient.
 
-If none of the three sources yields a usable token and `gh auth status` also fails, the skill aborts with an actionable error rather than producing a partial digest.
+**Creating a PAT:** https://github.com/settings/tokens → "Generate new token" (classic or fine-grained, both work). Save the value somewhere safe (1Password, Bitwarden, macOS Keychain) — GitHub only shows it once.
+
+If neither env var is set and `gh auth status` fails, the skill aborts with an actionable error rather than producing a partial digest.
 
 ### Finding Notion IDs
 

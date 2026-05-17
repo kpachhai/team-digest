@@ -49,9 +49,9 @@ If Notion MCP is unavailable, the digest will still produce the GitHub section a
 
 ### GitHub rate limiting
 
-`gh` uses whichever token resolved first from this chain: `$GH_TOKEN` / `$GITHUB_TOKEN` env vars → `github.token` field in `config.json` → `gh auth login` session. Authenticated users get 5,000 core API requests/hour and 30 search requests/hour, well within limits for a daily digest run. The `bin/team-digest-run.sh` headless wrapper inherits the same resolution, so cron and launchd runs are also authenticated.
+`gh` uses whichever token it resolves first: `$GH_TOKEN` env var → `$GITHUB_TOKEN` env var → the credential `gh auth login` stored. Authenticated users get 5,000 core API requests/hour and 30 search requests/hour, well within limits for a daily digest run. The `bin/team-digest-run.sh` headless wrapper uses the same resolution — for cron and launchd, set `GH_TOKEN` in the wrapper script's environment.
 
-If none of the three sources yields a usable token and `gh auth status` also fails, the skill aborts with a clear error rather than producing a partial digest. To fix: either run `gh auth login`, set `github.token` in `~/.config/team-digest/config.json`, or export `GH_TOKEN` in the shell where you invoke the digest. See [docs/configuration.md](configuration.md#github-authentication) for the full resolution rules and required scopes.
+If no token is available (no env var set and `gh auth status` fails), the skill aborts with a clear error rather than producing a partial digest. To fix: either run `gh auth login`, or export `GH_TOKEN=<your_PAT>` in the shell where you invoke the digest. The skill does NOT read tokens from `config.json` — env-var-only by design (avoids storing secrets on disk). See [docs/configuration.md](configuration.md#github-authentication) for required scopes and when to override the `gh auth login` default.
 
 To check your current rate limit status:
 ```bash
