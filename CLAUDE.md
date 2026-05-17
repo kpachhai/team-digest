@@ -80,11 +80,16 @@ The skill in `skills/team-digest/SKILL.md` is the core logic. It runs as a Claud
 0. Read `~/.config/team-digest/config.json` + team profile from `~/.config/team-digest/profiles/team-digest.md`
 1. Fetch Notion config page for live keywords/patterns
 2. Scan GitHub orgs via `gh` CLI (PRs, issues, releases) - parallelized across orgs
+2.3. Scan HIPs touched in `hiero-ledger/hiero-improvement-proposals` and search implementation orgs for HIP-referencing PRs/commits (gated on `hip_tracking.enabled`; see HIP Pipeline below)
 3. Search Notion for keyword matches via `notion-search` MCP tool
 4. Search Notion for partner conversations via `notion-search` MCP tool
 5. Write combined digest page to Notion database via `notion-create-pages` MCP tool
 
 Each source is independent; if one fails, the rest still run and the digest is produced with a failure indicator.
+
+### HIP Pipeline (Step 2.3)
+
+The daily skill scans `hiero-ledger/hiero-improvement-proposals` for HIPs touched on the digest day via `lib/fetch-hip-updates.sh`, then for the top 10 touched HIPs (ranked status-changed-first), searches `hiero-ledger/*` for PRs and commits that reference each HIP via `lib/fetch-hip-implementation-prs.sh` (Mechanism B). Existing `lib/fetch-github-prs.sh` and `lib/fetch-github-issues.sh` annotate each PR/issue with `Linked HIPs: HIP-N` when the body or title matches the HIP regex (Mechanism A). The `lib/refresh-hip-index.sh` helper maintains a weekly-refreshed list of known HIP numbers at `~/.config/team-digest/hip-numbers.txt` to filter false-positive regex matches. The whole pipeline gates on `hip_tracking.enabled: true` in config (default), with an additional opt-out via the `TEAM_DIGEST_HIP_ENABLED=0` env var.
 
 ### Team Profile System
 
@@ -99,6 +104,9 @@ Profiles (`profiles/*.template.md`) describe a team's role, priorities, and what
 - **Helper scripts in `skills/<name>/lib/`:** Skill bodies orchestrate; helpers do CLI/data work. Helpers must not call MCP tools (those only work inside Claude). `setup.sh` and `update.sh` copy `lib/` alongside `SKILL.md` to `~/.claude/skills/<name>/lib/`.
 - **Headless runs via `bin/<digest>-run.sh`:** Each digest skill ships a `bin/<digest>-run.sh` wrapper (in the repo) that invokes `claude -p "/<digest> [args]"` with the necessary Notion MCP tools allow-listed. This is the same skill - just a different invocation path. There is no separate routine/inline-config code path.
 - **`--dry-run` flag:** Every digest skill supports `--dry-run` which runs the full pipeline but writes the markdown to `/tmp/team-digest-dry-runs/<digest>-<date>-v<N>.md` instead of calling Notion. The path is ephemeral on purpose - dry runs are throwaway validation artifacts (compare once, discard). Use this flag to validate refactors without overwriting an existing live digest page.
+- **GitHub token resolution:** env-var only. `gh` resolves the token in this order: `$GH_TOKEN` -> `$GITHUB_TOKEN` -> the keyring credential from `gh auth login`. The skill does NOT read tokens from `config.json` - storing PATs in JSON config files creates leak surfaces (accidental commits, subprocess log capture). See `docs/configuration.md#github-authentication`.
+- **HIP cross-reference:** Mechanism A = regex annotation on existing PR/issue data (free, runs inside `fetch-github-prs.sh` / `fetch-github-issues.sh`); Mechanism B = per-HIP `gh search` against `implementation_orgs` (bounded by `hip_tracking.max_hips_with_implementation_expansion`, default 10). False positives filtered against `~/.config/team-digest/hip-numbers.txt`.
+- **HIP path convention:** files live at `HIP/hip-N.md` (singular `HIP`, not `HIPs`), confirmed by the canonical Hiero HIP repo's tree. Override via `hip_tracking.path` if pointing at a different improvement-proposal repo.
 
 ## Adding a New Team Digest (LOCAL ONLY)
 

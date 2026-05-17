@@ -62,9 +62,10 @@ Both write to the SAME Notion database, distinguished by the `Digest Type` prope
 
 1. **GitHub Activity** - PRs, issues, and releases across configured GitHub orgs. Priority repos get rich narrative summaries with synthesized themes, **Relevance** notes, and Mermaid diagrams for architectural changes; every other repo with activity in the date window gets a row in the **Other Active Repos** table.
 2. **Industry News** - public RSS/Atom feeds plus GitHub commit-watching for spec sets that don't publish RSS. Configured via `rss_feeds` in `config.json`. Items dated to the digest day are grouped by category in an **Industry News** section.
-3. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords. One narrative summary per matched page with linked title, matched keywords, and relevance.
-4. **Notion Favorites** - reads a user-curated list of Notion page URLs from a **Favorites** heading on the Notion config page (since Notion's API does not expose sidebar Favorites). For each favorite, fetches `last_edited_time`; if the page was edited on the digest day it gets a summary. Single-level child descent: if a favorite is an *index* page, the digest also fetches each linked page (one hop, capped at 50 children) and includes those edited that day.
-5. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
+3. **HIP Activity** - HIPs touched in `hiero-ledger/hiero-improvement-proposals` on the digest day, with status-change detection (e.g., `Status: Draft -> Last Call`) and cross-references to implementation PRs/commits across `hiero-ledger/*`. Configurable via `hip_tracking` in `config.json`; opt out with `hip_tracking.enabled: false`. See [docs/hip-tracking.md](docs/hip-tracking.md).
+4. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords. One narrative summary per matched page with linked title, matched keywords, and relevance.
+5. **Notion Favorites** - reads a user-curated list of Notion page URLs from a **Favorites** heading on the Notion config page (since Notion's API does not expose sidebar Favorites). For each favorite, fetches `last_edited_time`; if the page was edited on the digest day it gets a summary. Single-level child descent: if a favorite is an *index* page, the digest also fetches each linked page (one hop, capped at 50 children) and includes those edited that day.
+6. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
 
 Pages found through multiple sources are deduplicated by page ID across sections; the user explicitly cares about Favorites, so a favorite that ALSO matched a keyword stays in the Favorites section with a back-link rather than being silently dropped.
 
@@ -74,6 +75,7 @@ Pages found through multiple sources are deduplicated by page ID across sections
 
 - **Top GitHub Themes** - repos with sustained activity across 3+ days, with linked PRs/issues
 - **Releases This Week** - every release from any daily, in a single linked GFM table
+- **HIP Movement This Week** - HIPs touched 2+ days, status arcs across the week, cross-repo implementation activity per HIP. Synthesized from the dailies' `HIP Activity` sections - no re-scan.
 - **Partner Momentum** - companies that came up multiple days, with multi-day "Open threads"
 - **Notion Content Pulse** - keywords that spanned multiple days, with example linked pages
 - **Industry News Roundup** - deduplicated RSS items across the week, grouped by category
@@ -379,6 +381,8 @@ Zero additional SaaS costs. Everything runs on existing Claude Code and GitHub s
 
 - [docs/team-digest-quickstart.md](docs/team-digest-quickstart.md) - 10-minute setup walkthrough for the daily digest
 - [docs/team-weekly-quickstart.md](docs/team-weekly-quickstart.md) - The weekly rollup skill: prerequisites, usage, scheduling, failure modes
-- [docs/configuration.md](docs/configuration.md) - Customize keywords, partner patterns, Favorites, Pages-I-Created email, RSS feeds
+- [docs/configuration.md](docs/configuration.md) - Customize keywords, partner patterns, Favorites, Pages-I-Created email, RSS feeds, HIP tracking
+- [docs/hip-tracking.md](docs/hip-tracking.md) - HIP Activity source, cross-reference annotations, status-change detection, opting out
 - [docs/scheduling.md](docs/scheduling.md) - macOS launchd, Linux cron, GitHub Actions self-hosted runners
 - [docs/troubleshooting.md](docs/troubleshooting.md) - Common issues and fixes
+- [docs/roadmap.md](docs/roadmap.md) - What's parked for later (YouTube/X/Slack watching, monthly/quarterly digests, advanced HIP-to-code mapping)
