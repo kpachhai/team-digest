@@ -124,9 +124,6 @@ Run the helper:
 
 ```bash
 bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest
-
-# Resolve GitHub token if config has one (env vars still win).
-eval "$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | bash ~/.claude/skills/team-digest/lib/resolve-gh-token.sh)"
 ```
 
 It reads `~/.config/team-digest/config.json`, validates that the `team-digest` key and required Notion IDs exist, and prints the digest's config object as JSON on stdout. On failure (file missing, key missing, empty IDs) it exits non-zero with a clear message on stderr.
@@ -423,7 +420,7 @@ Also read the team profile at `~/.config/team-digest/profiles/team-digest.md` us
 
 The database `notion-fetch` call to discover the internal `data_source_id` is deferred to AFTER Step 0.5 below, because that call requires the Notion MCP schemas to be loaded first.
 
-**GitHub token resolution:** the `lib/resolve-gh-token.sh` helper resolves which GitHub token to use, in this priority order: (1) `$GH_TOKEN` or `$GITHUB_TOKEN` env vars, (2) the `github.token` field in `config.json`, (3) the token stored by `gh auth login`. If (2) wins, the helper exports `GH_TOKEN` for the run; all existing `gh search` / `gh api` calls in the lib helpers transparently pick it up. Scopes needed for iteration 1: `public_repo` + `read:discussion` (use `repo` instead of `public_repo` for private orgs).
+**GitHub authentication:** the skill calls `gh search` / `gh api` via the helpers in `lib/`. These commands honor whatever token `gh` has — in this order: `$GH_TOKEN` env var → `$GITHUB_TOKEN` env var → the credential `gh auth login` stored. To raise rate limits or access private repos beyond what your `gh auth login` token allows, export `GH_TOKEN=<your_PAT>` in the shell that runs the digest (or in the cron / launchd entry). Required PAT scopes: `public_repo` (or `repo` for private orgs) + `read:discussion`. The skill never reads tokens from `config.json` — env-var-only by design, to avoid storing secrets on disk.
 
 ### Step 0.5: Load Notion MCP tool schemas (mandatory pre-flight)
 

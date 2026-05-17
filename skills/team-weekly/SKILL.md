@@ -81,14 +81,11 @@ Run the helper:
 
 ```bash
 bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest
-
-# Resolve GitHub token if config has one (env vars still win).
-eval "$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | bash ~/.claude/skills/team-digest/lib/resolve-gh-token.sh)"
 ```
 
 Yes - this skill reads the **team-digest** config, not a separate `team-weekly` config. The two skills share Notion IDs, GitHub setup, and the team profile. This avoids config sprawl. The helper validates `notion.config_page_id` and `notion.database_id` are present and non-empty; on failure, surface the error and stop.
 
-**GitHub token resolution:** the `lib/resolve-gh-token.sh` helper resolves which GitHub token to use, in this priority order: (1) `$GH_TOKEN` or `$GITHUB_TOKEN` env vars, (2) the `github.token` field in `config.json`, (3) the token stored by `gh auth login`. If (2) wins, the helper exports `GH_TOKEN` for the run; all existing `gh search` / `gh api` calls in the lib helpers transparently pick it up. Scopes needed for iteration 1: `public_repo` + `read:discussion` (use `repo` instead of `public_repo` for private orgs).
+**GitHub authentication:** see the matching section in `/team-digest`'s SKILL.md — env-var-only by design (`$GH_TOKEN` → `$GITHUB_TOKEN` → `gh auth login`). The skill never reads tokens from `config.json`.
 
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md`. Used for the **Relevance** synthesis below. If absent, fall back to generic relevance heuristics.
 
