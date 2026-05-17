@@ -106,13 +106,13 @@ Flow:
 4. Read `$FROM_FILE` using the Read tool. The file contains Notion-flavored markdown assembled by a previous run.
 5. Extract `$DATE_LABEL` from the filename if no `$DATE_ARG` was provided. Safety file names follow the pattern `team-digest-YYYY-MM-DD-vN.md`; extract the `YYYY-MM-DD` portion. If extraction fails and no `$DATE_ARG` was given, stop with an error asking the user to pass the date explicitly.
 6. Check whether a digest page already exists for that date (search for "Team Daily Digest - <DATE_LABEL>"). Three cases:
-   - **No existing page found:** fall through to step 7 (create + update via split-write).
-   - **Existing page found AND its body matches the placeholder** (`Digest content loading...` callout — the marker that Step 5.3 of the normal flow failed): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id. This is the placeholder-recovery path.
-   - **Existing page found AND its body has real content:** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the date already has a digest and the file is preserved at `$FROM_FILE`.
+   - **No existing page found:** fall through to step 7 (create + chunked write).
+   - **Existing page found AND its body matches the placeholder** (`Digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id.
+   - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the date already has a digest and the file is preserved at `$FROM_FILE`.
 7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start`, `Digest Type: Combined`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
-8. Call `notion-update-page` against `$NEW_PAGE_ID` with `command: "replace_content"`, `new_str` = the file content, `properties: {}`, `content_updates: []`. This is the split-write update step (same shape as Step 5.3 of the normal flow).
+8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
 9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
-10. On step 8 failure, tell the user the page exists at `$NEW_PAGE_URL` with the placeholder body, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` to retry the update step (the existence check in step 6 will detect the placeholder and route back to the update path).
+10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
 
 #### Subcommand: `setup`
 
@@ -834,23 +834,44 @@ Then STOP - do NOT silently retry or write another safety file.
 
 The `notion-create-pages` response includes a `pages` array. Take the first entry's `id` field as `$NEW_PAGE_ID`. Also extract the `url` field as `$NEW_PAGE_URL` for the success message at the end.
 
-**Step 5.3: Replace the placeholder body with the full digest content.**
+**Step 5.3: Upload the full digest content using CHUNKED-WRITE.**
 
-Call `notion-update-page` with:
+The full content (~15-25 KB) exceeds what a single `notion-update-page` call can deliver within the stream idle timeout. Write it in sections so each call stays under ~4 KB and the stream stays alive between calls via progress log lines.
 
-- `page_id`: `$NEW_PAGE_ID`
-- `command`: `"replace_content"`
-- `new_str`: the full Notion-flavored Markdown body (same content as the safety file at `$SAFETY_PATH`)
-- `properties`: `{}` (empty — properties were already set in Step 5.1)
-- `content_updates`: `[]` (empty — not using update_content mode)
+**Sentinel:** the string `DIGEST-SECTION-BREAK` — appended as a standalone paragraph after each chunk, replaced by the next chunk in the next call, and removed in the final call.
 
-This call carries the heavy payload but can retry independently because the page already exists with valid metadata.
+**How to split:**
+- Identify all `## ` heading boundaries in the assembled content.
+- Section 0 = everything before the first `## ` (header callout + `---` separator).
+- Each `## Heading\n...content...` up to the next `## ` boundary is one section.
+- Merge two consecutive sections into one chunk if their combined length is under 3,000 characters.
+- Keep the footer callout (`<callout ...>` at the very end) as its own final section.
 
-**Step 5.4: If `notion-update-page` fails** (timeout, API error, anything non-2xx): the page exists with the placeholder body, so the metadata properties are correct and only the content needs to be uploaded. Tell the user:
+**Write loop (N = total chunks after merging):**
 
-> Page created with placeholder body; content update failed. The page exists at `$NEW_PAGE_URL`. Re-run with:
+1. Print `[write 1/N]`. Call `notion-update-page`:
+   - `page_id`: `$NEW_PAGE_ID`
+   - `command`: `"replace_content"`
+   - `new_str`: `[chunk 1 content]\n\nDIGEST-SECTION-BREAK`
+   - `properties`: `{}`, `content_updates`: `[]`
+
+2. For chunks 2 through N-1: print `[write i/N]`. Call `notion-update-page`:
+   - `page_id`: `$NEW_PAGE_ID`
+   - `command`: `"update_content"`
+   - `properties`: `{}`
+   - `content_updates`: `[{ "old_str": "DIGEST-SECTION-BREAK", "new_str": "[chunk i content]\n\nDIGEST-SECTION-BREAK" }]`
+
+3. Final chunk N: print `[write N/N]`. Call `notion-update-page`:
+   - `page_id`: `$NEW_PAGE_ID`
+   - `command`: `"update_content"`
+   - `properties`: `{}`
+   - `content_updates`: `[{ "old_str": "\n\nDIGEST-SECTION-BREAK", "new_str": "\n\n[chunk N content]" }]`
+
+**Step 5.4: If any chunk call fails** (timeout, API error, anything non-2xx): the page exists at `$NEW_PAGE_URL` with partial content (all chunks up to the last successful one, plus the sentinel if the write was interrupted mid-loop). Tell the user:
+
+> Page created but content upload was interrupted. The page exists at `$NEW_PAGE_URL`. Re-run with:
 > `bin/team-digest-run.sh <DATE_LABEL> --from-file <SAFETY_PATH>`
-> to populate the body from the safety file. Or delete the placeholder page in Notion and re-run from scratch.
+> The `--from-file` path detects the `DIGEST-SECTION-BREAK` sentinel and restarts the chunked write from the beginning.
 
 Then STOP. Do NOT silently retry; do NOT write another safety file.
 

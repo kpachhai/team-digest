@@ -30,6 +30,14 @@ set -euo pipefail
 # Ensure Homebrew and other tools are on PATH for cron / launchd contexts
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
+# Source optional env file for GH_TOKEN and other overrides.
+# Create ~/.config/team-digest/env with: export GH_TOKEN=<your_PAT>
+# This is the recommended way to pass a token to launchd runs without
+# putting secrets in the plist or config.json.
+ENV_FILE="$HOME/.config/team-digest/env"
+# shellcheck source=/dev/null
+[ -f "$ENV_FILE" ] && source "$ENV_FILE"
+
 LOG="${TEAM_DIGEST_LOG:-$HOME/.local/log/team-digest.log}"
 RAW_LOG="${TEAM_DIGEST_RAW_LOG:-$HOME/.local/log/team-digest-raw.jsonl}"
 MODEL="${TEAM_DIGEST_MODEL:-claude-sonnet-4-6}"
