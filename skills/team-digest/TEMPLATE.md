@@ -113,6 +113,21 @@ Proposed in [#<pr_num>](<pr_url>) against the HIP repository; not yet merged to 
 
 _(10-HIP implementation-expansion cap reached; HIPs above this line did not get implementation-activity lookup.)_
 
+<!-- Verbose-only subsection (rendered when TEAM_DIGEST_HIP_VERBOSE=1). -->
+<!-- Contains medium- and low-confidence matches from Strategies 2, 3, and 4. -->
+<!-- Iteration-2 contract; see docs/hip-tracking.md "Verbose mode". -->
+### Lower-Confidence Matches
+
+_Surfaced because `TEAM_DIGEST_HIP_VERBOSE=1`. Signal-quality varies; cross-check before citing._
+
+- **[HIP-<N>](<hip_url>)**: [PR #<num>](<pr_url>) by [@<author>](https://github.com/<author>) `(<source-label> · <confidence>)`
+  - Source: <source-label>
+  - Keywords: <comma-separated matched_keywords, if Strategy 3>
+  - Category tiebreak: <category, if Strategy 3 used the category map>
+  - Reason: <per_source[primary_source].reason>
+
+NOTE: Render rows sorted by `hip_id` ascending then `confidence` descending (medium before low). If the verbose mode is off (env var unset / `0`), omit the entire `### Lower-Confidence Matches` subsection and any medium/low matches that would have rendered there.
+
 ---
 
 ## Priority Repos
