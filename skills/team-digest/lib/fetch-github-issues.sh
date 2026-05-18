@@ -73,7 +73,9 @@ for repo in sorted(repos):
             print(f'    Description: {body}')
         hips = extract_hips(f'{title}\n{raw_body}')
         if hips:
-            hip_list = ', '.join(f'HIP-{n}' for n in hips)
+            # Mech A always emits high confidence: an explicit HIP-N token in
+            # issue title or body, filtered through the known-HIPs index.
+            hip_list = ', '.join(f'HIP-{n} (high)' for n in hips)
             print(f'    Linked HIPs: {hip_list}')
         print()
 PY
