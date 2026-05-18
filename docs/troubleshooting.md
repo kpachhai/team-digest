@@ -131,6 +131,38 @@ wc -l ~/.config/team-digest/hip-numbers.txt   # should be 100+ HIPs on the canon
 
 A non-empty index gates the `Linked HIPs:` annotation - without it, the helpers fall back to "no annotations" rather than risk surfacing false-positive HIP references. If the refresh helper itself fails, check `gh auth status` and that the configured `hip_tracking.repo` is reachable.
 
+### HIP-to-code confidence calibration drift
+
+The daily run emits a per-run match-count distribution to `~/.config/team-digest/hip-calibration-current.json` and warns on stderr if the baseline (in `hip-calibration-baseline.json`) is more than 180 days old. To re-baseline:
+
+```bash
+/team-digest 2026-05-06 --dry-run                                       # produces a v1 dry-run + matches.json
+bash skills/team-digest/lib/calibrate-hip-matches.sh --baseline \
+    /tmp/team-digest-dry-runs/team-digest-2026-05-06-v1.md
+```
+
+Re-run the baseline when any of the recalibration triggers fire: labeled set > 6 months old; new HIP-N where N exceeds labeled-set max by 100+; Phase 2 (Strategy 4) has been triggered; the per-run drift warning fires 3+ times in a 30-day window. Edit `~/.config/team-digest/hip-code-mapper-labeled-set.json` to add new positive / negative examples as the codebase + HIP space evolves.
+
+### Strategy 3 timeline correlation hit rate-limit
+
+When `fetch-hip-timeline-correlations.sh` exhausts its per-org budget (`strategy3.per_org_search_budget`, default 10) or sees three back-to-back 429 / secondary-rate-limit responses, it emits a single `source: "s3_skipped"` MatchRecord and continues - it does NOT crash the digest. The skipped record renders in the verbose-mode subsection only (`TEAM_DIGEST_HIP_VERBOSE=1`) with a no-PR-link form.
+
+If skips are recurring:
+
+- Lower `strategy3.max_correlation_hips` to cap the OR-query size.
+- Raise `strategy3.per_org_search_budget` if you have headroom on your `gh` token's rate limit.
+- Check that the digest is running under a token, not gh CLI guest mode (`gh auth status`).
+
+### Strategy 4 budget exhausted (Phase 2 only)
+
+If iteration 2's gate triggered Phase 2 and Strategy 4 is running, every digest run logs cumulative LLM spend. At 80% of `strategy4.cost_cap_usd` (default $2.00), a `[WARN]` fires on stderr; at 100%, the strategy circuit-breaks and the digest emits a `Strategy 4 budget exhausted at $X.XX — N HIPs unscored` footnote in the HIP Activity section header.
+
+Options:
+
+- Wait for the next digest run; cache hits (keyed on `(hip_id, hip_content_sha)` + `(repo, pr_number, pr_title_sha, pr_labels_sha)`) typically push the second run's spend below the cap.
+- Raise `strategy4.cost_cap_usd` in `~/.config/team-digest/config.json` if your team's HIP volume genuinely needs more budget.
+- Lower `strategy3.max_correlation_hips` to feed Strategy 4 fewer candidate HIPs.
+
 ### Duplicate digest pages
 
 If the automation ran and you also ran `/team-digest` manually, you will get two digest pages for the same day. The database has a "Status" property - automated runs are "Auto", which you can use to filter.

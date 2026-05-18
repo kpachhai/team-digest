@@ -82,6 +82,40 @@ A run-time override exists via the `TEAM_DIGEST_HIP_ENABLED` environment variabl
 
 If `hip_tracking` is missing from `config.json` entirely, the helpers fall back to the defaults above (enabled by default, on the canonical repo). Existing users who upgrade across iteration 1 do not need to edit their config unless they want to opt out or point at a different repo.
 
+#### Iteration 2 additions (Strategies 2, 3, 4 + verbose mode)
+
+Iteration 2 adds `strategy2.*`, `strategy3.*`, and (if Phase 2 triggers) `strategy4.*` sub-blocks. Defaults are encoded in `config.template.json` and the helpers fall back to them if the keys are missing; you only need to add the sub-blocks to your `config.json` if you want to override a default.
+
+| Field | Default | What it controls |
+|---|---|---|
+| `strategy2.max_refs_per_release` | `50` | Cap on HIP references extracted per release. Overflow logs a `[Notice]` and is truncated. |
+| `strategy2.max_backfill_days` | `30` | Default cap on `--backfill N` for `fetch-hip-release-refs.sh`. Larger windows require `--force-backfill`. |
+| `strategy2.max_pr_attribution_lookups_per_release` | `10` | Cap on the PR-attribution lookups per release (compare-against-prev-tag → `(#NNN)` token parse). |
+| `strategy3.max_correlation_hips` | `10` | Cap on how many status-changed HIPs Strategy 3 correlates per run. |
+| `strategy3.per_org_search_budget` | `10` | Cap on `gh search` calls per org per run. Exponential 1s/2s/4s backoff on 429. |
+| `strategy3.noise_ceiling_commits_per_day` | `20` | Repos with more than N commits on the digest day get their Strategy 3 matches downgraded to `low`. |
+| `strategy3.category_to_repos` | (HTS/HSS/HCS/Mirror/SDK defaults; see `config.template.json`) | Tiebreaker map used when Strategy 3 keyword overlap is 1-2. Override if your team uses different repo names or categories. |
+| `strategy4.cost_cap_usd` | `2.00` | Hard cap on Strategy 4 LLM cost per run (Phase 2 only). 80% warn, then exhaustion footnote. |
+| `strategy4.min_abstract_chars` | `200` | Strategy 4 skips HIPs with abstracts shorter than this (Draft-HIP boilerplate gate). |
+
+#### Verbose-mode env var
+
+Set `TEAM_DIGEST_HIP_VERBOSE=1` to render the `### Lower-Confidence Matches` subsection with medium- and low-confidence HIP-to-code matches. Persistent setting (cron/launchd safe):
+
+```bash
+echo 'export TEAM_DIGEST_HIP_VERBOSE=1' >> ~/.config/team-digest/env
+```
+
+`bin/team-digest-run.sh` and `bin/team-weekly-run.sh` source this file. Default (env var unset) renders only high-confidence matches. See [`docs/hip-tracking.md` → Verbose mode](hip-tracking.md#verbose-mode).
+
+#### GitHub scope minimization
+
+Iteration 2 does NOT widen `GH_TOKEN` scope beyond iteration 1's requirements. All four strategies (A, B, 2, 3) work with `public_repo` (or no scope for tokens against fully-public org content). Strategy 4, when triggered, also does not require a new GitHub scope - it sends only HIP abstracts + HIP/PR titles + PR labels to the LLM provider, never PR bodies, so no scope escalation is needed.
+
+#### `implementation_orgs` repo list maintenance
+
+The `implementation_orgs` array (and `priority_repos` within `github.orgs`) is config-managed, not auto-discovered. When the hiero-ledger org renames, archives, or adds a repo, update your `~/.config/team-digest/config.json` to reflect the change. Strategies 2 and 3 enumerate repos via `gh api orgs/<org>/repos` at runtime (so additions are picked up automatically inside a known org), but the org list itself is fixed by config.
+
 ### GitHub authentication
 
 The skill calls `gh search` / `gh api` via the helpers in `skills/team-digest/lib/`. These commands use whatever token `gh` itself resolves — in this order, highest priority first:

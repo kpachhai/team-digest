@@ -1,6 +1,8 @@
 # HIP Tracking in team-digest
 
-This document explains the HIP Activity source and HIP cross-reference annotations that were added in iteration 1. If you don't track Hedera/Hiero HIPs and want to disable this entirely, see [Opting out](#opting-out) below.
+This document explains the HIP Activity source and HIP cross-reference annotations. Iteration 1 introduced the source itself plus two matching strategies (Mechanism A = regex annotation, Mechanism B = per-HIP `gh search`). Iteration 2 added two more strategies, a unified confidence model (high / medium / low), a verbose-mode subsection for medium and low matches, a strategy-independent labeled set, and a calibration helper. Strategy 4 (LLM-driven similarity) is gated behind a Phase 2 trigger; see [Phase 2 gate](#phase-2-gate) below.
+
+If you don't track Hedera/Hiero HIPs and want to disable this entirely, see [Opting out](#opting-out) below.
 
 ## What it does
 
@@ -19,16 +21,112 @@ The `/team-weekly` skill aggregates HIP entries from the past week's dailies int
 
 ## How it works
 
-Four `lib/` helpers do the work:
+Six `lib/` helpers (four iteration-1, two iteration-2) plus inline Mechanism A annotation in `fetch-github-prs.sh` / `fetch-github-issues.sh` do the work:
 
 - `lib/refresh-hip-index.sh` - keeps a local index of known HIP numbers at `~/.config/team-digest/hip-numbers.txt`. Refreshed at most weekly. Used to filter out false-positive HIP regex matches (e.g., `HIP-9999` mentioned in a PR body where no HIP-9999 exists).
-- `lib/extract-hip-refs.sh` - pure-text utility that finds `HIP-N` patterns in arbitrary text. Reads stdin, writes one HIP number per line to stdout. Filters against the known-HIPs index if present.
+- `lib/extract-hip-refs.sh` - pure-text utility that finds `HIP-N` patterns in arbitrary text. Iteration 2 bumped the regex from `\d{1,4}` to `\d{1,5}` (HIP-10000+ safe) and added a placeholder blocklist for `HIP-0000` and `HIP-9999`. Reads stdin, writes one HIP number per line to stdout. Filters against the known-HIPs index if present.
 - `lib/fetch-hip-updates.sh` - fetches HIPs touched in a date window, with status-change detection and proposal-PR awareness. Returns one JSON record per touched HIP with frontmatter fields, abstract excerpt, and optional `prev_status`.
-- `lib/fetch-hip-implementation-prs.sh` - for one HIP, searches PRs (via `gh search prs`) and commits (via `gh search commits`) across the configured `implementation_orgs` that reference it. Returns a JSON array of matches.
+- `lib/fetch-hip-implementation-prs.sh` - Mechanism B: for one HIP, searches PRs (`gh search prs`) and commits (`gh search commits`) across configured `implementation_orgs` that reference it. Iteration 2 added `confidence: "high"`, `source: "mech_b"`, and `per_source` fields to every emitted PR and commit dict.
+- `lib/fetch-hip-release-refs.sh` _(new in iteration 2)_ - Strategy 2: scans release notes from `implementation_orgs` repos for HIP references; emits one MatchRecord per (HIP, release) pair, attributed to PRs via `gh api compare/<prev>...<this>` and commit-message PR-number parsing. See [Strategy 2 - Release-Note Analysis](#strategy-2---release-note-analysis).
+- `lib/fetch-hip-timeline-correlations.sh` _(new in iteration 2)_ - Strategy 3: batched per-org `gh search prs` for PRs created in the past 7d whose titles/labels match keywords from status-changed HIPs, with a HIP-category-to-repo tiebreaker map for 1-2-token overlap. See [Strategy 3 - Timeline Correlation](#strategy-3---timeline-correlation).
+- `lib/calibrate-hip-matches.sh` _(new in iteration 2)_ - measures precision/recall/F1 of all strategies against the strategy-independent labeled set; emits baseline + per-run drift snapshots. See [Calibration](#calibration).
 
-Mechanism A (regex annotation on existing PR/issue data) runs inside the existing `fetch-github-prs.sh` and `fetch-github-issues.sh` helpers - the same scan pass that already fetches PRs and issues now also pattern-matches HIP references in the body and title.
+Mechanism A (regex annotation on existing PR/issue data) runs inside the existing `fetch-github-prs.sh` and `fetch-github-issues.sh` helpers - the same scan pass that already fetches PRs and issues now also pattern-matches HIP references in the body and title. Iteration 2 added a `(high)` confidence label inline: `Linked HIPs: HIP-1137 (high), HIP-1140 (high)`.
 
 Mechanism B (per-HIP `gh search`) runs once per touched HIP in the daily pipeline's Step 2.3 (between `fetch-github-releases.sh` in Step 2 and `notion-search keywords` in Step 3). Bounded by `max_hips_with_implementation_expansion` (default 10) to keep the API budget predictable.
+
+Strategies 2 and 3 run after Mechanism B as new Phase 2b and Phase 2c sub-steps inside Step 2.3. Strategy 4 (LLM identifier-generation + gitGrep) is a gated Phase 2 within iteration 2 and ships only if the Phase 1 calibration baseline fails the acceptance gate (recall < 0.7 OR ≥ 5 hand-known true matches missed).
+
+## Confidence model
+
+Every emitted MatchRecord carries a `confidence` of `high`, `medium`, or `low`, plus a `sources[]` list of which strategies contributed and a `per_source` map with each strategy's own confidence + reason. When two records share the dedup key `(hip_id, repo, pr_number)`, **MAX confidence wins** and the source list / per_source map are unioned. Default per-strategy emissions:
+
+| Strategy | Reason | Emitted confidence |
+|---|---|---|
+| Mechanism A (regex annotation) | Explicit HIP-N in title/body, filtered through known-HIPs index | `high` |
+| Mechanism B (per-HIP `gh search`) | Author of PR/commit named the HIP in searched text | `high` |
+| Strategy 2 - HIP-N in release tag | Release tag/name contains the HIP token | `high` |
+| Strategy 2 - HIP-N in release body | Release body mentions HIP but not the tag | `medium` |
+| Strategy 3 - keyword overlap ≥ 3 | PR title/labels share 3+ tokens with HIP title | `medium` |
+| Strategy 3 - keyword overlap 1-2 + category tiebreak | Weak overlap, but PR repo is in the HIP-category's expected-repo set | `low` |
+| Strategy 4 - LLM identifier hit (gated) | Claude-generated identifiers matched in PR title/labels | `medium` |
+
+The digest renders **only high-confidence matches** by default. Medium and low matches surface in a `### Lower-Confidence Matches` subsection when `TEAM_DIGEST_HIP_VERBOSE=1`. See [Verbose mode](#verbose-mode).
+
+## Strategy 2 - Release-Note Analysis
+
+`fetch-hip-release-refs.sh` scans releases from `implementation_orgs` repos in the digest window. For each release:
+
+1. Extract HIP-N tokens from the release tag + name (`in_tag` reason, `high` confidence).
+2. Extract HIP-N tokens from the release body (`in_body` reason, `medium` confidence; suppressed for HIPs already matched in the tag).
+3. Find the previous release for the same repo via `gh api repos/<org>/<repo>/releases` sorted by `published_at`.
+4. Compare the two tags via `gh api repos/<org>/<repo>/compare/<prev>...<this>` and parse `(#NNN)` tokens from each commit's message (GitHub default merge format).
+5. Emit one MatchRecord per `(hip_id, repo, pr_number)` cross-product of (HIPs found, PRs attributed), capped at `strategy2.max_pr_attribution_lookups_per_release` (default 10).
+
+Backfill mode (`--backfill N`) reaches back N days from the digest date; capped at `strategy2.max_backfill_days` (default 30); larger windows require `--force-backfill`.
+
+If a release mentions more than `strategy2.max_refs_per_release` (default 50) HIPs, the helper logs a `[Notice]` on stderr and truncates.
+
+## Strategy 3 - Timeline Correlation
+
+`fetch-hip-timeline-correlations.sh` correlates today's status-changed HIPs against PRs created in the past 7 days across `implementation_orgs`:
+
+1. Read HIPs from `fetch-hip-updates.sh`; filter to entries with `status_changed: true` AND `prev_status NOT IN (null, "Unknown")` (Tier 2 best-effort gate). Cap at `strategy3.max_correlation_hips` (default 10).
+2. Extract up to 5 keywords per HIP title (English stopwords dropped, tokens of length ≥ 4 only).
+3. Build one batched OR-query per org: `gh search prs "HIP-X OR HIP-Y OR kw1 OR kw2 ..." --owner <org> --created=<window>` with `--limit 100`.
+4. Per-org budget cap: `strategy3.per_org_search_budget` (default 10) calls. Exponential 1s/2s/4s backoff on HTTP 422 / secondary-rate-limit; after 3 failed retries, the org emits a single `source: "s3_skipped"` record with `reason: "rate_limit_after_3_retries"` - the helper continues and does NOT crash the digest.
+5. Score each candidate PR against each HIP. ≥ 3 keyword tokens overlapping = `medium`; 1-2 overlap + the PR's repo is in the HIP category's expected-repo set (`strategy3.category_to_repos`) = `low`; 0 overlap = drop.
+6. Apply noise ceiling: for any repo with > `strategy3.noise_ceiling_commits_per_day` (default 20) commits on the digest day, downgrade its matches to `low` with reason `high-volume area (downgraded)`.
+
+The category-to-repo map ships with reasonable defaults for HTS / HSS / HCS / Mirror Node / SDK in `config.template.json`; override per machine.
+
+## Verbose mode
+
+By default the digest renders only `confidence: high` matches in `## HIP Activity`. To see medium and low matches too, set `TEAM_DIGEST_HIP_VERBOSE=1` in the runtime environment. Persistent setting:
+
+```bash
+echo 'export TEAM_DIGEST_HIP_VERBOSE=1' >> ~/.config/team-digest/env
+```
+
+`bin/team-digest-run.sh` (and `bin/team-weekly-run.sh`) source this file automatically. The verbose subsection renders inside the existing `## HIP Activity` H2 boundary at H3 depth, so the chunked-write logic in Step 5.3 (sentinel-driven, H2-split) is unaffected.
+
+The verbose subsection format includes the source label, confidence, matched keywords (Strategy 3), category tiebreak (Strategy 3), and per-source reason. `s3_skipped` rate-limit records render only in verbose mode with a special no-PR-link form.
+
+## Calibration
+
+The labeled set at `~/.config/team-digest/hip-code-mapper-labeled-set.json` is the source of truth for measuring matching quality. It is **strategy-independent**: built from HIP `Reference Implementation:` fields, maintainer manual recall, and hiero-agent index cross-check. Iteration-1 dry-run output is **explicitly excluded** as a seed (anti-circularity).
+
+Run a one-shot baseline measurement after a clean dry-run:
+
+```bash
+/team-digest 2026-05-06 --dry-run
+bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --baseline \
+  /tmp/team-digest-dry-runs/team-digest-2026-05-06-v1.md
+```
+
+This computes precision/recall/F1 per strategy and overall, writes `~/.config/team-digest/hip-calibration-baseline.json`, and reports Phase 1 acceptance:
+
+- **PASS**: overall recall ≥ 0.7 AND missed ≤ 5
+- **FAIL**: either condition broken → Phase 2 (Strategy 4) is unlocked
+
+Every digest run also invokes `calibrate-hip-matches.sh --current-only` at finalize, emitting a per-run match-count distribution at `~/.config/team-digest/hip-calibration-current.json` and warning on stderr if the baseline is more than 180 days old.
+
+### Recalibration triggers
+
+Re-run `--baseline` when any of:
+
+1. Labeled set is more than 6 months old.
+2. A new HIP-N has been published where N exceeds the labeled-set max by 100+.
+3. Phase 2 (Strategy 4) has been triggered.
+4. The per-run drift warning fires 3+ times in a 30-day window.
+
+## Phase 2 gate
+
+Strategy 4 (LLM identifier-generation + `gitGrep`) is intentionally NOT shipped by default; iteration 2 ships it only if Phase 1 (Strategies A + B + 2 + 3 + confidence + calibration) measurably under-performs. After the baseline runs, check `~/.config/team-digest/iteration-2-phase2-decision.json` (written by the gate script) for `decision: TRIGGER | DEFER`.
+
+If `TRIGGER`: Strategy 4 ships next. Input is strictly `(HIP title, HIP abstract, PR title, PR labels)` - **never PR body content** (secret-leak mitigation). Cost-capped at `strategy4.cost_cap_usd` (default $2.00/run) with an 80% circuit-break and a "budget exhausted: N HIPs unscored" footnote.
+
+If `DEFER`: Strategy 4 stays in the parking lot and the baseline metrics are recorded in `docs/roadmap.md` as the evidence for the deferral.
 
 ## Status-change detection
 
@@ -92,4 +190,4 @@ See [`docs/troubleshooting.md`](troubleshooting.md) for: empty HIP section when 
 
 ## What's parked for later
 
-See [`docs/roadmap.md`](roadmap.md) for HIP-related items that didn't make iteration 1: GitHub Discussions integration (P5), advanced HIP-to-code mapping strategies with confidence scoring (P4a), and the option to consume an external `data/hips.json` cache directly instead of re-fetching (P4b).
+See [`docs/roadmap.md`](roadmap.md) for HIP-related items not yet shipped. P4a Phase 1 (Strategies 2 + 3 + confidence + calibration) shipped in iteration 2. Phase 2 (Strategy 4) is gated; ship-vs-defer outcome is recorded in `~/.config/team-digest/iteration-2-phase2-decision.json` and the roadmap doc. Still parked: GitHub Discussions integration (P5), monthly/quarterly synthesis (P6), and the option to consume an external `data/hips.json` cache directly instead of re-fetching (P4b).
