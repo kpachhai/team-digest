@@ -200,31 +200,27 @@ if [ -d "$DRY_DIR" ]; then
   fi
 fi
 
-# Find the matches dir Claude's helpers actually wrote to. Prefer the
-# wrapper's own dir if it has sidecars; otherwise discover any
-# /tmp/team-digest-matches-* dir that has files newer than the pre-run
-# reference file (this catches the SKILL.md fallback pattern
-# `<DATE_LABEL>-<skill-PID>` for runs where env-var propagation fails).
+# Find the matches dir Claude's helpers actually wrote to. F5.2/F5.3 had a
+# bug where the wrapper preferred its own dir even when Claude re-exported
+# a different path mid-run (after a Write-tool error recovery): wrapper's
+# dir ended up with just 1 sidecar while the SKILL's recovery dir had the
+# full set. F5.4 fix: iterate all candidate dirs, pick the one with the MOST
+# JSON files newer than the pre-run reference. Winner-by-volume - whichever
+# dir got the real workload wins, regardless of which name pattern was used.
 discover_matches_dir() {
-  # 1. Wrapper's dir if non-empty.
-  if [ -d "$TEAM_DIGEST_MATCHES_DIR" ]; then
-    local wrapper_count
-    wrapper_count=$(find "$TEAM_DIGEST_MATCHES_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$wrapper_count" -gt 0 ]; then
-      echo "$TEAM_DIGEST_MATCHES_DIR"
-      return
-    fi
-  fi
-  # 2. Any /tmp/team-digest-matches-* dir with files newer than the reference.
+  local best_dir=""
+  local best_count=0
   local d
-  for d in /tmp/team-digest-matches-*; do
+  for d in "$TEAM_DIGEST_MATCHES_DIR" /tmp/team-digest-matches-*; do
     [ -d "$d" ] || continue
-    if find "$d" -maxdepth 1 -name '*.json' -newer "$PRE_RUN_REF" -print 2>/dev/null | head -1 | grep -q .; then
-      echo "$d"
-      return
+    local count
+    count=$(find "$d" -maxdepth 1 -name '*.json' -newer "$PRE_RUN_REF" -print 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$count" -gt "$best_count" ]; then
+      best_count="$count"
+      best_dir="$d"
     fi
   done
-  echo ""
+  echo "$best_dir"
 }
 
 # set +e around discover to avoid pipefail/set-e surprises in the helper.

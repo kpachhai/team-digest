@@ -65,8 +65,16 @@ eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG" --lo
 # records here. When invoked via bin/team-digest-run.sh, the wrapper already
 # exported TEAM_DIGEST_MATCHES_DIR; just use it. For interactive runs (no
 # wrapper), create one ourselves so helpers still have a destination.
+#
+# **DO NOT re-export TEAM_DIGEST_MATCHES_DIR to a different value in
+# subsequent Bash tool calls.** The wrapper may have set it to one path
+# (e.g. `/tmp/team-digest-matches-<wrapper-PID>`); if you re-export to a
+# different path in later Bash calls, sidecars end up split across two dirs
+# and the wrapper's post-run consolidator can only see one. Just use the
+# value the env var currently holds. Inheritance across Bash subshells works
+# for vars exported by the parent process.
 if [ -z "${TEAM_DIGEST_MATCHES_DIR:-}" ]; then
-  export TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-${DATE_LABEL}-$$"
+  export TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-${DATE_LABEL}"
 fi
 mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 ```
