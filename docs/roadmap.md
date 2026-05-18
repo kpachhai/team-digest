@@ -17,7 +17,20 @@ Tracked in `docs/superpowers/specs/2026-05-16-team-digest-iteration-1-design.md`
 
 User-facing surface lives in [`docs/hip-tracking.md`](hip-tracking.md), [`docs/configuration.md`](configuration.md), and [`docs/troubleshooting.md`](troubleshooting.md).
 
-## Iteration 2 candidates
+## Iteration 2 (Phase 1 shipped 2026-05; Phase 2 gated)
+
+Tracked in `docs/superpowers/specs/2026-05-17-team-digest-iteration-2-design.md` and the matching plan. Phase 1 (always-ship) highlights:
+
+- Strategy 2 - Release-Note Analysis (`fetch-hip-release-refs.sh`): scans implementation_orgs repos' release notes for HIP-N tokens in tag/name (high confidence) and body (medium confidence), attributes to PRs via compare-against-prev-tag commit-message parsing.
+- Strategy 3 - Timeline Correlation (`fetch-hip-timeline-correlations.sh`): batched per-org `gh search prs` for past-7d PRs whose titles/labels share keywords with today's status-changed HIPs. HIP-category-to-repo tiebreaker map for 1-2-token overlap. Per-org budget, 429 backoff, noise-ceiling downgrade.
+- Unified confidence model (high / medium / low) threaded through Mechanism A, B, Strategy 2, Strategy 3. MAX-confidence dedup on `(hip_id, repo, pr_number)` key.
+- Verbose-mode `### Lower-Confidence Matches` subsection, gated on `TEAM_DIGEST_HIP_VERBOSE=1` (persistent setting via `~/.config/team-digest/env`).
+- Strategy-independent labeled set at `~/.config/team-digest/hip-code-mapper-labeled-set.json` (≥30 entries / ≥10 negatives). Calibration helper (`calibrate-hip-matches.sh`) with baseline + per-run drift modes.
+- T-pre: ported the chunked Notion write (commit 251830a from iteration 1) to `/team-weekly` for consistency, since the weekly synthesizes 5-7 dailies and hits the same stream-idle timeout.
+
+Phase 2 (Strategy 4 - LLM identifier-generation + gitGrep) status: gated. Decision recorded in `~/.config/team-digest/iteration-2-phase2-decision.json` based on Phase 1 calibration baseline (`OR(recall < 0.7, missed >= 5)`). PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
+
+## Iteration 3 candidates
 
 Items below are scoped enough to fit one or two iterations. Order is rough priority; reorder per upcoming need.
 
@@ -67,7 +80,9 @@ Items below are scoped enough to fit one or two iterations. Order is rough prior
 - Slack rate limits are tier-1 (~50 calls/minute) - fine for daily scans, would need attention for backfills.
 - Thread reply context matters: a top-level message reading "yep, that works" is meaningless without the parent. Either fetch threads when a parent has replies, or skip messages with no significant content of their own.
 
-### P4a - Advanced HIP-to-code mapping strategies
+### P4a - Advanced HIP-to-code mapping strategies (SHIPPED iteration 2 Phase 1; Phase 2 gated)
+
+**Status:** Phase 1 shipped 2026-05 - Strategies 2 (release-note analysis) + 3 (timeline correlation) + confidence model + verbose mode + calibration. Strategy 4 (LLM semantic) is gated by Phase 1 calibration outcome; see `~/.config/team-digest/iteration-2-phase2-decision.json` for the actual decision and `docs/hip-tracking.md` for the operational surface. Below is the original parking-lot text preserved for context.
 
 **What:** Beyond the iteration-1 Mechanism A (regex annotation) and Mechanism B (per-HIP `gh search`), implement the richer matching strategies from a companion `hiero-agent` repo's `tools/hip-code-mapper` module: release-note analysis, timeline correlation, and LLM semantic similarity scoring.
 
