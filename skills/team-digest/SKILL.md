@@ -54,12 +54,18 @@ This ensures:
 - No activity is missed or double-counted between runs
 - Missed days can be backfilled by specifying the date
 
-Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional plus an optional `--lookback-days N` flag sourced from `github.pr_lookback_days` in `config.json` (default 0). The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell:
+Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional plus an optional `--lookback-days N` flag sourced from `github.pr_lookback_days` in `config.json` (default 0). The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell. Also export `TEAM_DIGEST_MATCHES_DIR` so helpers write structured match-record sidecars used by Phase 3d:
 
 ```bash
 PR_LOOKBACK_DAYS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("github") or {}).get("pr_lookback_days", 0))')
 eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG" --lookback-days "$PR_LOOKBACK_DAYS")"
 # Now $DATE_LABEL, $START, $END, $LOOKBACK_START, $LOOKBACK_DAYS are set.
+
+# F5: matches sidecar dir - helpers write structured Mech A / Mech B / S2 / S3
+# records here; consolidate-matches.sh merges them at Step 5.0 finalize.
+# Use $$ so concurrent runs don't collide. Cleaned at the end of Step 5.
+export TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-${DATE_LABEL}-$$"
+mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 ```
 
 If the user did not pass a date arg, invoke the helper with no positional and it defaults to yesterday in UTC. If the helper exits non-zero (invalid date format or non-integer lookback), surface its stderr to the user and stop.
@@ -610,9 +616,24 @@ The H3 subsection is contained within the H2 `## HIP Activity` boundary, so the 
 
 Pass-through for `s3_skipped` records: these were emitted by Strategy 3 when an org hit rate-limit retries. Render them in the verbose subsection only, with a special row form `_Strategy 3 skipped for <org>/_meta — <reason>_` (no PR link, no HIP-N link). In default (non-verbose) mode, omit `s3_skipped` records entirely.
 
-**Phase 3d — hold the merged matches list for Step 5 finalize:**
+**Phase 3d — persist Mech B / Strategy 2 / Strategy 3 outputs to `$TEAM_DIGEST_MATCHES_DIR`:**
 
-Hold the dedup-merged matches list in conversation context. Do NOT write it to disk yet — the canonical artifact path depends on `$SAFETY_PATH`, which is determined in Step 5 (the v-counter loop picks the next free version number). Step 5 below has an iteration-2 sub-step that writes the matches list to `${SAFETY_PATH%.md}-matches.json` alongside the safety file, then invokes `calibrate-hip-matches.sh --current-only` for drift detection. Keeping the merged list in context across steps preserves the merge work without a redundant on-disk roundtrip.
+F5 (iteration 5) moved the canonical matches.json merge from in-Claude-context to a deterministic on-disk consolidation. The Mech A sidecars are written automatically by `fetch-github-prs.sh` / `fetch-github-issues.sh` because the `$TEAM_DIGEST_MATCHES_DIR` env var is exported (see Step 1). For the other strategies, write their captured JSON outputs to the same dir:
+
+```bash
+# Mech B - dispatched in Phase 2; each (hip, date) call returned JSON.
+# Concatenate all those outputs into a single JSON array file. The
+# consolidator handles the {hip, prs, commits} Mech B shape.
+echo '<JSON array of all Mech B outputs combined>' > "$TEAM_DIGEST_MATCHES_DIR/mech_b.json"
+
+# Strategy 2 - the JSON array captured from Phase 2b.
+echo '<Strategy 2 JSON array>' > "$TEAM_DIGEST_MATCHES_DIR/strategy2.json"
+
+# Strategy 3 - the JSON array captured from Phase 2c.
+echo '<Strategy 3 JSON array>' > "$TEAM_DIGEST_MATCHES_DIR/strategy3.json"
+```
+
+The dir already contains `mech_a-prs-<org>.json` and `mech_a-issues-<org>.json` for each org scanned in Step 2 (helpers wrote them automatically). Step 5.0 consolidates everything; no in-context merge required here.
 
 To re-baseline (one-shot, run by the maintainer outside the daily cron):
 
@@ -863,16 +884,13 @@ Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep 
 
 After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
 
-**Step 5.0 (iteration-2): emit matches.json peer + run --current-only calibration.**
+**Step 5.0 (iteration-5): consolidate matches sidecars + run --current-only calibration.**
 
-Right after the safety file is written, persist the dedup-merged matches list (held in conversation context from Phase 3d) to a peer JSON file alongside the safety file. The path mirrors the safety file's pattern so `calibrate-hip-matches.sh --baseline <safety-file>` can derive it deterministically.
+Right after the safety file is written, run the consolidator to merge all per-strategy match-record sidecars from `$TEAM_DIGEST_MATCHES_DIR` into the canonical `matches.json` peer file. The consolidator handles MAX-confidence dedup deterministically (no in-context merge required) so the matches list is reliable even when PR volume is high.
 
-```python
-# Use the Write tool to emit the peer file. matches_merged is the list-of-dicts
-# from Step 2.3 Phase 3b after the MAX-confidence dedup.
-import json, os
-matches_path = SAFETY_PATH.removesuffix(".md") + "-matches.json"
-# Write matches_path with content = json.dumps(matches_merged, indent=2)
+```bash
+MATCHES_OUT="${SAFETY_PATH%.md}-matches.json"
+bash ~/.claude/skills/team-digest/lib/consolidate-matches.sh "$TEAM_DIGEST_MATCHES_DIR" "$MATCHES_OUT"
 ```
 
 Then invoke the calibration helper in `--current-only` mode to emit a per-strategy match-count distribution and surface a drift warning if the baseline is older than 180 days. Non-fatal: a calibration warning is a `[Notice]` in the digest header, not a digest-abort.
@@ -882,6 +900,12 @@ bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --current-only "$
 ```
 
 Capture stderr; if it contains `[WARN] HIP calibration baseline is ... old`, surface it as a `[Notice]` line in the digest header so the maintainer notices and can run `--baseline` against a fresh dry-run.
+
+After both steps succeed, clean up the matches sidecar dir to avoid `/tmp` clutter:
+
+```bash
+rm -rf "$TEAM_DIGEST_MATCHES_DIR"
+```
 
 **If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path. The matches.json peer file at `${SAFETY_PATH%.md}-matches.json` is the canonical iteration-2 calibration input.)
 
