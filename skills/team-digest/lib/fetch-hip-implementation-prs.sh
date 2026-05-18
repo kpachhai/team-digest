@@ -69,7 +69,7 @@ def strip_md(body, cap=150):
 
 prs = [
     {
-        'repo': pr.get('repository', {}).get('name', ''),
+        'repo': pr.get('repository', {}).get('nameWithOwner') or pr.get('repository', {}).get('name', ''),
         'number': pr.get('number'),
         'title': pr.get('title', ''),
         'state': (pr.get('state', '') or '').upper(),
@@ -86,7 +86,7 @@ prs = [
 ]
 commits = [
     {
-        'repo': c.get('repository', {}).get('name', ''),
+        'repo': c.get('repository', {}).get('nameWithOwner') or c.get('repository', {}).get('name', ''),
         'sha': (c.get('sha') or '')[:7],
         'subject': (c.get('commit', {}).get('message') or '').split('\n', 1)[0][:150],
         'author': (c.get('commit', {}).get('author', {}).get('name') or '?'),

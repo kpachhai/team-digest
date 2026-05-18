@@ -52,6 +52,11 @@ repos = {}
 for issue in data:
     repos.setdefault(issue['repository']['name'], []).append(issue)
 
+# F5: structured Mech A match records emitted to disk when
+# $TEAM_DIGEST_MATCHES_DIR is set. See fetch-github-prs.sh for the design.
+mech_a_records = []
+org_name = os.environ.get('TEAM_DIGEST_GH_ORG', '')
+
 for repo in sorted(repos):
     issues = repos[repo]
     print(f'## {repo} ({len(issues)} issues)')
@@ -66,9 +71,13 @@ for repo in sorted(repos):
         author = (issue.get('author') or {}).get('login', '?')
         state = issue.get('state', '?').upper()
         title = issue['title']
+        updated_at = issue.get('updatedAt') or ''
+        updated_date = updated_at[:10] if updated_at else ''
         print(f'  [{state}] #{issue["number"]} {title}')
         print(f'    Author: @{author}')
         print(f'    URL: {issue["url"]}')
+        if updated_date:
+            print(f'    Updated: {updated_date}')
         if body:
             print(f'    Description: {body}')
         hips = extract_hips(f'{title}\n{raw_body}')
@@ -77,12 +86,40 @@ for repo in sorted(repos):
             # issue title or body, filtered through the known-HIPs index.
             hip_list = ', '.join(f'HIP-{n} (high)' for n in hips)
             print(f'    Linked HIPs: {hip_list}')
+            # F5: structured record for the canonical matches.json.
+            repo_full = issue.get('repository', {}).get('nameWithOwner') or f'{org_name}/{repo}'
+            for n in hips:
+                mech_a_records.append({
+                    'hip_id': f'HIP-{n}',
+                    'repo': repo_full,
+                    'pr_number': issue['number'],
+                    'confidence': 'high',
+                    'sources': ['mech_a'],
+                    'per_source': {'mech_a': {'confidence': 'high', 'reason': 'regex_annotation_on_issue'}},
+                    'pr_title': title,
+                    'pr_state': state,
+                    'pr_author': author,
+                    'pr_url': issue['url'],
+                    'pr_updated_at': updated_date or None,
+                    'is_issue': True,
+                })
         print()
+
+matches_dir = os.environ.get('TEAM_DIGEST_MATCHES_DIR', '')
+if matches_dir:
+    try:
+        os.makedirs(matches_dir, exist_ok=True)
+        out_path = os.path.join(matches_dir, f'mech_a-issues-{org_name or "unknown-org"}.json')
+        with open(out_path, 'w') as f:
+            json.dump(mech_a_records, f, indent=2)
+        print(f'(structured mech_a-issues sidecar: {out_path}, {len(mech_a_records)} record(s))', file=sys.stderr)
+    except Exception as e:
+        print(f'WARN: failed to write mech_a-issues sidecar to {matches_dir}: {e}', file=sys.stderr)
 PY
 
 gh search issues \
   --owner="$ORG" \
   --updated="${START}..${END}" \
-  --json repository,title,state,author,number,body,url,labels \
+  --json repository,title,state,author,number,body,url,labels,updatedAt \
   --limit 100 \
-  | python3 "$_py"
+  | TEAM_DIGEST_GH_ORG="$ORG" python3 "$_py"
