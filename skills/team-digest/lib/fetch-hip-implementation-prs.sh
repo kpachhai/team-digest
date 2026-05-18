@@ -60,6 +60,11 @@ prs = [
         'author': (pr.get('author') or {}).get('login', '?'),
         'url': pr.get('url', ''),
         'body_excerpt': strip_md(pr.get('body', '')),
+        # Mechanism B: per-HIP gh search hit; the search query was HIP-N,
+        # so any returned PR mentions the HIP explicitly. High confidence.
+        'confidence': 'high',
+        'source': 'mech_b',
+        'per_source': {'mech_b': {'confidence': 'high', 'reason': 'per_hip_search_hit'}},
     }
     for pr in prs_raw[:20]
 ]
@@ -70,6 +75,10 @@ commits = [
         'subject': (c.get('commit', {}).get('message') or '').split('\n', 1)[0][:150],
         'author': (c.get('commit', {}).get('author', {}).get('name') or '?'),
         'url': c.get('url', ''),
+        # Same justification as PRs: gh search for HIP-N returned this commit.
+        'confidence': 'high',
+        'source': 'mech_b',
+        'per_source': {'mech_b': {'confidence': 'high', 'reason': 'per_hip_search_hit'}},
     }
     for c in commits_raw[:20]
 ]

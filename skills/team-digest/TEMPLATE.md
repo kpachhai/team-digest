@@ -84,8 +84,10 @@ NOTE: Omit pages whose title starts with "Team Daily Digest", "Team Weekly Diges
 
 **Implementation activity today:**
 
-- [<repo> #<num>](<url>) — <plain-English what the PR does>, by [@<author>](https://github.com/<author>) (<state>)
-- <N> commits in [<repo>](repo-url) referencing HIP-<N>: [<sha>](<commit-url>) "<subject>" by [@<author>](https://github.com/<author>)
+- [<repo> #<num>](<url>) — <plain-English what the PR does>, by [@<author>](https://github.com/<author>) (<state>) `(<source-label> · <confidence>)`
+- <N> commits in [<repo>](repo-url) referencing HIP-<N>: [<sha>](<commit-url>) "<subject>" by [@<author>](https://github.com/<author>) `(<source-label> · <confidence>)`
+
+NOTE: `<source-label>` and `<confidence>` come from the MatchRecord (`per_source[<primary>]`). High-confidence matches render in this section by default; medium and low matches surface in the `### Lower-Confidence Matches` subsection at the end of HIP Activity when `TEAM_DIGEST_HIP_VERBOSE=1` is set. `<source-label>` maps: `mech_a` → regex, `mech_b` → per-HIP search, `s2_in_tag`/`s2_in_body` → release note, `s3` → timeline, `s4` → semantic. Use the source label of the primary (highest-confidence) match from `sources[]`.
 
 <!-- Tier 2 entry (HIP touched but no status change, no implementation activity) -->
 ### [HIP-<N>](<raw_url>) — <title>
@@ -176,7 +178,7 @@ NOTE: Cap each repo at the top 3-5 items; trailing routine work goes in a final 
 
 NOTE: "<count summary>" examples: "1 merged, 3 open", "5 open PRs, 2 open issues", "[v0.155.0-rc1](url) released, 1 open PR".
 NOTE: If a repo's only activity is one routine item (typo fix, CODEOWNERS, dep bump), the H3 heading + single bullet is fine.
-NOTE: For Mechanism A HIP annotations, sub-bullets that touch a HIP should include the linked `[HIP-N](url)` in the bold lead or follow with "(implements [HIP-N](url))".
+NOTE: For Mechanism A HIP annotations, sub-bullets that touch a HIP should include the linked `[HIP-N](url)` in the bold lead or follow with "(implements [HIP-N](url))". As of iteration 2, the `Linked HIPs:` annotation line that the underlying helpers emit includes the confidence label inline (e.g. `HIP-1137 (high)`); preserve that label in the rendered sub-bullet so readers can see the source/confidence at a glance: `(implements [HIP-1137](url), high)`.
 
 ---
 
