@@ -17,6 +17,23 @@ Tracked in `docs/superpowers/specs/2026-05-16-team-digest-iteration-1-design.md`
 
 User-facing surface lives in [`docs/hip-tracking.md`](hip-tracking.md), [`docs/configuration.md`](configuration.md), and [`docs/troubleshooting.md`](troubleshooting.md).
 
+## Iteration 3 (shipped 2026-05-18)
+
+Calibration-quality follow-ups surfaced by iteration 2's retrospective:
+
+- **F1 - three-lens calibration:** `calibrate-hip-matches.sh` now reports metrics under two lenses against the labeled set: `implementation` (narrow, production-codebase code change) and `useful_signal` (broader, includes HIP-doc-update PRs which are valuable signal but not implementations). `phase2-gate.sh` uses the `useful_signal` lens for the Phase 2 gate decision (better aligned with the digest's purpose). The iter-2 "Mech B precision = 0" finding was a classification artifact, not a strategy failure - under the `useful_signal` lens, Mech B precision is **1.00**.
+- **F2 - date-range window filtering:** `calibrate-hip-matches.sh --baseline` gains optional `--window-start YYYY-MM-DD --window-end YYYY-MM-DD` args. When set, labeled positives are filtered to those whose `pr_merged_at` falls in the window. Addresses the iter-2 date-scope mismatch where a single-day dry-run was being measured against a multi-year labeled set.
+- **Labeled-set schema upgrade:** entries gained `is_hip_doc_update`, `is_useful_signal`, and `pr_merged_at` fields. 60 existing entries were backfilled via `gh pr view` for `pr_merged_at`; 16 HIP-repo entries got `is_hip_doc_update: true`. Existing entries without these fields are treated as `is_useful_signal: true` and in-scope by default (back-compat).
+
+Real metrics against the 2026-05-06 dry-run + past-week window:
+
+| Lens | Precision | Recall | F1 | TP / FP / FN |
+|---|---|---|---|---|
+| useful_signal | **1.00** | 0.59 | 0.74 | 10 / 0 / 7 |
+| implementation | 0.50 | 0.45 | 0.48 | 5 / 5 / 6 |
+
+Gate remains TRIGGER (recall 0.59 < 0.7) but the diagnostic shifted: the 7 missed are mostly PRs that merged earlier in the past week and weren't caught by the digest's `--updated=DATE_LABEL` filter. Strategy 4 (LLM identifier-generation) would not address this; iteration 4 candidate F4 (widen the digest's PR-update window, or multi-day backfill mode) is the real fix.
+
 ## Iteration 2 (Phase 1 shipped 2026-05; Phase 2 gated)
 
 Tracked in `docs/superpowers/specs/2026-05-17-team-digest-iteration-2-design.md` and the matching plan. Phase 1 (always-ship) highlights:
@@ -30,9 +47,29 @@ Tracked in `docs/superpowers/specs/2026-05-17-team-digest-iteration-2-design.md`
 
 Phase 2 (Strategy 4 - LLM identifier-generation + gitGrep) status: gated. Decision recorded in `~/.config/team-digest/iteration-2-phase2-decision.json` based on Phase 1 calibration baseline (`OR(recall < 0.7, missed >= 5)`). PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
 
-## Iteration 3 candidates
+## Iteration 4 candidates
 
 Items below are scoped enough to fit one or two iterations. Order is rough priority; reorder per upcoming need.
+
+### F4 - Widen PR-update window / multi-day backfill mode
+
+**What:** the iteration-3 calibration showed that 7 of 17 in-scope labeled positives (within a past-week window) were missed by the 2026-05-06 dry-run because those PRs merged on earlier dates in the same week and the digest's `gh search prs --updated=DATE_LABEL` filter only catches PRs touched on the digest day itself. Add a `--lookback-days N` flag (or config key) that widens the digest's PR-update filter to `--updated=>=DATE_LABEL-N`, and group earlier-merged PRs under a separate "Merged earlier in the week" sub-section.
+
+**Why:** This is the real fix for the iteration-3 recall gap. Strategy 4 (LLM identifier-generation) would NOT address it because the missed PRs are in the same orgs+repos we already scan; they're just outside the date window. Widening the window catches them.
+
+**Approach sketch:**
+
+1. Add `pr_lookback_days` config key under `team-digest.github` (default 0 = today's behavior).
+2. `fetch-github-prs.sh` and `fetch-github-issues.sh` pass `--updated=>=<lookback-start>..<digest-end>` instead of `--updated=<digest-start>..<digest-end>`.
+3. Mechanism A/B/2/3 inherit the broader window (no helper change beyond the date arg).
+4. Rendering: emit a new "Merged earlier this week" sub-section in priority-repo narratives when a PR's `mergedAt` is before the digest day but inside the lookback window.
+5. Calibration: re-run with `--window-start=<lookback-start> --window-end=<digest-end>`; expect recall to lift to ≥ 0.7 on the useful_signal lens.
+
+**Gotchas:**
+
+- API budget: 7-day lookback multiplies PR-search calls. Mech B is already capped by `max_hips_with_implementation_expansion`; Strategy 3 is capped by `per_org_search_budget`. Mech A scales linearly with PR-count returned.
+- Dedup: PRs merged earlier in the week may appear in multiple daily digests (each day's run sees the same PRs). Surface only on the FIRST run that touches them, OR mark with `(previously surfaced YYYY-MM-DD)`.
+- Phase 2 gate: re-baseline after F4 ships. Expected outcome: recall lifts above 0.7 on the useful_signal lens; gate flips from TRIGGER to DEFER without needing Strategy 4.
 
 ### P1 - YouTube channel watching
 
