@@ -596,6 +596,34 @@ The H3 subsection is contained within the H2 `## HIP Activity` boundary, so the 
 
 Pass-through for `s3_skipped` records: these were emitted by Strategy 3 when an org hit rate-limit retries. Render them in the verbose subsection only, with a special row form `_Strategy 3 skipped for <org>/_meta — <reason>_` (no PR link, no HIP-N link). In default (non-verbose) mode, omit `s3_skipped` records entirely.
 
+**Phase 3d — emit matches.json + run --current-only calibration:**
+
+The dedup-merged match list is the canonical iteration-2 artifact. Emit it as a peer file alongside the dry-run safety file at `${SAFETY_PATH%.md}-matches.json` so the calibration helper can consume it.
+
+```python
+# Inline-python at SKILL.md execution time. matches_merged is the list-of-dicts
+# from Phase 3b after the MAX-confidence dedup. SAFETY_PATH is set in Step 5.
+import json, os
+matches_json_path = SAFETY_PATH.removesuffix(".md") + "-matches.json"
+with open(matches_json_path, "w") as f:
+    json.dump(matches_merged, f, indent=2)
+```
+
+Then invoke the calibration helper in `--current-only` mode to emit a per-strategy match-count distribution + drift-warning if the baseline is stale (>180 days). Non-fatal: a calibration warning is a `[Notice]` in the digest header, not a digest-abort.
+
+```bash
+bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --current-only "$SAFETY_PATH"
+```
+
+Capture stderr; if it contains a `[WARN] HIP calibration baseline is ... old` line, surface it as a `[Notice]` in the digest header so the maintainer notices.
+
+To re-baseline (one-shot, run by the maintainer outside the daily cron):
+
+```bash
+/team-digest <date> --dry-run
+bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --baseline /tmp/team-digest-dry-runs/team-digest-<date>-vN.md
+```
+
 **Render the HIP Activity section** under each org header in `hip_tracking.implementation_orgs`, BEFORE the Priority Repos subsection. See the entry shapes in `TEMPLATE.md` for the exact format (Tier 1 / Tier 2 / Tier 2b / overflow).
 
 **Section-empty fallback:** if Phase 1 returned `[]` and no proposal PRs were found, omit the entire HIP Activity section (no "no HIPs today" filler).
