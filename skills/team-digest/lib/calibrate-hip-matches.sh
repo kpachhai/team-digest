@@ -32,6 +32,16 @@ CURRENT_FILE="$HOME/.config/team-digest/hip-calibration-current.json"
 case "$MODE" in
   --baseline)
     DRY_RUN_OUTPUT="${1:?--baseline requires a dry-run output file path}"
+    shift
+    WINDOW_START=""
+    WINDOW_END=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --window-start) WINDOW_START="${2:?--window-start requires YYYY-MM-DD}"; shift 2 ;;
+        --window-end)   WINDOW_END="${2:?--window-end requires YYYY-MM-DD}"; shift 2 ;;
+        *) echo "ERROR: unknown --baseline arg: $1" >&2; exit 1 ;;
+      esac
+    done
     if [ ! -f "$LABELED_SET" ]; then
       echo "ERROR: labeled set not found at $LABELED_SET; run T2 (build-labeled-set) first" >&2
       exit 1
@@ -44,6 +54,8 @@ case "$MODE" in
     LABELED_SET="$LABELED_SET" \
     MATCHES_JSON="$MATCHES_JSON" \
     BASELINE_FILE="$BASELINE_FILE" \
+    WINDOW_START="$WINDOW_START" \
+    WINDOW_END="$WINDOW_END" \
     TARGET_REPO="$(cd "$(dirname "$0")/../../.." && pwd)" \
     python3 - <<'PY'
 import datetime, json, os, subprocess, sys
@@ -52,57 +64,98 @@ labeled_path = os.environ["LABELED_SET"]
 matches_path = os.environ["MATCHES_JSON"]
 out_path = os.environ["BASELINE_FILE"]
 target_repo = os.environ["TARGET_REPO"]
+window_start = os.environ.get("WINDOW_START") or None
+window_end = os.environ.get("WINDOW_END") or None
+window_active = bool(window_start and window_end)
 
 with open(labeled_path) as f:
-    labeled = [e for e in json.load(f) if "_meta" not in e]
+    labeled_all = [e for e in json.load(f) if "_meta" not in e]
 
 with open(matches_path) as f:
     matches = json.load(f)
 
-labeled_positives = {(e["hip_id"], e["repo"], int(e["pr_number"])): True
-                     for e in labeled if e["is_implementation"]}
-labeled_negatives = {(e["hip_id"], e["repo"], int(e["pr_number"])): False
-                     for e in labeled if not e["is_implementation"]}
 
-per_strategy = {}
-for strategy in ["mech_a", "mech_b", "s2", "s3", "s4"]:
-    strategy_keys = set()
-    for m in matches:
-        srcs = m.get("sources") or []
-        # s2_in_tag / s2_in_body collapse under "s2" for per-strategy counting.
-        # s3_skipped doesn't count for s3 precision (it's a control record).
-        match_strategy = strategy
-        if strategy == "s2" and (("s2_in_tag" in srcs) or ("s2_in_body" in srcs) or ("s2" in srcs)):
-            strategy_keys.add((m["hip_id"], m["repo"], int(m.get("pr_number") or 0)))
-        elif strategy in srcs:
-            strategy_keys.add((m["hip_id"], m["repo"], int(m.get("pr_number") or 0)))
-    tp = sum(1 for k in labeled_positives if k in strategy_keys)
-    fn = sum(1 for k in labeled_positives if k not in strategy_keys)
-    fp = sum(1 for k in strategy_keys if k in labeled_negatives)
+def in_window(entry):
+    """Return True if the entry's pr_merged_at falls in the window. Entries
+    without pr_merged_at are treated as in-scope by default (back-compat)."""
+    if not window_active:
+        return True
+    merged_at = entry.get("pr_merged_at")
+    if not merged_at:
+        return True  # back-compat: no date -> assume in scope
+    return window_start <= merged_at <= window_end
+
+
+# Two label sets per "lens":
+#   - is_implementation: production-codebase code change (today's narrow def)
+#   - is_useful_signal:  worth surfacing in the digest (broader; includes
+#                         HIP-doc-update PRs which are signal but not impl)
+# Each lens has its own positives + negatives + in-window filter.
+def build_labels(lens_field):
+    positives = set()
+    negatives = set()
+    for e in labeled_all:
+        key = (e["hip_id"], e["repo"], int(e["pr_number"]))
+        if not in_window(e):
+            continue
+        val = e.get(lens_field)
+        if val is True:
+            positives.add(key)
+        elif val is False:
+            negatives.add(key)
+        # If lens_field is missing on this entry, skip (no opinion).
+    return positives, negatives
+
+
+def compute_metrics(strategy_keys, positives, negatives):
+    tp = sum(1 for k in positives if k in strategy_keys)
+    fn = sum(1 for k in positives if k not in strategy_keys)
+    fp = sum(1 for k in strategy_keys if k in negatives)
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-    per_strategy[strategy] = {
-        "tp": tp, "fp": fp, "fn": fn,
-        "precision": round(precision, 4),
-        "recall": round(recall, 4),
-        "f1": round(f1, 4),
+    return {"tp": tp, "fp": fp, "fn": fn,
+            "precision": round(precision, 4),
+            "recall": round(recall, 4),
+            "f1": round(f1, 4)}
+
+
+def collect_strategy_keys(matches, strategy):
+    keys = set()
+    for m in matches:
+        srcs = m.get("sources") or []
+        present = (strategy in srcs)
+        if strategy == "s2":
+            present = present or ("s2_in_tag" in srcs) or ("s2_in_body" in srcs)
+        if present:
+            keys.add((m["hip_id"], m["repo"], int(m.get("pr_number") or 0)))
+    return keys
+
+
+# Three views: full labeled set; per-lens (impl); per-lens (useful_signal).
+lenses = {
+    "implementation": ("is_implementation",),
+    "useful_signal":  ("is_useful_signal",),
+}
+
+per_lens = {}
+for lens_name, (field,) in lenses.items():
+    positives, negatives = build_labels(field)
+    per_strategy = {}
+    for strategy in ["mech_a", "mech_b", "s2", "s3", "s4"]:
+        s_keys = collect_strategy_keys(matches, strategy)
+        per_strategy[strategy] = compute_metrics(s_keys, positives, negatives)
+    all_keys = {(m["hip_id"], m["repo"], int(m.get("pr_number") or 0)) for m in matches}
+    overall = compute_metrics(all_keys, positives, negatives)
+    per_lens[lens_name] = {
+        "lens_field": field,
+        "positives_count": len(positives),
+        "negatives_count": len(negatives),
+        "per_strategy": per_strategy,
+        "overall": overall,
     }
 
-# Overall: all strategies merged (any match anywhere = positive)
-all_keys = {(m["hip_id"], m["repo"], int(m.get("pr_number") or 0)) for m in matches}
-tp = sum(1 for k in labeled_positives if k in all_keys)
-fn = sum(1 for k in labeled_positives if k not in all_keys)
-fp = sum(1 for k in all_keys if k in labeled_negatives)
-precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-
 try:
-    # Try the script-relative ../../../ first (works when helper runs from
-    # the repo's skills/team-digest/lib/). Falls through to "unknown" when
-    # the helper is installed at ~/.claude/skills/team-digest/lib/ - that
-    # path's .. .. .. lands in ~/.claude/ which is not a git repo.
     sha = subprocess.check_output(
         ["git", "-C", target_repo, "rev-parse", "HEAD"],
         stderr=subprocess.DEVNULL,
@@ -112,41 +165,44 @@ except Exception:
 
 baseline = {
     "captured_at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
-    "labeled_set_size": len(labeled),
-    "labeled_set_positives": len(labeled_positives),
-    "labeled_set_negatives": len(labeled_negatives),
+    "labeled_set_size": len(labeled_all),
+    "window_start": window_start,
+    "window_end": window_end,
+    "window_active": window_active,
     "baseline_team_digest_sha": sha,
     "matches_source": matches_path,
-    "per_strategy": per_strategy,
-    "overall": {
-        "tp": tp, "fp": fp, "fn": fn,
-        "precision": round(precision, 4),
-        "recall": round(recall, 4),
-        "f1": round(f1, 4),
-    },
+    "lenses": per_lens,
 }
 
 with open(out_path, "w") as f:
     json.dump(baseline, f, indent=2)
 
-print(f"Baseline written: precision={precision:.4f} recall={recall:.4f} f1={f1:.4f}")
-print(f"  Strategies: " + ", ".join(
-    f"{s}=f1:{per_strategy[s]['f1']:.2f}/p:{per_strategy[s]['precision']:.2f}/r:{per_strategy[s]['recall']:.2f}"
-    for s in ["mech_a", "mech_b", "s2", "s3", "s4"]
-))
+# Pretty-print
+print(f"Baseline written to {out_path}")
+print(f"  Window: {('[' + window_start + ', ' + window_end + ']') if window_active else '(full labeled set, no date filter)'}")
+for lens_name, lens_data in per_lens.items():
+    o = lens_data["overall"]
+    print(f"  Lens '{lens_name}' ({lens_data['positives_count']} pos, {lens_data['negatives_count']} neg): "
+          f"p={o['precision']:.2f} r={o['recall']:.2f} f1={o['f1']:.2f} (tp={o['tp']} fp={o['fp']} fn={o['fn']})")
+    for s, m in lens_data["per_strategy"].items():
+        if m["tp"] + m["fp"] + m["fn"] == 0:
+            continue
+        print(f"    {s:>8}: p={m['precision']:.2f} r={m['recall']:.2f} f1={m['f1']:.2f} (tp={m['tp']} fp={m['fp']} fn={m['fn']})")
 
-# Phase 1 acceptance gate
-ok_recall = recall >= 0.7
-ok_missed = fn <= 5
+# Phase 1 acceptance gate: uses the broader useful_signal lens
+useful = per_lens["useful_signal"]["overall"]
+ok_recall = useful["recall"] >= 0.7
+ok_missed = useful["fn"] <= 5
 if ok_recall and ok_missed:
-    print(f"Phase 1 acceptance: PASS (recall {recall:.2f} >= 0.7 AND missed {fn} <= 5)")
+    print(f"Phase 1 acceptance (useful_signal lens): PASS "
+          f"(recall {useful['recall']:.2f} >= 0.7 AND missed {useful['fn']} <= 5)")
 else:
     reasons = []
     if not ok_recall:
-        reasons.append(f"recall {recall:.2f} < 0.7")
+        reasons.append(f"recall {useful['recall']:.2f} < 0.7")
     if not ok_missed:
-        reasons.append(f"missed {fn} >= 5")
-    print(f"Phase 1 acceptance: FAIL ({'; '.join(reasons)}) - Phase 2 (Strategy 4) is unlocked", file=sys.stderr)
+        reasons.append(f"missed {useful['fn']} >= 5")
+    print(f"Phase 1 acceptance (useful_signal lens): FAIL ({'; '.join(reasons)}) - Phase 2 (Strategy 4) is unlocked", file=sys.stderr)
 PY
     ;;
 

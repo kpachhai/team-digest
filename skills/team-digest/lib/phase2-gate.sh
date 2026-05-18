@@ -45,24 +45,42 @@ import datetime, json, os, sys
 with open(os.environ["BASELINE_FILE"]) as f:
     baseline = json.load(f)
 
-recall = baseline["overall"]["recall"]
-missed = baseline["overall"]["fn"]
+# Iteration 3: baseline schema gained a "lenses" object. Gate decision uses
+# the useful_signal lens (broader than implementation; better aligned with
+# what the digest actually surfaces). Back-compat: fall through to the
+# pre-iter3 "overall" shape if "lenses" is absent.
+if "lenses" in baseline and "useful_signal" in baseline["lenses"]:
+    lens_used = "useful_signal"
+    overall = baseline["lenses"]["useful_signal"]["overall"]
+elif "overall" in baseline:
+    lens_used = "legacy_overall"
+    overall = baseline["overall"]
+else:
+    print("ERROR: baseline JSON has neither 'lenses.useful_signal' nor 'overall'", file=sys.stderr)
+    sys.exit(1)
 
+recall = overall["recall"]
+missed = overall["fn"]
 trigger = (recall < 0.7) or (missed >= 5)
 
 out = {
     "decided_at": datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z",
     "decision": "TRIGGER" if trigger else "DEFER",
     "rule": "OR(recall < 0.7, missed >= 5)",
+    "lens_used": lens_used,
     "recall_at_decision": recall,
     "missed_at_decision": missed,
+    "window_start": baseline.get("window_start"),
+    "window_end": baseline.get("window_end"),
+    "window_active": baseline.get("window_active", False),
     "baseline_captured_at": baseline.get("captured_at"),
     "baseline_team_digest_sha": baseline.get("baseline_team_digest_sha"),
     "reason": (
-        f"Phase 1 met acceptance criteria (recall {recall:.2f} >= 0.7 AND missed {missed} <= 5). "
+        f"Phase 1 met acceptance criteria on the {lens_used} lens "
+        f"(recall {recall:.2f} >= 0.7 AND missed {missed} <= 5). "
         f"Strategy 4 deferred-with-evidence."
         if not trigger else
-        f"Phase 1 missed acceptance ("
+        f"Phase 1 missed acceptance on the {lens_used} lens ("
         + (f"recall {recall:.2f} < 0.7" if recall < 0.7 else "")
         + (" AND " if (recall < 0.7 and missed >= 5) else "")
         + (f"missed {missed} >= 5" if missed >= 5 else "")
