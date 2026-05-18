@@ -63,13 +63,17 @@ When `$FROM_FILE` is set, skip the full synthesis pipeline (Steps 1-4) and jump 
 Flow:
 1. Load config (Step 0 Load config below) - still needed for `database_id` and `data_source_id`.
 2. Run `compute-week-window.sh` with the provided date/range args to set `$WEEK_LABEL`, `$WEEK_START`, `$WEEK_END`. This is needed for Notion page properties.
-3. Load Notion MCP schemas (Step 0.5) - required to call `notion-create-pages`.
+3. Load Notion MCP schemas (Step 0.5) - required to call `notion-create-pages` and `notion-update-page`.
 4. Fetch `data_source_id` from the database (same `notion-fetch` call as Step 2).
 5. Read `$FROM_FILE` using the Read tool. The file contains Notion-flavored markdown assembled by a previous run.
-6. Check whether a weekly digest already exists for `$WEEK_LABEL` (search for "Team Weekly Digest <WEEK_LABEL>"). If one exists, stop with a warning rather than creating a duplicate.
-7. Call `notion-create-pages` with the file content as the page body and standard properties. For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline).
-8. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
-9. On failure, tell the user the source file is still at `$FROM_FILE` and they can try again.
+6. Check whether a weekly digest page already exists for `$WEEK_LABEL` (search for "Team Weekly Digest - <WEEK_LABEL>"). Three cases:
+   - **No existing page found:** fall through to step 7 (create + chunked write).
+   - **Existing page found AND its body matches the placeholder** (`Weekly digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id. This is the placeholder/partial-recovery path.
+   - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the week already has a digest and the file is preserved at `$FROM_FILE`.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Weekly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $WEEK_END`, `Digest Type: Weekly`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
+9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
+10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
 
 #### Subcommand: `config`
 
@@ -261,22 +265,75 @@ After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user k
 
 **If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path.)
 
-**If `$DRY_RUN` is NOT set:** proceed to create the Notion page. If the `notion-create-pages` call fails (stream timeout, API error, or any other error), tell the user:
-> Notion write failed. Assembled content is saved at `<SAFETY_PATH>`. Re-run with:
+**If `$DRY_RUN` is NOT set:** proceed with the SPLIT-WRITE procedure to avoid the stream-timeout failure mode that hits single-call `notion-create-pages` writes when the body grows large. The weekly digest synthesizes 5-7 dailies and is materially larger than a single daily, so the timeout risk is higher here than for `/team-digest`. The split moves the heavy payload into a sentinel-driven sequence of `notion-update-page` calls so the small `notion-create-pages` call almost never fails, and a failure mid-chunk can be retried independently without losing the page.
+
+**Step 5.1: Create the page with a PLACEHOLDER body.**
+
+Call `notion-create-pages` with:
+
+- **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 2>" }`
+- **Properties:**
+  - `Digest Title`: `Team Weekly Digest - <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)`
+  - `date:Date:start`: `<WEEK_END>` (Sunday - so weekly entries sort just after the last daily of that week)
+  - `Digest Type`: `Weekly`
+  - `Repos Active`: total unique repos active across all 7 dailies (sum-of-uniques, not sum-of-dailies)
+  - `Keywords Matched`: union of `Keywords Matched` across the week as a JSON array
+  - `Status`: `Auto`
+- **Content:** the literal one-line placeholder `<callout icon="⏳" color="gray">Weekly digest content loading...</callout>` — nothing else. This call carries the metadata payload only; the body comes later.
+
+If THIS call fails (rare given the small payload), tell the user:
+> Notion page creation failed at the metadata step. Assembled content is saved at `<SAFETY_PATH>`. Re-run with:
 > `bin/team-weekly-run.sh <DATE_OR_RANGE_ARGS> --from-file <SAFETY_PATH>`
-Then stop - do NOT silently retry or write another file.
+Then STOP - do NOT silently retry or write another safety file.
 
-Create a new page in the Team Daily Digest database using the `notion-create-pages` MCP tool.
+**Step 5.2: Extract `page_id` from the response.**
 
-**Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 2>" }`
+The `notion-create-pages` response includes a `pages` array. Take the first entry's `id` field as `$NEW_PAGE_ID`. Also extract the `url` field as `$NEW_PAGE_URL` for the success message at the end.
 
-**Properties:**
-- `Digest Title`: `Team Weekly Digest - <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)`
-- `date:Date:start`: `<WEEK_END>` (Sunday - so weekly entries sort just after the last daily of that week)
-- `Digest Type`: `Weekly`
-- `Repos Active`: total unique repos active across all 7 dailies (sum-of-uniques, not sum-of-dailies)
-- `Keywords Matched`: union of `Keywords Matched` across the week as a JSON array
-- `Status`: `Auto`
+**Step 5.3: Upload the full weekly content using CHUNKED-WRITE.**
+
+The full weekly content (typically 25-50 KB - larger than the daily because it synthesizes 5-7 dailies) exceeds what a single `notion-update-page` call can deliver within the stream idle timeout. Write it in sections so each call stays under ~4 KB and the stream stays alive between calls via progress log lines.
+
+**Sentinel:** the string `DIGEST-SECTION-BREAK` — appended as a standalone paragraph after each chunk, replaced by the next chunk in the next call, and removed in the final call. This sentinel matches the value team-digest uses; a single page is only ever bound to one digest at a time, so reusing the sentinel name is safe and keeps recovery logic identical.
+
+**How to split:**
+- Identify all `## ` heading boundaries in the assembled content (e.g. `## Executive Summary`, `## Top Picks: Notion Pages Worth Reading This Week`, `## Week at a Glance`, `## Top GitHub themes`, `## Releases this week`, `## HIP Movement This Week`, `## Partner momentum`, `## Notion content pulse`, `## Industry news roundup`, `## Favorites movement`, `## Day-by-Day Index`).
+- Section 0 = everything before the first `## ` (header callout + `---` separator).
+- Each `## Heading\n...content...` up to the next `## ` boundary is one section.
+- Merge two consecutive sections into one chunk if their combined length is under 3,000 characters.
+- Keep the footer callout (`<callout ...>` at the very end) as its own final section.
+
+**Write loop (N = total chunks after merging):**
+
+1. Print `[write 1/N]`. Call `notion-update-page`:
+   - `page_id`: `$NEW_PAGE_ID`
+   - `command`: `"replace_content"`
+   - `new_str`: `[chunk 1 content]\n\nDIGEST-SECTION-BREAK`
+   - `properties`: `{}`, `content_updates`: `[]`
+
+2. For chunks 2 through N-1: print `[write i/N]`. Call `notion-update-page`:
+   - `page_id`: `$NEW_PAGE_ID`
+   - `command`: `"update_content"`
+   - `properties`: `{}`
+   - `content_updates`: `[{ "old_str": "DIGEST-SECTION-BREAK", "new_str": "[chunk i content]\n\nDIGEST-SECTION-BREAK" }]`
+
+3. Final chunk N: print `[write N/N]`. Call `notion-update-page`:
+   - `page_id`: `$NEW_PAGE_ID`
+   - `command`: `"update_content"`
+   - `properties`: `{}`
+   - `content_updates`: `[{ "old_str": "\n\nDIGEST-SECTION-BREAK", "new_str": "\n\n[chunk N content]" }]`
+
+**Step 5.4: If any chunk call fails** (timeout, API error, anything non-2xx): the page exists at `$NEW_PAGE_URL` with partial content (all chunks up to the last successful one, plus the sentinel if the write was interrupted mid-loop). Tell the user:
+
+> Page created but content upload was interrupted. The page exists at `$NEW_PAGE_URL`. Re-run with:
+> `bin/team-weekly-run.sh <DATE_OR_RANGE_ARGS> --from-file <SAFETY_PATH>`
+> The `--from-file` path detects the `DIGEST-SECTION-BREAK` sentinel and restarts the chunked write from the beginning.
+
+Then STOP. Do NOT silently retry; do NOT write another safety file.
+
+**Step 5.5: On full success, print the Notion page URL.**
+
+Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to the new weekly digest.
 
 **Content** uses Notion-flavored Markdown. The same Notion API rules apply as in `/team-digest` Step 5. Specifically:
 
