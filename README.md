@@ -172,6 +172,20 @@ git pull
 | `setup.sh`  | First time setup (creates config, checks prereqs, installs skills)  |
 | `update.sh` | After `git pull` (syncs skills and config, flags new template keys) |
 
+### Running on a second machine
+
+If you already have `team-digest` set up on one machine and want to mirror it onto another (different work / personal split, new laptop, etc.), the deep-merge in `update.sh` makes this clean:
+
+1. **Clone + setup on the second machine.** `git clone` the repo, run `./setup.sh`. This creates a placeholder `~/.config/team-digest/config.json` and copies the minimal profile template.
+2. **Sync the machine-local files yourself.** `config.json` and `profiles/team-digest.md` are gitignored (one per machine). Two paths:
+   - **From scratch**: edit `~/.config/team-digest/config.json` to fill Notion IDs, edit `~/.config/team-digest/profiles/team-digest.md` for your team.
+   - **Mirror from your other machine**: copy those two files across via a transfer method you trust (chezmoi, rsync, manual paste). Both files contain machine-local content - Notion IDs, employer-specific orgs, your live SA profile.
+3. **Re-run `./update.sh`** so the helpers + skills + iteration-2-through-6 wiring all land in `~/.claude/skills/team-digest/`.
+4. **First dry-run validation.** `bin/team-digest-run.sh <yesterday> --dry-run` should produce a richer digest (more orgs scanned, more RSS feeds, full Notion keyword surface, partner conversations) than the test machine could because the Notion workspace is real.
+5. **Production cron.** Install the launchd plist (macOS) or cron entry (Linux) per `docs/scheduling.md`. The plist defaults to `bin/team-digest-run.sh` (no flags) which runs yesterday's daily.
+
+The labeled set and calibration baseline (`~/.config/team-digest/hip-code-mapper-labeled-set.json`, `hip-calibration-baseline.json`) are machine-local by design - each machine can have its own. If you want the same labeled set on the second machine, copy that file across too.
+
 ### Customization
 
 Three layers of configuration - no hardcoded Notion links anywhere:

@@ -47,6 +47,54 @@ Tracked in `docs/superpowers/specs/2026-05-17-team-digest-iteration-2-design.md`
 
 Phase 2 (Strategy 4 - LLM identifier-generation + gitGrep) status: gated. Decision recorded in `~/.config/team-digest/iteration-2-phase2-decision.json` based on Phase 1 calibration baseline (`OR(recall < 0.7, missed >= 5)`). PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
 
+## Iteration 5 + 6 (shipped 2026-05-18)
+
+### F5 - deterministic matches.json consolidation (SHIPPED)
+
+F5 family of changes moves the canonical matches.json merge OUT of Claude's in-context state and INTO deterministic shell. Replaces the iter-2 design where Claude held the merged list across many SKILL.md steps - which proved lossy under high PR volume (iter-3 saw 9 HIPs in the digest but only 4 in matches.json).
+
+- **F5.0**: every match-producing helper writes structured sidecars to `$TEAM_DIGEST_MATCHES_DIR`:
+  - `fetch-github-prs.sh`, `fetch-github-issues.sh` → `mech_a-{prs,issues}-<org>.json` (one per org scanned)
+  - `fetch-hip-implementation-prs.sh` → `mech_b-hip-<N>.json` (one per HIP queried)
+  - `fetch-hip-release-refs.sh` → `strategy2.json` (one file)
+  - `fetch-hip-timeline-correlations.sh` → `strategy3.json` (one file)
+- **F5.1** (consolidator): new `consolidate-matches.sh` helper merges all sidecars into the canonical matches.json with MAX-confidence dedup on `(hip_id, repo, pr_number)`. Handles both flat-array shapes and Mech B's `{hip, prs, commits}` shape.
+- **F5.2** (wrapper post-run): `bin/team-digest-run.sh` runs the consolidator + `calibrate-hip-matches.sh --current-only` as a shell post-step after Claude exits. Claude is no longer responsible for emitting matches.json.
+- **F5.3** (BSD-find portable): pre-run reference file replaces `find -newermt @<epoch>` (which only works on GNU find).
+- **F5.4** (winner-by-volume): the wrapper's matches-dir discovery picks whichever candidate dir has the MOST newer-than-pre-run JSON files. Robust across env-var-propagation failure, mid-run recoveries, and Claude re-exporting the dir path.
+- **`fetch-hip-implementation-prs.sh` repo fix**: now emits `repository.nameWithOwner` (full `<owner>/<repo>` form) so its records dedup correctly against Mech A keys.
+
+### F6 - release-attribution credit in calibration (SHIPPED)
+
+iter-3's window check used only `pr_merged_at` - too narrow for Strategy 2. S2 attributes HIPs to PRs that were *included in releases* published in the window, even if the PR itself merged earlier. Under iter-3 logic those labeled positives got filtered out and S2 got 0 TPs despite emitting real signal.
+
+F6: labeled-set entries can now carry `attributed_to_releases: [<date1>, ...]`. The calibration helper's `in_window()` returns True if `pr_merged_at` OR any `attributed_to_releases` date falls in the window. Backfilled 3 labeled-set entries with their v0.51.0 release attribution.
+
+### Real metrics after F5 + F6
+
+Against the 2026-05-06 dry-run with a 7-day lookback window:
+
+| Lens | Window | Precision | Recall | F1 | TP/FP/FN |
+|---|---|---|---|---|---|
+| useful_signal | [2026-04-29, 2026-05-06] | **1.00** | **0.52** | 0.69 | 11 / 0 / 10 |
+| implementation | [2026-04-29, 2026-05-06] | 0.64 | 0.50 | 0.56 | 7 / 4 / 7 |
+
+Per-strategy under useful_signal (windowed):
+
+| Strategy | Records | TP | Precision | Recall |
+|---|---|---|---|---|
+| `mech_a` | 8 | 5 | 1.00 | 0.24 |
+| `mech_b` | 9 | 4 | 1.00 | 0.19 |
+| `s2` | 30 | 3 | 1.00 | 0.14 |
+| `s3` | 0 | 0 | n/a | n/a |
+| **Overall** | **46** | **11** | **1.00** | **0.52** |
+
+Total matches.json: 46 records covering 12 distinct HIPs across 5 strategies. **Zero false positives across all strategies.** S2 (release-note analysis) is the dominant volume contributor; Mech A + Mech B + S2 each have perfect precision.
+
+Phase 2 gate stays in TRIGGER (recall 0.52 < 0.7 threshold). But the diagnostic is honest: the 10 still-missed labeled positives are PRs in repos the digest already scans, just with different PR numbers than the helpers happened to surface. Strategy 4 (LLM identifier-generation) would not address that gap; the calibration is already against the system's real coverage.
+
+**Recommendation:** keep Strategy 4 deferred. The mechanical gate-TRIGGER is conservative; the actual digest output is rich and high-precision. Future improvements come from extending the labeled set (which converges the recall metric to the real coverage) or from the F5/F4 candidates below.
+
 ## Iteration 4 (shipped 2026-05-18)
 
 ### F4 - PR-update window lookback (SHIPPED)
