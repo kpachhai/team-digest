@@ -180,9 +180,12 @@ TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-$$"
 export TEAM_DIGEST_MATCHES_DIR
 mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 
-# Capture pre-run timestamp so we can find files written by THIS run (vs
-# left over from prior dry-runs).
-PRE_RUN_TS=$(date +%s)
+# Capture a pre-run reference file so we can find files written by THIS run
+# (vs left over from prior dry-runs). Using a reference file with `find -newer`
+# is portable across BSD find (macOS) and GNU find (Linux); `find -newermt
+# @<epoch>` only works on GNU find.
+PRE_RUN_REF=$(mktemp /tmp/team-digest-prerunref.XXXXXX)
+# mktemp already touches the file with mtime = now, which is what -newer wants.
 
 run_claude "$PROMPT"
 
@@ -191,37 +194,51 @@ run_claude "$PROMPT"
 DRY_DIR="/tmp/team-digest-dry-runs"
 LATEST_SAFETY=""
 if [ -d "$DRY_DIR" ]; then
-  LATEST_SAFETY=$(find "$DRY_DIR" -maxdepth 1 -name "team-digest-*.md" -newermt "@$PRE_RUN_TS" -print 2>/dev/null \
-    | head -1)
+  LATEST_SAFETY=$(find "$DRY_DIR" -maxdepth 1 -name "team-digest-*.md" -newer "$PRE_RUN_REF" -print 2>/dev/null | head -1)
   if [ -z "$LATEST_SAFETY" ]; then
-    LATEST_SAFETY=$(ls -t "$DRY_DIR"/team-digest-*.md 2>/dev/null | head -1)
+    LATEST_SAFETY=$(ls -t "$DRY_DIR"/team-digest-*.md 2>/dev/null | head -1 || true)
   fi
 fi
 
 # Find the matches dir Claude's helpers actually wrote to. Prefer the
 # wrapper's own dir if it has sidecars; otherwise discover any
-# /tmp/team-digest-matches-* dir that has files newer than PRE_RUN_TS (this
-# catches the SKILL.md fallback pattern `<DATE_LABEL>-<skill-PID>`).
+# /tmp/team-digest-matches-* dir that has files newer than the pre-run
+# reference file (this catches the SKILL.md fallback pattern
+# `<DATE_LABEL>-<skill-PID>` for runs where env-var propagation fails).
 discover_matches_dir() {
   # 1. Wrapper's dir if non-empty.
-  if [ -d "$TEAM_DIGEST_MATCHES_DIR" ] && [ "$(find "$TEAM_DIGEST_MATCHES_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ]; then
-    echo "$TEAM_DIGEST_MATCHES_DIR"
-    return
+  if [ -d "$TEAM_DIGEST_MATCHES_DIR" ]; then
+    local wrapper_count
+    wrapper_count=$(find "$TEAM_DIGEST_MATCHES_DIR" -maxdepth 1 -name '*.json' 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$wrapper_count" -gt 0 ]; then
+      echo "$TEAM_DIGEST_MATCHES_DIR"
+      return
+    fi
   fi
-  # 2. Any team-digest-matches-* dir with files newer than pre-run.
+  # 2. Any /tmp/team-digest-matches-* dir with files newer than the reference.
+  local d
   for d in /tmp/team-digest-matches-*; do
     [ -d "$d" ] || continue
-    if find "$d" -maxdepth 1 -name '*.json' -newermt "@$PRE_RUN_TS" -print 2>/dev/null | grep -q .; then
+    if find "$d" -maxdepth 1 -name '*.json' -newer "$PRE_RUN_REF" -print 2>/dev/null | head -1 | grep -q .; then
       echo "$d"
       return
     fi
   done
   echo ""
 }
+
+# set +e around discover to avoid pipefail/set-e surprises in the helper.
+set +e
 ACTIVE_MATCHES_DIR=$(discover_matches_dir)
+set -e
 
 SIDECAR_COUNT=0
-[ -n "$ACTIVE_MATCHES_DIR" ] && SIDECAR_COUNT=$(find "$ACTIVE_MATCHES_DIR" -maxdepth 1 -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+if [ -n "$ACTIVE_MATCHES_DIR" ]; then
+  SIDECAR_COUNT=$(find "$ACTIVE_MATCHES_DIR" -maxdepth 1 -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+fi
+
+# Clean up the reference file - we don't need it past this point.
+rm -f "$PRE_RUN_REF"
 
 if [ -n "$LATEST_SAFETY" ] && [ "$SIDECAR_COUNT" -gt 0 ]; then
   MATCHES_OUT="${LATEST_SAFETY%.md}-matches.json"
