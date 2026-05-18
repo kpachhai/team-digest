@@ -887,18 +887,29 @@ Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep 
 
 After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
 
-**Step 5.0 (iteration 5): matches.json consolidation is handled by the wrapper.**
+**Step 5.0 (iteration 5): matches.json consolidation is handled by the wrapper. Do NOT write matches.json yourself.**
 
 The sidecar files you wrote in Phase 3d (and the ones `fetch-github-prs.sh` / `fetch-github-issues.sh` wrote automatically) live at `$TEAM_DIGEST_MATCHES_DIR`. After this skill body returns, `bin/team-digest-run.sh` deterministically:
 
 1. Finds the newest safety file written by this run.
-2. Runs `consolidate-matches.sh $TEAM_DIGEST_MATCHES_DIR <safety>-matches.json`.
-3. Runs `calibrate-hip-matches.sh --current-only <safety>` for drift detection.
-4. Removes `$TEAM_DIGEST_MATCHES_DIR`.
+2. Discovers the matches sidecar dir (the wrapper's own dir if env-var propagation worked, else the skill-body fallback dir `/tmp/team-digest-matches-<DATE_LABEL>-<pid>`).
+3. Runs `consolidate-matches.sh <dir> <safety>-matches.json` to produce the canonical matches.json with MAX-confidence dedup.
+4. Runs `calibrate-hip-matches.sh --current-only <safety>` for drift detection.
+5. Cleans up the matches dir.
 
-**Therefore: do NOT call `consolidate-matches.sh` or `calibrate-hip-matches.sh --current-only` from inside this skill body.** That used to be required (Step 5.0 in the iteration-2 design); the wrapper now owns those steps so they happen deterministically regardless of context budget at end of run. Your job in this skill is just to make sure the sidecars exist in `$TEAM_DIGEST_MATCHES_DIR` by the time you finish — Phase 3d above is where that happens.
+**STRICT RULES for this skill:**
 
-If you're running interactively inside Claude Code (not via `bin/team-digest-run.sh`), the wrapper isn't there, and the matches.json + calibration drift won't auto-run. That's acceptable — interactive runs are for ad-hoc preview, not the calibration loop. If you specifically want them, invoke the two helpers manually after the skill finishes.
+- **DO NOT use the Write tool to create a `*-matches.json` file.** The wrapper will produce it from the sidecars. If you write one yourself, the wrapper's consolidator will overwrite it — but only if env-var propagation works AND your write happens before the wrapper's post-run step. The race is fragile; don't run it. Just write the sidecars and stop.
+- **DO NOT call `consolidate-matches.sh` or `calibrate-hip-matches.sh --current-only` from inside this skill body.** The wrapper calls them after you return.
+- Your end-of-run handoff to the user: print `Safety backup: <SAFETY_PATH>` (and, if dry-run, `Dry-run output: <SAFETY_PATH>`). Do NOT also print a `Matches sidecar: <path>` line; the wrapper logs that itself when consolidation succeeds.
+
+If you're running interactively inside Claude Code (not via `bin/team-digest-run.sh`), the wrapper isn't there. The sidecars still get written but matches.json won't auto-consolidate. To produce it manually after the skill finishes, invoke:
+
+```bash
+bash ~/.claude/skills/team-digest/lib/consolidate-matches.sh "$TEAM_DIGEST_MATCHES_DIR" "${SAFETY_PATH%.md}-matches.json"
+```
+
+That's an explicit user action, not part of the skill body.
 
 **If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path. The matches.json peer file at `${SAFETY_PATH%.md}-matches.json` is the canonical iteration-2 calibration input.)
 
