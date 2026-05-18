@@ -62,9 +62,12 @@ eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG" --lo
 # Now $DATE_LABEL, $START, $END, $LOOKBACK_START, $LOOKBACK_DAYS are set.
 
 # F5: matches sidecar dir - helpers write structured Mech A / Mech B / S2 / S3
-# records here; consolidate-matches.sh merges them at Step 5.0 finalize.
-# Use $$ so concurrent runs don't collide. Cleaned at the end of Step 5.
-export TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-${DATE_LABEL}-$$"
+# records here. When invoked via bin/team-digest-run.sh, the wrapper already
+# exported TEAM_DIGEST_MATCHES_DIR; just use it. For interactive runs (no
+# wrapper), create one ourselves so helpers still have a destination.
+if [ -z "${TEAM_DIGEST_MATCHES_DIR:-}" ]; then
+  export TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-${DATE_LABEL}-$$"
+fi
 mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 ```
 
@@ -884,28 +887,18 @@ Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep 
 
 After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
 
-**Step 5.0 (iteration-5): consolidate matches sidecars + run --current-only calibration.**
+**Step 5.0 (iteration 5): matches.json consolidation is handled by the wrapper.**
 
-Right after the safety file is written, run the consolidator to merge all per-strategy match-record sidecars from `$TEAM_DIGEST_MATCHES_DIR` into the canonical `matches.json` peer file. The consolidator handles MAX-confidence dedup deterministically (no in-context merge required) so the matches list is reliable even when PR volume is high.
+The sidecar files you wrote in Phase 3d (and the ones `fetch-github-prs.sh` / `fetch-github-issues.sh` wrote automatically) live at `$TEAM_DIGEST_MATCHES_DIR`. After this skill body returns, `bin/team-digest-run.sh` deterministically:
 
-```bash
-MATCHES_OUT="${SAFETY_PATH%.md}-matches.json"
-bash ~/.claude/skills/team-digest/lib/consolidate-matches.sh "$TEAM_DIGEST_MATCHES_DIR" "$MATCHES_OUT"
-```
+1. Finds the newest safety file written by this run.
+2. Runs `consolidate-matches.sh $TEAM_DIGEST_MATCHES_DIR <safety>-matches.json`.
+3. Runs `calibrate-hip-matches.sh --current-only <safety>` for drift detection.
+4. Removes `$TEAM_DIGEST_MATCHES_DIR`.
 
-Then invoke the calibration helper in `--current-only` mode to emit a per-strategy match-count distribution and surface a drift warning if the baseline is older than 180 days. Non-fatal: a calibration warning is a `[Notice]` in the digest header, not a digest-abort.
+**Therefore: do NOT call `consolidate-matches.sh` or `calibrate-hip-matches.sh --current-only` from inside this skill body.** That used to be required (Step 5.0 in the iteration-2 design); the wrapper now owns those steps so they happen deterministically regardless of context budget at end of run. Your job in this skill is just to make sure the sidecars exist in `$TEAM_DIGEST_MATCHES_DIR` by the time you finish — Phase 3d above is where that happens.
 
-```bash
-bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --current-only "$SAFETY_PATH"
-```
-
-Capture stderr; if it contains `[WARN] HIP calibration baseline is ... old`, surface it as a `[Notice]` line in the digest header so the maintainer notices and can run `--baseline` against a fresh dry-run.
-
-After both steps succeed, clean up the matches sidecar dir to avoid `/tmp` clutter:
-
-```bash
-rm -rf "$TEAM_DIGEST_MATCHES_DIR"
-```
+If you're running interactively inside Claude Code (not via `bin/team-digest-run.sh`), the wrapper isn't there, and the matches.json + calibration drift won't auto-run. That's acceptable — interactive runs are for ad-hoc preview, not the calibration loop. If you specifically want them, invoke the two helpers manually after the skill finishes.
 
 **If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path. The matches.json peer file at `${SAFETY_PATH%.md}-matches.json` is the canonical iteration-2 calibration input.)
 

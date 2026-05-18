@@ -161,4 +161,57 @@ PROMPT="/team-digest"
 [ -n "$FROM_FILE" ] && PROMPT="$PROMPT --from-file $FROM_FILE"
 
 echo "Running: $PROMPT" | tee -a "$LOG"
+
+# ---- F5 (iteration 5): deterministic matches.json consolidation ------------
+# Set up the matches sidecar dir BEFORE invoking claude so helpers
+# (fetch-github-prs.sh, fetch-github-issues.sh) can write structured Mech A
+# records during the run. SKILL.md Phase 3d also writes Mech B / Strategy 2 /
+# Strategy 3 captured outputs into this dir. After claude exits, we
+# deterministically consolidate everything into matches.json regardless of
+# what Claude remembered to do at Step 5.0.
+TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-$$"
+export TEAM_DIGEST_MATCHES_DIR
+mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
+trap 'rm -rf "$TEAM_DIGEST_MATCHES_DIR"' EXIT
+
+# Capture pre-run timestamp so we can find safety files written by THIS run
+# (vs. files left over from prior dry-runs).
+PRE_RUN_TS=$(date +%s)
+
 run_claude "$PROMPT"
+
+# ---- Post-run consolidation (only for dry-run or when safety file exists) --
+# Find the most-recently-written safety file in the dry-run dir that was
+# created/modified after pre-run-ts. Fall back to the most recent file
+# overall if mtime comparison comes up empty (some filesystems round mtime).
+DRY_DIR="/tmp/team-digest-dry-runs"
+LATEST_SAFETY=""
+if [ -d "$DRY_DIR" ]; then
+  LATEST_SAFETY=$(find "$DRY_DIR" -maxdepth 1 -name "team-digest-*.md" -newermt "@$PRE_RUN_TS" -print 2>/dev/null \
+    | head -1)
+  if [ -z "$LATEST_SAFETY" ]; then
+    LATEST_SAFETY=$(ls -t "$DRY_DIR"/team-digest-*.md 2>/dev/null | head -1)
+  fi
+fi
+
+# Only consolidate if the matches dir has anything in it (helpers + skill
+# wrote sidecars during the run).
+SIDECAR_COUNT=$(find "$TEAM_DIGEST_MATCHES_DIR" -maxdepth 1 -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+if [ -n "$LATEST_SAFETY" ] && [ "$SIDECAR_COUNT" -gt 0 ]; then
+  MATCHES_OUT="${LATEST_SAFETY%.md}-matches.json"
+  echo "[post-run] Consolidating $SIDECAR_COUNT match sidecar(s) -> $MATCHES_OUT" | tee -a "$LOG"
+  CONSOLIDATOR="$HOME/.claude/skills/team-digest/lib/consolidate-matches.sh"
+  if [ -x "$CONSOLIDATOR" ]; then
+    bash "$CONSOLIDATOR" "$TEAM_DIGEST_MATCHES_DIR" "$MATCHES_OUT" 2>&1 | tee -a "$LOG" || true
+  else
+    echo "[post-run] WARN: consolidator not at $CONSOLIDATOR; skipping" | tee -a "$LOG"
+  fi
+
+  # Calibration drift snapshot (iteration 2). Non-fatal.
+  CALIBRATOR="$HOME/.claude/skills/team-digest/lib/calibrate-hip-matches.sh"
+  if [ -x "$CALIBRATOR" ] && [ -f "$MATCHES_OUT" ]; then
+    bash "$CALIBRATOR" --current-only "$LATEST_SAFETY" 2>&1 | tee -a "$LOG" || true
+  fi
+else
+  echo "[post-run] No matches consolidation: safety=${LATEST_SAFETY:-<none>}, sidecars=$SIDECAR_COUNT" | tee -a "$LOG"
+fi
