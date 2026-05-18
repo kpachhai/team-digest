@@ -9,11 +9,27 @@
 
 set -euo pipefail
 
-HIP_NUMBER="${1:?usage: fetch-hip-implementation-prs.sh <hip-number> <YYYY-MM-DD> [orgs]}"
-TARGET_DATE="${2:?usage: fetch-hip-implementation-prs.sh <hip-number> <YYYY-MM-DD> [orgs]}"
-ORGS_RAW="${3:-hiero-ledger}"
+HIP_NUMBER="${1:?usage: fetch-hip-implementation-prs.sh <hip-number> <YYYY-MM-DD> [orgs] [--since-iso ISO]}"
+TARGET_DATE="${2:?usage: fetch-hip-implementation-prs.sh <hip-number> <YYYY-MM-DD> [orgs] [--since-iso ISO]}"
+shift 2
+ORGS_RAW="hiero-ledger"
+SINCE_OVERRIDE=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --since-iso)
+      SINCE_OVERRIDE="${2:?--since-iso requires an ISO 8601 timestamp}"
+      shift 2
+      ;;
+    *)
+      ORGS_RAW="$1"
+      shift
+      ;;
+  esac
+done
 
-SINCE="${TARGET_DATE}T00:00:00Z"
+# F4 (iteration 4): SINCE can be overridden to widen the per-HIP search window
+# beyond the digest day. Default = digest day start.
+SINCE="${SINCE_OVERRIDE:-${TARGET_DATE}T00:00:00Z}"
 UNTIL="${TARGET_DATE}T23:59:59Z"
 
 IFS=',' read -ra ORGS <<< "$ORGS_RAW"

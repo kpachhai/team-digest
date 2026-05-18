@@ -47,29 +47,43 @@ Tracked in `docs/superpowers/specs/2026-05-17-team-digest-iteration-2-design.md`
 
 Phase 2 (Strategy 4 - LLM identifier-generation + gitGrep) status: gated. Decision recorded in `~/.config/team-digest/iteration-2-phase2-decision.json` based on Phase 1 calibration baseline (`OR(recall < 0.7, missed >= 5)`). PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
 
-## Iteration 4 candidates
+## Iteration 4 (shipped 2026-05-18)
+
+### F4 - PR-update window lookback (SHIPPED)
+
+`compute-window.sh` gained an optional `--lookback-days N` flag and now also emits `LOOKBACK_START` + `LOOKBACK_DAYS` variables. SKILL.md reads the new `github.pr_lookback_days` config key (default `0` — preserves today's daily-cron behavior) and passes `$LOOKBACK_START` (instead of `$START`) to `fetch-github-prs.sh`, `fetch-github-issues.sh`, and Mechanism B's `fetch-hip-implementation-prs.sh` (via a new `--since-iso ISO` flag). Releases stay on the narrow window (a wider lookback would re-surface old releases).
+
+When `pr_lookback_days > 0`:
+
+- The digest header gets a `[Notice]` announcing the wider window.
+- Each PR in the priority-repo narrative gets a `(merged YYYY-MM-DD)` suffix so readers can distinguish today's signal from the backfill.
+- The iteration-3 calibration helper's `--window-start/--window-end` args should match the lookback window for meaningful precision/recall.
+
+Trade-offs (documented in `docs/configuration.md`): a PR can re-appear in successive daily digests (no cross-day dedup in iteration 4); larger lookback = more `gh search` results (capped at 100 per call). Mech B remains bounded by `max_hips_with_implementation_expansion`.
+
+The fix targets iteration 3's specific finding (7 in-scope labeled positives missed because they merged earlier in the week). Validation requires a maintainer-run dry-run with `pr_lookback_days: 7` and a re-baseline against `--window-start <DATE-7d> --window-end <DATE>`. Expected outcome: useful_signal recall lifts above 0.7; Phase 2 gate flips from TRIGGER to DEFER.
+
+## Iteration 5 candidates
 
 Items below are scoped enough to fit one or two iterations. Order is rough priority; reorder per upcoming need.
 
-### F4 - Widen PR-update window / multi-day backfill mode
+### F5 - Cross-day dedup for lookback-window PRs
 
-**What:** the iteration-3 calibration showed that 7 of 17 in-scope labeled positives (within a past-week window) were missed by the 2026-05-06 dry-run because those PRs merged on earlier dates in the same week and the digest's `gh search prs --updated=DATE_LABEL` filter only catches PRs touched on the digest day itself. Add a `--lookback-days N` flag (or config key) that widens the digest's PR-update filter to `--updated=>=DATE_LABEL-N`, and group earlier-merged PRs under a separate "Merged earlier in the week" sub-section.
+**What:** when `pr_lookback_days > 0`, a PR that merged earlier in the week appears in each successive daily digest until it falls out of the window. Add a cross-day "previously surfaced" tracker so the same PR is rendered fully on day 1 and noted as `(previously surfaced YYYY-MM-DD)` on subsequent days.
 
-**Why:** This is the real fix for the iteration-3 recall gap. Strategy 4 (LLM identifier-generation) would NOT address it because the missed PRs are in the same orgs+repos we already scan; they're just outside the date window. Widening the window catches them.
+**Why:** F4's main UX issue. Without dedup, the same PR clutters multiple consecutive daily pages.
 
 **Approach sketch:**
 
-1. Add `pr_lookback_days` config key under `team-digest.github` (default 0 = today's behavior).
-2. `fetch-github-prs.sh` and `fetch-github-issues.sh` pass `--updated=>=<lookback-start>..<digest-end>` instead of `--updated=<digest-start>..<digest-end>`.
-3. Mechanism A/B/2/3 inherit the broader window (no helper change beyond the date arg).
-4. Rendering: emit a new "Merged earlier this week" sub-section in priority-repo narratives when a PR's `mergedAt` is before the digest day but inside the lookback window.
-5. Calibration: re-run with `--window-start=<lookback-start> --window-end=<digest-end>`; expect recall to lift to ≥ 0.7 on the useful_signal lens.
+1. Persist a `~/.config/team-digest/seen-prs.json` cache mapping `(repo, pr_number)` → first-surfaced-date.
+2. At Phase 3 cross-link time, mark any PR whose `(repo, pr_number)` is in the cache and whose first-surfaced-date < today. Render with the `(previously surfaced YYYY-MM-DD)` annotation.
+3. After successful Notion write, update the cache with today's date for any new PRs.
+4. Cache prune: drop entries older than `max_backfill_days × 2`.
 
 **Gotchas:**
 
-- API budget: 7-day lookback multiplies PR-search calls. Mech B is already capped by `max_hips_with_implementation_expansion`; Strategy 3 is capped by `per_org_search_budget`. Mech A scales linearly with PR-count returned.
-- Dedup: PRs merged earlier in the week may appear in multiple daily digests (each day's run sees the same PRs). Surface only on the FIRST run that touches them, OR mark with `(previously surfaced YYYY-MM-DD)`.
-- Phase 2 gate: re-baseline after F4 ships. Expected outcome: recall lifts above 0.7 on the useful_signal lens; gate flips from TRIGGER to DEFER without needing Strategy 4.
+- Multiple machines syncing the cache: probably out-of-scope; each machine has its own cache.
+- The cache is part of the runtime state, not the labeled set or config. Document it.
 
 ### P1 - YouTube channel watching
 

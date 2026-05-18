@@ -54,16 +54,24 @@ This ensures:
 - No activity is missed or double-counted between runs
 - Missed days can be backfilled by specifying the date
 
-Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional. The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell:
+Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional plus an optional `--lookback-days N` flag sourced from `github.pr_lookback_days` in `config.json` (default 0). The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell:
 
 ```bash
-eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG")"
-# Now $DATE_LABEL, $START, $END are set.
+PR_LOOKBACK_DAYS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("github") or {}).get("pr_lookback_days", 0))')
+eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG" --lookback-days "$PR_LOOKBACK_DAYS")"
+# Now $DATE_LABEL, $START, $END, $LOOKBACK_START, $LOOKBACK_DAYS are set.
 ```
 
-If the user did not pass a date arg, invoke the helper with no arg and it defaults to yesterday in UTC. If the helper exits non-zero (invalid date format), surface its stderr to the user and stop.
+If the user did not pass a date arg, invoke the helper with no positional and it defaults to yesterday in UTC. If the helper exits non-zero (invalid date format or non-integer lookback), surface its stderr to the user and stop.
 
-Pass both `$START` and `$END` to GitHub helpers (the `START..END` range pins the window to exactly that UTC day). Use `$DATE_LABEL` as both `start_date` and `end_date` in all Notion `created_date_range` filters.
+**Window contract for downstream callers (iteration 4):**
+
+- **PRs + issues** scan: pass `$LOOKBACK_START $END` to `fetch-github-prs.sh` and `fetch-github-issues.sh`. With default `pr_lookback_days=0`, `LOOKBACK_START == START` so the digest-day-only behavior is preserved. With `pr_lookback_days=N`, the helpers see the wider window and surface PRs/issues that updated within the past N days.
+- **Releases** scan: pass `$START $END` (unchanged). Releases are pinned by `published_at` and a wider lookback would re-surface old releases that don't belong in today's digest.
+- **Notion keyword / partner search**: pass `$DATE_LABEL` as both `start_date` and `end_date` (unchanged). Notion's `created_date_range` is digest-day-scoped by design.
+- **HIP Activity (Step 2.3)**: see the Phase 1 / 2 / 2b / 2c instructions for how `$LOOKBACK_START` propagates to Mechanism B's per-HIP search.
+
+When `LOOKBACK_DAYS > 0`, the digest header should include a `[Notice]` line: `Scanning a {LOOKBACK_DAYS}-day window ({LOOKBACK_START%T*}..{DATE_LABEL})`. This tells the reader the digest is broader than the typical daily and explains why earlier-merged PRs may appear.
 
 ### Backfill Limitations
 
@@ -496,10 +504,14 @@ Scan **each org** from `config.github.orgs` for activity during the target date 
 **For each org, invoke these three helpers in parallel:**
 
 ```bash
-bash ~/.claude/skills/team-digest/lib/fetch-github-prs.sh      <org> "$START" "$END"
-bash ~/.claude/skills/team-digest/lib/fetch-github-issues.sh   <org> "$START" "$END"
+bash ~/.claude/skills/team-digest/lib/fetch-github-prs.sh      <org> "$LOOKBACK_START" "$END"
+bash ~/.claude/skills/team-digest/lib/fetch-github-issues.sh   <org> "$LOOKBACK_START" "$END"
 bash ~/.claude/skills/team-digest/lib/fetch-github-releases.sh <org> "$START" "$END"
 ```
+
+The PR/issue helpers use `$LOOKBACK_START` (which equals `$START` when `pr_lookback_days=0`, otherwise extends backward by N days). The releases helper stays on the narrow `$START..$END` window — wider lookback would re-surface old releases that don't belong in today's digest.
+
+When `$LOOKBACK_DAYS > 0`, every PR/issue returned by the helpers may have either been merged inside the digest day OR earlier in the lookback window. The renderer should annotate earlier-merged items in the priority-repo narrative with a `(merged <YYYY-MM-DD>)` suffix so readers can distinguish today's signal from the backfill. The "merged today" check is `merged_at[:10] == $DATE_LABEL`.
 
 Each helper writes a plain-text summary to stdout. PR and issue helpers group by repo with `## <repo> (<N>)` headers, then per-item lines with `[STATE] #<number> <title>`, author handle, URL, and a 200-char description excerpt. The releases helper emits one line per release: `<repo>: <tag> - <name> (<YYYY-MM-DD>) <html_url>`.
 
@@ -556,8 +568,10 @@ Rank the HIP entries: status-changed first, then by HIP number ascending. Take t
 For each, dispatch in parallel (emit all Bash tool calls in one message):
 
 ```bash
-bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$DATE_LABEL" "<comma-joined implementation_orgs>"
+bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$DATE_LABEL" "<comma-joined implementation_orgs>" --since-iso "$LOOKBACK_START"
 ```
+
+The `--since-iso` arg honors the iteration-4 `pr_lookback_days` config knob: with default 0, `$LOOKBACK_START == $START` and the helper sees the digest-day-only window (today's behavior). With `pr_lookback_days > 0`, the per-HIP `gh search` extends backward by N days and surfaces earlier-merged HIP-implementation PRs.
 
 Capture each as JSON.
 
