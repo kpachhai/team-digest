@@ -54,14 +54,14 @@ This ensures:
 - No activity is missed or double-counted between runs
 - Missed days can be backfilled by specifying the date
 
-Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional plus an optional `--lookback-days N` flag sourced from `github.pr_lookback_days` in `config.json` (default 0). The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell. Also export `TEAM_DIGEST_MATCHES_DIR` so helpers write structured match-record sidecars used by Phase 3d:
+Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional plus an optional `--lookback-days N` flag sourced from `github.pr_lookback_days` in `config.json` (default 0). The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell. Also export `TEAM_DIGEST_MATCHES_DIR` so helpers write structured match-record sidecars used by the consolidation step:
 
 ```bash
 PR_LOOKBACK_DAYS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("github") or {}).get("pr_lookback_days", 0))')
 eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG" --lookback-days "$PR_LOOKBACK_DAYS")"
 # Now $DATE_LABEL, $START, $END, $LOOKBACK_START, $LOOKBACK_DAYS are set.
 
-# F5: matches sidecar dir - helpers write structured Mech A / Mech B / S2 / S3
+# Matches sidecar dir - helpers write structured Mech A / Mech B / S2 / S3
 # records here. When invoked via bin/team-digest-run.sh, the wrapper already
 # exported TEAM_DIGEST_MATCHES_DIR; just use it. For interactive runs (no
 # wrapper), create one ourselves so helpers still have a destination.
@@ -81,12 +81,12 @@ mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 
 If the user did not pass a date arg, invoke the helper with no positional and it defaults to yesterday in UTC. If the helper exits non-zero (invalid date format or non-integer lookback), surface its stderr to the user and stop.
 
-**Window contract for downstream callers (iteration 4):**
+**Window contract for downstream callers:**
 
 - **PRs + issues** scan: pass `$LOOKBACK_START $END` to `fetch-github-prs.sh` and `fetch-github-issues.sh`. With default `pr_lookback_days=0`, `LOOKBACK_START == START` so the digest-day-only behavior is preserved. With `pr_lookback_days=N`, the helpers see the wider window and surface PRs/issues that updated within the past N days.
 - **Releases** scan: pass `$START $END` (unchanged). Releases are pinned by `published_at` and a wider lookback would re-surface old releases that don't belong in today's digest.
 - **Notion keyword / partner search**: pass `$DATE_LABEL` as both `start_date` and `end_date` (unchanged). Notion's `created_date_range` is digest-day-scoped by design.
-- **HIP Activity (Step 2.3)**: see the Phase 1 / 2 / 2b / 2c instructions for how `$LOOKBACK_START` propagates to Mechanism B's per-HIP search.
+- **HIP Activity (Step 2.3)**: see the stage-by-stage instructions below for how `$LOOKBACK_START` propagates to Mechanism B's per-HIP search.
 
 When `LOOKBACK_DAYS > 0`, the digest header should include a `[Notice]` line: `Scanning a {LOOKBACK_DAYS}-day window ({LOOKBACK_START%T*}..{DATE_LABEL})`. This tells the reader the digest is broader than the typical daily and explains why earlier-merged PRs may appear.
 
@@ -568,9 +568,9 @@ If scanning an org fails, note the failure and continue with the next org.
 
 **Gated on `TEAM_DIGEST_HIP_ENABLED=1`** (set automatically by Step 0 based on `hip_tracking.enabled` in config). If set to 0, skip this entire step.
 
-This step produces the HIP Activity section that appears under each org header in `hip_tracking.implementation_orgs` (default: `hiero-ledger`). It runs after the main GitHub scan so Phase 3 below can cross-link with PR data already in context.
+This step produces the HIP Activity section that appears under each org header in `hip_tracking.implementation_orgs` (default: `hiero-ledger`). It runs after the main GitHub scan so the cross-link stage below can cross-link with PR data already in context.
 
-**Phase 1 — fetch updates:**
+**Stage 1 — fetch HIP updates:**
 
 ```bash
 bash ~/.claude/skills/team-digest/lib/fetch-hip-updates.sh "$DATE_LABEL"
@@ -578,7 +578,7 @@ bash ~/.claude/skills/team-digest/lib/fetch-hip-updates.sh "$DATE_LABEL"
 
 Capture stdout as JSON. Empty array `[]` → skip the rest of Step 2.3 (no HIP Activity section in output). Non-zero exit → log inline `(HIP source: <error>)` at the HIP Activity section position and continue with the rest of the digest.
 
-**Phase 2 — fetch implementation activity for top 10 HIPs (parallel):**
+**Stage 2 — Mechanism B per-HIP implementation search (parallel, top 10 HIPs):**
 
 Rank the HIP entries: status-changed first, then by HIP number ascending. Take the top `max_hips_with_implementation_expansion` (default 10).
 
@@ -588,11 +588,11 @@ For each, dispatch in parallel (emit all Bash tool calls in one message):
 bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$DATE_LABEL" "<comma-joined implementation_orgs>" --since-iso "$LOOKBACK_START"
 ```
 
-The `--since-iso` arg honors the iteration-4 `pr_lookback_days` config knob: with default 0, `$LOOKBACK_START == $START` and the helper sees the digest-day-only window (today's behavior). With `pr_lookback_days > 0`, the per-HIP `gh search` extends backward by N days and surfaces earlier-merged HIP-implementation PRs.
+The `--since-iso` arg honors the `pr_lookback_days` config knob: with default 0, `$LOOKBACK_START == $START` and the helper sees the digest-day-only window (today's behavior). With `pr_lookback_days > 0`, the per-HIP `gh search` extends backward by N days and surfaces earlier-merged HIP-implementation PRs.
 
 Capture each as JSON.
 
-**Phase 2b — Strategy 2 (release-note analysis):**
+**Stage 3 — Strategy 2 (release-note analysis):**
 
 ```bash
 bash ~/.claude/skills/team-digest/lib/fetch-hip-release-refs.sh "$DATE_LABEL"
@@ -600,23 +600,23 @@ bash ~/.claude/skills/team-digest/lib/fetch-hip-release-refs.sh "$DATE_LABEL"
 
 Capture stdout as a JSON array of MatchRecord entries (`{hip_id, repo, pr_number, confidence, sources: ["s2"], per_source.s2.reason: "in_tag"|"in_body", release_tag, release_url}`). Empty array `[]` → no release-note HIP signal today; continue. Non-zero exit → log inline `(Strategy 2: <error>)` and continue with the rest of HIP Activity (do NOT abort the digest on a single-strategy failure).
 
-**Phase 2c — Strategy 3 (timeline correlation):**
+**Stage 4 — Strategy 3 (timeline correlation):**
 
 ```bash
 bash ~/.claude/skills/team-digest/lib/fetch-hip-timeline-correlations.sh "$DATE_LABEL"
 ```
 
-Capture stdout as a JSON array of MatchRecord entries (`{hip_id, repo, pr_number, confidence, sources: ["s3"], per_source.s3.reason: <keyword_overlap_3plus | keyword_overlap_1or2_plus_category_tiebreak | high-volume area (downgraded)>, matched_keywords, category_tiebreak?}`). The helper batches one `gh search prs` call per org (HIP-N OR <keywords>), respects `strategy3.per_org_search_budget` with exponential 1s/2s/4s backoff on 429 responses, applies the `noise_ceiling_commits_per_day` downgrade for high-volume repos, and emits a single `source: "s3_skipped"` record on rate-limit-after-3-retries instead of crashing. Same non-fatal contract as Phase 2b.
+Capture stdout as a JSON array of MatchRecord entries (`{hip_id, repo, pr_number, confidence, sources: ["s3"], per_source.s3.reason: <keyword_overlap_3plus | keyword_overlap_1or2_plus_category_tiebreak | high-volume area (downgraded)>, matched_keywords, category_tiebreak?}`). The helper batches one `gh search prs` call per org (HIP-N OR <keywords>), respects `strategy3.per_org_search_budget` with exponential 1s/2s/4s backoff on 429 responses, applies the `noise_ceiling_commits_per_day` downgrade for high-volume repos, and emits a single `source: "s3_skipped"` record on rate-limit-after-3-retries instead of crashing. Same non-fatal contract as Strategy 2.
 
-**Phase 3 — cross-link with Step 2 data:**
+**Stage 5 — cross-link with Step 2 data:**
 
-For each PR returned by Phase 2, Phase 2b, or Phase 2c: if the same PR (by `url` or `(repo, pr_number)` tuple) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-Phase-1))`.
+For each PR returned by Stages 2, 3, or 4: if the same PR (by `url` or `(repo, pr_number)` tuple) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-stage-1))`.
 
-**Phase 3b — MAX-confidence dedup merge:**
+**Stage 6 — MAX-confidence dedup merge:**
 
-Combine the MatchRecord arrays from Mechanism A (extracted from Step 2's `Linked HIPs:` annotations), Mechanism B (Phase 2 output), Strategy 2 (Phase 2b output), Strategy 3 (Phase 2c output) using dedup key `(hip_id, repo, pr_number)`. When two records share the dedup key, MAX their confidence (high > medium > low) and union their `sources[]` and `per_source` maps. The merged-and-deduped list is what gets rendered in the HIP Activity section.
+Combine the MatchRecord arrays from Mechanism A (extracted from Step 2's `Linked HIPs:` annotations), Mechanism B (Stage 2 output), Strategy 2 (Stage 3 output), Strategy 3 (Stage 4 output) using dedup key `(hip_id, repo, pr_number)`. When two records share the dedup key, MAX their confidence (high > medium > low) and union their `sources[]` and `per_source` maps. The merged-and-deduped list is what gets rendered in the HIP Activity section.
 
-**Phase 3c — verbose-mode filter:**
+**Stage 7 — verbose-mode filter:**
 
 Read the env var `TEAM_DIGEST_HIP_VERBOSE` (default `0` if unset). Persistent setting lives in `~/.config/team-digest/env` (sourced by `bin/team-digest-run.sh` as of commit `251830a`). Two behaviors:
 
@@ -627,9 +627,9 @@ The H3 subsection is contained within the H2 `## HIP Activity` boundary, so the 
 
 Pass-through for `s3_skipped` records: these were emitted by Strategy 3 when an org hit rate-limit retries. Render them in the verbose subsection only, with a special row form `_Strategy 3 skipped for <org>/_meta — <reason>_` (no PR link, no HIP-N link). In default (non-verbose) mode, omit `s3_skipped` records entirely.
 
-**Phase 3d — match-record sidecars (FULLY AUTOMATIC, no skill-body action required):**
+**Stage 8 — match-record sidecars (FULLY AUTOMATIC, no skill-body action required):**
 
-F5.3 (iteration 5) made every match-producing helper write structured JSON sidecars to `$TEAM_DIGEST_MATCHES_DIR` directly. By the time the helpers in Phase 2 / 2b / 2c return, the dir contains:
+Every match-producing helper writes structured JSON sidecars to `$TEAM_DIGEST_MATCHES_DIR` directly. By the time the helpers in Stages 2 / 3 / 4 return, the dir contains:
 
 - `mech_a-prs-<org>.json` (one per github org) — from `fetch-github-prs.sh`
 - `mech_a-issues-<org>.json` (one per github org) — from `fetch-github-issues.sh`
@@ -639,7 +639,7 @@ F5.3 (iteration 5) made every match-producing helper write structured JSON sidec
 
 **You do NOT need to write anything to `$TEAM_DIGEST_MATCHES_DIR` from the skill body.** The helpers handled it.
 
-After this phase, the dir is the canonical source of truth for matches. The wrapper (`bin/team-digest-run.sh`) calls `consolidate-matches.sh` on this dir after the skill returns; see Step 5.0 below.
+After this stage, the dir is the canonical source of truth for matches. The wrapper (`bin/team-digest-run.sh`) calls `consolidate-matches.sh` on this dir after the skill returns; see Step 5.0 below.
 
 To re-baseline (one-shot, run by the maintainer outside the daily cron):
 
@@ -650,7 +650,7 @@ bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --baseline /tmp/t
 
 **Render the HIP Activity section** under each org header in `hip_tracking.implementation_orgs`, BEFORE the Priority Repos subsection. See the entry shapes in `TEMPLATE.md` for the exact format (Tier 1 / Tier 2 / Tier 2b / overflow).
 
-**Section-empty fallback:** if Phase 1 returned `[]` and no proposal PRs were found, omit the entire HIP Activity section (no "no HIPs today" filler).
+**Section-empty fallback:** if Stage 1 returned `[]` and no proposal PRs were found, omit the entire HIP Activity section (no "no HIPs today" filler).
 
 ### Step 2.5: Scan Industry News (RSS feeds + commit-watching for spec sets)
 
@@ -890,9 +890,9 @@ Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep 
 
 After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
 
-**Step 5.0 (iteration 5): matches.json consolidation is handled by the wrapper. Do NOT write matches.json yourself.**
+**Step 5.0: matches.json consolidation is handled by the wrapper. Do NOT write matches.json yourself.**
 
-The sidecar files you wrote in Phase 3d (and the ones `fetch-github-prs.sh` / `fetch-github-issues.sh` wrote automatically) live at `$TEAM_DIGEST_MATCHES_DIR`. After this skill body returns, `bin/team-digest-run.sh` deterministically:
+The sidecar files written by the match helpers (`fetch-github-prs.sh`, `fetch-github-issues.sh`, `fetch-hip-implementation-prs.sh`, `fetch-hip-release-refs.sh`, `fetch-hip-timeline-correlations.sh`) all live at `$TEAM_DIGEST_MATCHES_DIR`. After this skill body returns, `bin/team-digest-run.sh` deterministically:
 
 1. Finds the newest safety file written by this run.
 2. Discovers the matches sidecar dir (the wrapper's own dir if env-var propagation worked, else the skill-body fallback dir `/tmp/team-digest-matches-<DATE_LABEL>-<pid>`).
@@ -914,7 +914,7 @@ bash ~/.claude/skills/team-digest/lib/consolidate-matches.sh "$TEAM_DIGEST_MATCH
 
 That's an explicit user action, not part of the skill body.
 
-**If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path. The matches.json peer file at `${SAFETY_PATH%.md}-matches.json` is the canonical iteration-2 calibration input.)
+**If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path. The matches.json peer file at `${SAFETY_PATH%.md}-matches.json` is the canonical calibration input.)
 
 **If `$DRY_RUN` is NOT set:** proceed with the SPLIT-WRITE procedure to avoid the stream-timeout failure mode that hit single-call `notion-create-pages` writes when the body grew large. The split moves the heavy payload into a separate `notion-update-page` call so the small `notion-create-pages` call almost never fails, and a failure on the update step can be retried independently without losing the page.
 

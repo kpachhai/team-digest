@@ -52,7 +52,7 @@ repos = {}
 for issue in data:
     repos.setdefault(issue['repository']['name'], []).append(issue)
 
-# F5: structured Mech A match records emitted to disk when
+# Structured Mech A match records emitted to disk when
 # $TEAM_DIGEST_MATCHES_DIR is set. See fetch-github-prs.sh for the design.
 mech_a_records = []
 org_name = os.environ.get('TEAM_DIGEST_GH_ORG', '')
@@ -86,7 +86,7 @@ for repo in sorted(repos):
             # issue title or body, filtered through the known-HIPs index.
             hip_list = ', '.join(f'HIP-{n} (high)' for n in hips)
             print(f'    Linked HIPs: {hip_list}')
-            # F5: structured record for the canonical matches.json.
+            # Structured record for the canonical matches.json sidecar.
             repo_full = issue.get('repository', {}).get('nameWithOwner') or f'{org_name}/{repo}'
             for n in hips:
                 mech_a_records.append({

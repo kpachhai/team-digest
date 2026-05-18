@@ -80,11 +80,11 @@ Example block (the defaults from `config.template.json`):
 
 A run-time override exists via the `TEAM_DIGEST_HIP_ENABLED` environment variable. If exported as `0` in the shell that runs the digest, the HIP source is skipped regardless of config. Useful for historical backfills where HIP scanning would be noise.
 
-If `hip_tracking` is missing from `config.json` entirely, the helpers fall back to the defaults above (enabled by default, on the canonical repo). Existing users who upgrade across iteration 1 do not need to edit their config unless they want to opt out or point at a different repo.
+If `hip_tracking` is missing from `config.json` entirely, the helpers fall back to the defaults above (enabled by default, on the canonical repo). Upgrading users do not need to edit their config unless they want to opt out or point at a different repo.
 
-#### Iteration 2 additions (Strategies 2, 3, 4 + verbose mode)
+#### Per-strategy tuning (Strategies 2, 3, 4 + verbose mode)
 
-Iteration 2 adds `strategy2.*`, `strategy3.*`, and (if Phase 2 triggers) `strategy4.*` sub-blocks. Defaults are encoded in `config.template.json` and the helpers fall back to them if the keys are missing; you only need to add the sub-blocks to your `config.json` if you want to override a default.
+Optional `strategy2.*`, `strategy3.*`, and (if the calibration gate triggers Strategy 4) `strategy4.*` sub-blocks tune each strategy's behavior. Defaults are encoded in `config.template.json` and the helpers fall back to them if the keys are missing; you only need to add the sub-blocks to your `config.json` if you want to override a default.
 
 | Field | Default | What it controls |
 |---|---|---|
@@ -95,7 +95,7 @@ Iteration 2 adds `strategy2.*`, `strategy3.*`, and (if Phase 2 triggers) `strate
 | `strategy3.per_org_search_budget` | `10` | Cap on `gh search` calls per org per run. Exponential 1s/2s/4s backoff on 429. |
 | `strategy3.noise_ceiling_commits_per_day` | `20` | Repos with more than N commits on the digest day get their Strategy 3 matches downgraded to `low`. |
 | `strategy3.category_to_repos` | (HTS/HSS/HCS/Mirror/SDK defaults; see `config.template.json`) | Tiebreaker map used when Strategy 3 keyword overlap is 1-2. Override if your team uses different repo names or categories. |
-| `strategy4.cost_cap_usd` | `2.00` | Hard cap on Strategy 4 LLM cost per run (Phase 2 only). 80% warn, then exhaustion footnote. |
+| `strategy4.cost_cap_usd` | `2.00` | Hard cap on Strategy 4 LLM cost per run (only active when the gate triggers). 80% warn, then exhaustion footnote. |
 | `strategy4.min_abstract_chars` | `200` | Strategy 4 skips HIPs with abstracts shorter than this (Draft-HIP boilerplate gate). |
 
 #### Verbose-mode env var
@@ -110,7 +110,7 @@ echo 'export TEAM_DIGEST_HIP_VERBOSE=1' >> ~/.config/team-digest/env
 
 #### GitHub scope minimization
 
-Iteration 2 does NOT widen `GH_TOKEN` scope beyond iteration 1's requirements. All four strategies (A, B, 2, 3) work with `public_repo` (or no scope for tokens against fully-public org content). Strategy 4, when triggered, also does not require a new GitHub scope - it sends only HIP abstracts + HIP/PR titles + PR labels to the LLM provider, never PR bodies, so no scope escalation is needed.
+Strategies 2 and 3 do NOT widen `GH_TOKEN` scope. All four strategies (A, B, 2, 3) work with `public_repo` (or no scope for tokens against fully-public org content). Strategy 4, when triggered, also does not require a new GitHub scope - it sends only HIP abstracts + HIP/PR titles + PR labels to the LLM provider, never PR bodies, so no scope escalation is needed.
 
 #### `implementation_orgs` repo list maintenance
 
@@ -132,7 +132,7 @@ When and why to set it:
 - **Daily cron (default, `0`):** preserves today's behavior. Each daily digest is a single-day snapshot.
 - **Weekly-catchup run (`7`):** if your team only runs the digest weekly, set `pr_lookback_days: 7` so a single run surfaces PRs that merged anywhere in the past week. The digest header will include a `[Notice]` line announcing the wider window.
 - **Backfilling missed days:** if you missed a few days and want to catch up with one run, set `pr_lookback_days: N` matching the gap.
-- **Calibration:** the iteration-3 calibration helper's `--window-start/--window-end` args should match the lookback window for meaningful precision/recall numbers.
+- **Calibration:** the calibration helper's `--window-start/--window-end` args should match the lookback window for meaningful precision/recall numbers.
 
 What it affects vs. doesn't:
 
@@ -141,7 +141,7 @@ What it affects vs. doesn't:
 
 Trade-offs:
 
-- Each day a lookback PR is touched it can re-appear in successive daily digests (no cross-day dedup in iteration 4). The `(merged YYYY-MM-DD)` annotation in the rendered narrative lets readers distinguish today's signal from the backfill.
+- Each day a lookback PR is touched it can re-appear in successive daily digests (no cross-day dedup yet; see `docs/roadmap.md` for the planned dedup tracker). The `(merged YYYY-MM-DD)` annotation in the rendered narrative lets readers distinguish today's signal from the backfill.
 - Larger lookback = more `gh search` results (`--limit 100` per call caps any explosion). Mech B is still bounded by `max_hips_with_implementation_expansion`.
 
 ### GitHub authentication

@@ -1,78 +1,39 @@
 # team-digest Roadmap
 
-What landed in iteration 1, what's parked for later, and how each parked item maps to a likely future iteration.
+What's shipped today, what's parked for later, and the rationale for each parked item. This is the canonical home for "what's next" decisions.
 
-This file is the canonical home for "what's next" decisions. Spec section 20 of `docs/superpowers/specs/2026-05-16-team-digest-iteration-1-design.md` is the short-form preview; this file is the long form with rationale and gotchas per item.
+For a date-anchored history of when each capability landed, see the git log (`git log --oneline docs/roadmap.md`) or `CHANGELOG.md` if present.
 
-## Iteration 1 (shipped 2026-05)
+## Shipped capabilities
 
-Tracked in `docs/superpowers/specs/2026-05-16-team-digest-iteration-1-design.md` and the matching plan. Highlights:
+### Daily digest (`/team-digest`)
 
-- HIP Activity source for the daily digest (Step 2.3), including Tier 1/2/2b/3 entry shapes and status-change detection.
+- HIP Activity source for the daily digest (Step 2.3), including Tier 1 / Tier 2 / Tier 2b / Tier 3 (overflow) entry shapes and status-change detection.
 - HIP cross-reference annotation (Mechanism A) on every PR/issue that names a HIP, with regex extraction filtered against a weekly-refreshed known-HIPs index.
 - Per-HIP implementation-PR/commit search (Mechanism B), bounded by `max_hips_with_implementation_expansion` (default 10).
 - Pre-Write Link Audit check 9: bare `HIP-N` text in prose must be a markdown link.
-- HIP Movement This Week theme in `/team-weekly`, with cross-day status arcs and cross-repo implementation tracking.
-- Token-efficiency Phase 1 (body cap, skip-fetch, child cap, highlight length) and Phase 4 (split `notion-create-pages` + `notion-update-page` to keep within the Notion MCP timeout budget).
-
-User-facing surface lives in [`docs/hip-tracking.md`](hip-tracking.md), [`docs/configuration.md`](configuration.md), and [`docs/troubleshooting.md`](troubleshooting.md).
-
-## Iteration 3 (shipped 2026-05-18)
-
-Calibration-quality follow-ups surfaced by iteration 2's retrospective:
-
-- **F1 - three-lens calibration:** `calibrate-hip-matches.sh` now reports metrics under two lenses against the labeled set: `implementation` (narrow, production-codebase code change) and `useful_signal` (broader, includes HIP-doc-update PRs which are valuable signal but not implementations). `phase2-gate.sh` uses the `useful_signal` lens for the Phase 2 gate decision (better aligned with the digest's purpose). The iter-2 "Mech B precision = 0" finding was a classification artifact, not a strategy failure - under the `useful_signal` lens, Mech B precision is **1.00**.
-- **F2 - date-range window filtering:** `calibrate-hip-matches.sh --baseline` gains optional `--window-start YYYY-MM-DD --window-end YYYY-MM-DD` args. When set, labeled positives are filtered to those whose `pr_merged_at` falls in the window. Addresses the iter-2 date-scope mismatch where a single-day dry-run was being measured against a multi-year labeled set.
-- **Labeled-set schema upgrade:** entries gained `is_hip_doc_update`, `is_useful_signal`, and `pr_merged_at` fields. 60 existing entries were backfilled via `gh pr view` for `pr_merged_at`; 16 HIP-repo entries got `is_hip_doc_update: true`. Existing entries without these fields are treated as `is_useful_signal: true` and in-scope by default (back-compat).
-
-Real metrics against the 2026-05-06 dry-run + past-week window:
-
-| Lens | Precision | Recall | F1 | TP / FP / FN |
-|---|---|---|---|---|
-| useful_signal | **1.00** | 0.59 | 0.74 | 10 / 0 / 7 |
-| implementation | 0.50 | 0.45 | 0.48 | 5 / 5 / 6 |
-
-Gate remains TRIGGER (recall 0.59 < 0.7) but the diagnostic shifted: the 7 missed are mostly PRs that merged earlier in the past week and weren't caught by the digest's `--updated=DATE_LABEL` filter. Strategy 4 (LLM identifier-generation) would not address this; iteration 4 candidate F4 (widen the digest's PR-update window, or multi-day backfill mode) is the real fix.
-
-## Iteration 2 (Phase 1 shipped 2026-05; Phase 2 gated)
-
-Tracked in `docs/superpowers/specs/2026-05-17-team-digest-iteration-2-design.md` and the matching plan. Phase 1 (always-ship) highlights:
-
 - Strategy 2 - Release-Note Analysis (`fetch-hip-release-refs.sh`): scans implementation_orgs repos' release notes for HIP-N tokens in tag/name (high confidence) and body (medium confidence), attributes to PRs via compare-against-prev-tag commit-message parsing.
 - Strategy 3 - Timeline Correlation (`fetch-hip-timeline-correlations.sh`): batched per-org `gh search prs` for past-7d PRs whose titles/labels share keywords with today's status-changed HIPs. HIP-category-to-repo tiebreaker map for 1-2-token overlap. Per-org budget, 429 backoff, noise-ceiling downgrade.
 - Unified confidence model (high / medium / low) threaded through Mechanism A, B, Strategy 2, Strategy 3. MAX-confidence dedup on `(hip_id, repo, pr_number)` key.
 - Verbose-mode `### Lower-Confidence Matches` subsection, gated on `TEAM_DIGEST_HIP_VERBOSE=1` (persistent setting via `~/.config/team-digest/env`).
 - Strategy-independent labeled set at `~/.config/team-digest/hip-code-mapper-labeled-set.json` (≥30 entries / ≥10 negatives). Calibration helper (`calibrate-hip-matches.sh`) with baseline + per-run drift modes.
-- T-pre: ported the chunked Notion write (commit 251830a from iteration 1) to `/team-weekly` for consistency, since the weekly synthesizes 5-7 dailies and hits the same stream-idle timeout.
+- Two-lens calibration: `calibrate-hip-matches.sh` reports metrics under two lenses against the labeled set: `implementation` (narrow, production-codebase code change) and `useful_signal` (broader, includes HIP-doc-update PRs which are valuable signal but not implementations). `strategy4-gate.sh` uses the `useful_signal` lens for the gate decision (better aligned with the digest's purpose).
+- Date-range window filtering: `calibrate-hip-matches.sh --baseline` accepts optional `--window-start YYYY-MM-DD --window-end YYYY-MM-DD` args. When set, labeled positives are filtered to those whose `pr_merged_at` (or `attributed_to_releases` date) falls in the window — necessary when a single-day dry-run is measured against a labeled set spanning multiple years.
+- Release-attribution credit: labeled-set entries can carry an `attributed_to_releases: [<date>, ...]` field. The calibration helper's `in_window()` returns true if `pr_merged_at` OR any `attributed_to_releases` date falls in the window. Required for Strategy 2 fidelity — S2 attributes HIPs to PRs included in releases published in the window, even if the PR itself merged earlier.
+- Labeled-set schema: entries carry `is_hip_doc_update`, `is_useful_signal`, `pr_merged_at`, and optional `attributed_to_releases`. Entries without these fields are treated as `is_useful_signal: true` and in-scope by default (back-compat).
+- PR-update window lookback: `compute-window.sh` accepts optional `--lookback-days N` and emits `LOOKBACK_START` + `LOOKBACK_DAYS`. SKILL.md reads the `github.pr_lookback_days` config key (default `0` — preserves daily-cron behavior) and passes `$LOOKBACK_START` to `fetch-github-prs.sh`, `fetch-github-issues.sh`, and Mechanism B's `fetch-hip-implementation-prs.sh` (via `--since-iso ISO`). Releases stay on the narrow window. When the lookback is > 0, the digest header gets a `[Notice]` and each PR gets a `(merged YYYY-MM-DD)` suffix.
+- Deterministic matches.json consolidation: every match-producing helper writes structured JSON sidecars to `$TEAM_DIGEST_MATCHES_DIR`. After Claude exits, `bin/team-digest-run.sh` runs `consolidate-matches.sh` to merge them with MAX-confidence dedup on `(hip_id, repo, pr_number)`. Moves the canonical merge out of Claude's in-context state into deterministic shell — Claude proved lossy under high PR volume. The wrapper uses winner-by-volume directory discovery to handle env-var-propagation failure and mid-run Write-tool recoveries.
+- Token-efficiency safeguards (body cap, skip-fetch, child cap, highlight length) and chunked Notion write (split `notion-create-pages` + `notion-update-page`) to stay within the Notion MCP timeout budget. Same chunked-write pattern applies to `/team-weekly`.
 
-Phase 2 (Strategy 4 - LLM identifier-generation + gitGrep) status: gated. Decision recorded in `~/.config/team-digest/iteration-2-phase2-decision.json` based on Phase 1 calibration baseline (`OR(recall < 0.7, missed >= 5)`). PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
+User-facing surface lives in [`docs/hip-tracking.md`](hip-tracking.md), [`docs/configuration.md`](configuration.md), and [`docs/troubleshooting.md`](troubleshooting.md).
 
-## Iteration 5 + 6 (shipped 2026-05-18)
+### Strategy 4 (gated)
 
-### F5 - deterministic matches.json consolidation (SHIPPED)
+Strategy 4 (LLM identifier-generation + `gitGrep`) is gated by `lib/strategy4-gate.sh` against the calibration baseline. State machine: `DEFERRED_AWAITING_BASELINE` → `DEFER` (calibration met `recall >= 0.7 AND missed <= 5` on the `useful_signal` lens) or `TRIGGER` (otherwise). Strategy 4 ships only on `TRIGGER`. Decision recorded in `~/.config/team-digest/strategy4-gate-decision.json`. PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
 
-F5 family of changes moves the canonical matches.json merge OUT of Claude's in-context state and INTO deterministic shell. Replaces the iter-2 design where Claude held the merged list across many SKILL.md steps - which proved lossy under high PR volume (iter-3 saw 9 HIPs in the digest but only 4 in matches.json).
+## Calibration snapshot
 
-- **F5.0**: every match-producing helper writes structured sidecars to `$TEAM_DIGEST_MATCHES_DIR`:
-  - `fetch-github-prs.sh`, `fetch-github-issues.sh` → `mech_a-{prs,issues}-<org>.json` (one per org scanned)
-  - `fetch-hip-implementation-prs.sh` → `mech_b-hip-<N>.json` (one per HIP queried)
-  - `fetch-hip-release-refs.sh` → `strategy2.json` (one file)
-  - `fetch-hip-timeline-correlations.sh` → `strategy3.json` (one file)
-- **F5.1** (consolidator): new `consolidate-matches.sh` helper merges all sidecars into the canonical matches.json with MAX-confidence dedup on `(hip_id, repo, pr_number)`. Handles both flat-array shapes and Mech B's `{hip, prs, commits}` shape.
-- **F5.2** (wrapper post-run): `bin/team-digest-run.sh` runs the consolidator + `calibrate-hip-matches.sh --current-only` as a shell post-step after Claude exits. Claude is no longer responsible for emitting matches.json.
-- **F5.3** (BSD-find portable): pre-run reference file replaces `find -newermt @<epoch>` (which only works on GNU find).
-- **F5.4** (winner-by-volume): the wrapper's matches-dir discovery picks whichever candidate dir has the MOST newer-than-pre-run JSON files. Robust across env-var-propagation failure, mid-run recoveries, and Claude re-exporting the dir path.
-- **`fetch-hip-implementation-prs.sh` repo fix**: now emits `repository.nameWithOwner` (full `<owner>/<repo>` form) so its records dedup correctly against Mech A keys.
-
-### F6 - release-attribution credit in calibration (SHIPPED)
-
-iter-3's window check used only `pr_merged_at` - too narrow for Strategy 2. S2 attributes HIPs to PRs that were *included in releases* published in the window, even if the PR itself merged earlier. Under iter-3 logic those labeled positives got filtered out and S2 got 0 TPs despite emitting real signal.
-
-F6: labeled-set entries can now carry `attributed_to_releases: [<date1>, ...]`. The calibration helper's `in_window()` returns True if `pr_merged_at` OR any `attributed_to_releases` date falls in the window. Backfilled 3 labeled-set entries with their v0.51.0 release attribution.
-
-### Real metrics after F5 + F6
-
-Against the 2026-05-06 dry-run with a 7-day lookback window:
+Real metrics against a 2026-05-06 dry-run with a 7-day lookback window:
 
 | Lens | Window | Precision | Recall | F1 | TP/FP/FN |
 |---|---|---|---|---|---|
@@ -89,42 +50,26 @@ Per-strategy under useful_signal (windowed):
 | `s3` | 0 | 0 | n/a | n/a |
 | **Overall** | **46** | **11** | **1.00** | **0.52** |
 
-Total matches.json: 46 records covering 12 distinct HIPs across 5 strategies. **Zero false positives across all strategies.** S2 (release-note analysis) is the dominant volume contributor; Mech A + Mech B + S2 each have perfect precision.
+Total matches.json: 46 records covering 12 distinct HIPs across the active strategies. **Zero false positives across all strategies.** S2 (release-note analysis) is the dominant volume contributor; Mech A + Mech B + S2 each have perfect precision.
 
-Phase 2 gate stays in TRIGGER (recall 0.52 < 0.7 threshold). But the diagnostic is honest: the 10 still-missed labeled positives are PRs in repos the digest already scans, just with different PR numbers than the helpers happened to surface. Strategy 4 (LLM identifier-generation) would not address that gap; the calibration is already against the system's real coverage.
+Gate stays in TRIGGER (recall 0.52 < 0.7 threshold). But the diagnostic is honest: the 10 still-missed labeled positives are PRs in repos the digest already scans, just with different PR numbers than the helpers happened to surface. Strategy 4 (LLM identifier-generation) would not address that gap; the calibration is already against the system's real coverage.
 
-**Recommendation:** keep Strategy 4 deferred. The mechanical gate-TRIGGER is conservative; the actual digest output is rich and high-precision. Future improvements come from extending the labeled set (which converges the recall metric to the real coverage) or from the F5/F4 candidates below.
+**Recommendation:** keep Strategy 4 deferred. The mechanical gate-TRIGGER is conservative; the actual digest output is rich and high-precision. Future improvements come from extending the labeled set (which converges the recall metric to the real coverage).
 
-## Iteration 4 (shipped 2026-05-18)
+## Parked items
 
-### F4 - PR-update window lookback (SHIPPED)
+Items below are scoped enough to fit one or two focused work sessions. Order is rough priority; reorder per upcoming need.
 
-`compute-window.sh` gained an optional `--lookback-days N` flag and now also emits `LOOKBACK_START` + `LOOKBACK_DAYS` variables. SKILL.md reads the new `github.pr_lookback_days` config key (default `0` — preserves today's daily-cron behavior) and passes `$LOOKBACK_START` (instead of `$START`) to `fetch-github-prs.sh`, `fetch-github-issues.sh`, and Mechanism B's `fetch-hip-implementation-prs.sh` (via a new `--since-iso ISO` flag). Releases stay on the narrow window (a wider lookback would re-surface old releases).
-
-When `pr_lookback_days > 0`:
-
-- The digest header gets a `[Notice]` announcing the wider window.
-- Each PR in the priority-repo narrative gets a `(merged YYYY-MM-DD)` suffix so readers can distinguish today's signal from the backfill.
-- The iteration-3 calibration helper's `--window-start/--window-end` args should match the lookback window for meaningful precision/recall.
-
-Trade-offs (documented in `docs/configuration.md`): a PR can re-appear in successive daily digests (no cross-day dedup in iteration 4); larger lookback = more `gh search` results (capped at 100 per call). Mech B remains bounded by `max_hips_with_implementation_expansion`.
-
-The fix targets iteration 3's specific finding (7 in-scope labeled positives missed because they merged earlier in the week). Validation requires a maintainer-run dry-run with `pr_lookback_days: 7` and a re-baseline against `--window-start <DATE-7d> --window-end <DATE>`. Expected outcome: useful_signal recall lifts above 0.7; Phase 2 gate flips from TRIGGER to DEFER.
-
-## Iteration 5 candidates
-
-Items below are scoped enough to fit one or two iterations. Order is rough priority; reorder per upcoming need.
-
-### F5 - Cross-day dedup for lookback-window PRs
+### Cross-day dedup for lookback-window PRs
 
 **What:** when `pr_lookback_days > 0`, a PR that merged earlier in the week appears in each successive daily digest until it falls out of the window. Add a cross-day "previously surfaced" tracker so the same PR is rendered fully on day 1 and noted as `(previously surfaced YYYY-MM-DD)` on subsequent days.
 
-**Why:** F4's main UX issue. Without dedup, the same PR clutters multiple consecutive daily pages.
+**Why:** main UX issue with the lookback feature. Without dedup, the same PR clutters multiple consecutive daily pages.
 
 **Approach sketch:**
 
 1. Persist a `~/.config/team-digest/seen-prs.json` cache mapping `(repo, pr_number)` → first-surfaced-date.
-2. At Phase 3 cross-link time, mark any PR whose `(repo, pr_number)` is in the cache and whose first-surfaced-date < today. Render with the `(previously surfaced YYYY-MM-DD)` annotation.
+2. At cross-link time, mark any PR whose `(repo, pr_number)` is in the cache and whose first-surfaced-date < today. Render with the `(previously surfaced YYYY-MM-DD)` annotation.
 3. After successful Notion write, update the cache with today's date for any new PRs.
 4. Cache prune: drop entries older than `max_backfill_days × 2`.
 
@@ -133,7 +78,7 @@ Items below are scoped enough to fit one or two iterations. Order is rough prior
 - Multiple machines syncing the cache: probably out-of-scope; each machine has its own cache.
 - The cache is part of the runtime state, not the labeled set or config. Document it.
 
-### P1 - YouTube channel watching
+### YouTube channel watching
 
 **What:** Surface new uploads from configured YouTube channels in the digest, with optional transcript-derived topic summaries.
 
@@ -147,7 +92,7 @@ Items below are scoped enough to fit one or two iterations. Order is rough prior
 - LLM summarization adds tokens. Budget realistically: ~1.5K tokens per 30-minute talk transcript at Sonnet pricing.
 - Auto-generated transcripts have transcription errors; partner names get mangled. Use them for "what's this about" classification, not for verbatim quotes.
 
-### P2 - X profile watching
+### X profile watching
 
 **What:** Track new posts from configured X (Twitter) accounts of partners, ecosystem contributors, and key competitors.
 
@@ -165,7 +110,7 @@ Items below are scoped enough to fit one or two iterations. Order is rough prior
 - Authenticated rate limits on the Free API tier are too tight even for one daily run across 10 accounts. Pricing realistically gates this on the Basic tier.
 - Quoted posts, replies, and threads all have different surface shapes - the parser needs to handle each.
 
-### P3 - Slack channel watching
+### Slack channel watching
 
 **What:** Scan configured Slack channels for keyword-relevant messages on the digest day.
 
@@ -179,29 +124,7 @@ Items below are scoped enough to fit one or two iterations. Order is rough prior
 - Slack rate limits are tier-1 (~50 calls/minute) - fine for daily scans, would need attention for backfills.
 - Thread reply context matters: a top-level message reading "yep, that works" is meaningless without the parent. Either fetch threads when a parent has replies, or skip messages with no significant content of their own.
 
-### P4a - Advanced HIP-to-code mapping strategies (SHIPPED iteration 2 Phase 1; Phase 2 gated)
-
-**Status:** Phase 1 shipped 2026-05 - Strategies 2 (release-note analysis) + 3 (timeline correlation) + confidence model + verbose mode + calibration. Strategy 4 (LLM semantic) is gated by Phase 1 calibration outcome; see `~/.config/team-digest/iteration-2-phase2-decision.json` for the actual decision and `docs/hip-tracking.md` for the operational surface. Below is the original parking-lot text preserved for context.
-
-**What:** Beyond the iteration-1 Mechanism A (regex annotation) and Mechanism B (per-HIP `gh search`), implement the richer matching strategies from a companion `hiero-agent` repo's `tools/hip-code-mapper` module: release-note analysis, timeline correlation, and LLM semantic similarity scoring.
-
-**Why:** Mechanism A + B catch the obvious "PR title mentions HIP-N" case. They miss PRs that implement a HIP without naming it (the developer forgot, or the implementation predates the HIP merge), and they miss the "this commit on this date suspiciously aligns with HIP-X moving to Last Call" temporal pattern.
-
-**Approach sketch:** Three additive strategies on top of A and B:
-
-- **Strategy 2 - Release-note analysis:** when a release lands, scan its release notes for HIP references and back-attribute the change set to those HIPs.
-- **Strategy 3 - Timeline correlation:** for HIPs that moved status in the past week, look at the day's commits in `implementation_orgs` repos for clusters in the same area of the codebase as the HIP's expected surface.
-- **Strategy 4 - LLM semantic similarity:** embed HIP abstracts and PR descriptions, surface pairs with high cosine similarity. The `hiero-agent` reference budget-caps this at $2/run.
-
-Each strategy adds a `confidence` field to the match record (high / medium / low). The digest renders only high-confidence matches by default; medium and low go to a verbose mode.
-
-**Gotchas:**
-
-- Strategy 4 is the only one with hard cost. Budget it explicitly (per-run cap), or pre-compute embeddings nightly and only score similarities at digest time.
-- Confidence scoring is the load-bearing piece. Without it, false positives drown the digest signal. Calibrate against a labeled set of known-true matches before shipping.
-- Test data from an existing `hiero-agent` mapper run is the natural starting point - copy its labeled set, don't re-build one.
-
-### P4b - Cross-tool consumption from a `hiero-agent` cache
+### Cross-tool consumption from a `hiero-agent` cache
 
 **What:** Read a companion `hiero-agent` repo's `data/hips.json` cache at runtime instead of re-fetching the HIP repo ourselves.
 
@@ -215,13 +138,13 @@ Each strategy adds a `confidence` field to the match record (high / medium / low
 - The cache's freshness is `hiero-agent`'s call, not ours. Don't promise "today's HIP activity" when the cache is days old; surface the cache age in the digest section header.
 - Some forkers won't have `hiero-agent` installed. The `"github"` default must stay the canonical path; cache-backed is opt-in.
 
-### P5 - GitHub Discussions integration
+### GitHub Discussions integration
 
 **What:** Scan configured GitHub Discussions categories for new posts and replies on the digest day, the same way the digest scans PRs and issues today.
 
 **Why:** A meaningful share of ecosystem design conversation lives in Discussions, not PR comments - especially in the HIP repo, where pre-PR design proposals get aired. Discussions are invisible to the digest today.
 
-**Approach sketch:** Discussions live in the GitHub GraphQL API (not REST). The existing `gh api` calls use REST; this needs `gh api graphql -f query='...'`. A new `lib/fetch-github-discussions.sh` would take `<org> <repo> <YYYY-MM-DD>` and return a JSON array of discussion threads with new top-level posts or replies that day. The token needs the `read:discussion` scope, which iteration 1's `GH_TOKEN` documentation already nudges users toward.
+**Approach sketch:** Discussions live in the GitHub GraphQL API (not REST). The existing `gh api` calls use REST; this needs `gh api graphql -f query='...'`. A new `lib/fetch-github-discussions.sh` would take `<org> <repo> <YYYY-MM-DD>` and return a JSON array of discussion threads with new top-level posts or replies that day. The token needs the `read:discussion` scope.
 
 **Gotchas:**
 
@@ -229,7 +152,7 @@ Each strategy adds a `confidence` field to the match record (high / medium / low
 - Discussions are per-repo, not per-org. The helper has to enumerate repos (or take a hardcoded list) - same shape as how `fetch-github-releases.sh` enumerates.
 - Long discussion threads need a "today's new content" filter, not a full-thread dump. Filter by `createdAt > digest_window_start`.
 
-### P6 - Monthly / quarterly / yearly synthesis
+### Monthly / quarterly / yearly synthesis
 
 **What:** Extend the `team-weekly` synthesis-from-existing-pages pattern to longer windows: a `team-monthly` that reads the past 4-5 weeklies and synthesizes month-spanning themes, and analogous `team-quarterly` and `team-yearly`.
 
@@ -241,27 +164,27 @@ Each strategy adds a `confidence` field to the match record (high / medium / low
 
 - Synthesizing from synthesis. A monthly reads weeklies; each weekly is already a compression of dailies. Some signal is lost at each layer. Decide explicitly what monthly themes ask of the source data: if a monthly theme needs a fact that wasn't preserved in weeklies, the daily layer has to surface it.
 - Render performance at the monthly/quarterly cadence: a quarterly reading 13 weeklies, each with 5-7 themes, easily produces a long Notion page. Audit the page-length budget.
-- Cadence boundaries don't always align. ISO weeks cross month boundaries; iso quarters drift from calendar quarters by a few days. Pick one convention per cadence and stick to it.
+- Cadence boundaries don't always align. ISO weeks cross month boundaries; ISO quarters drift from calendar quarters by a few days. Pick one convention per cadence and stick to it.
 
-### P7 - Token-efficiency Phases 2 + 3 (contingency)
+### Token-efficiency follow-ups (contingency)
 
-**What:** Two further token-efficiency mechanisms beyond iteration 1's Phase 1 + Phase 4: Phase 2 splits the digest run into "gather" and "write" passes with a serialized intermediate file (`--gather-only` plus `--from-data-file`); Phase 3 applies deeper content reduction (per-repo narrative caps, skip `notion-fetch` in partner conversations).
+**What:** Two further token-efficiency mechanisms beyond the existing safeguards: a "gather + write" two-pass mode (`--gather-only` plus `--from-data-file`) with a serialized intermediate file, and per-section content reduction (per-repo narrative caps, skip `notion-fetch` in partner conversations).
 
-**Why:** Iteration 1's Phase 1 + 4 hit the acceptance criteria (under 200K tokens per daily, under $0.80 per run, no timeouts). Phase 2 + 3 are the contingency for "Phase 1 + 4 prove insufficient" - we won't know that until we run for several weeks of HIP-active dailies.
+**Why:** Today's safeguards hit the acceptance criteria (under 200K tokens per daily, under $0.80 per run, no timeouts). These follow-ups are contingency for "today's safeguards prove insufficient" - won't know that until the system runs for several weeks of HIP-active dailies.
 
-**Approach sketch:** Phase 2 is the bigger architectural lift: the skill needs a clean serialization boundary between the data-gathering pipeline and the narrative-writing pipeline. Likely a JSON file at `/tmp/team-digest-data/<DATE>.json` that the gather pass writes and the write pass consumes. Phase 3 is per-section heuristics: cap each priority-repo narrative at N PR-narrative bullets, skip `notion-fetch` on partner-conversation pages where the title already encodes the action.
+**Approach sketch:** The two-pass mode is the bigger architectural lift: a clean serialization boundary between the data-gathering pipeline and the narrative-writing pipeline. Likely a JSON file at `/tmp/team-digest-data/<DATE>.json` that the gather pass writes and the write pass consumes. Content-reduction is per-section heuristics: cap each priority-repo narrative at N PR-narrative bullets, skip `notion-fetch` on partner-conversation pages where the title already encodes the action.
 
 **Gotchas:**
 
 - Defer until acceptance criteria measurably break. Premature optimization adds complexity for no benefit.
-- Phase 2's serialization boundary is a behavior change - the gather pass and write pass run in different processes (probably different `claude -p` invocations). Lock down the JSON schema before splitting; otherwise the two passes drift.
-- Phase 3's content-reduction heuristics are easy to over-tune. Each cut needs to be justified by a specific measured cost, not "this looks redundant."
+- The two-pass mode is a behavior change - the gather pass and write pass run in different processes (probably different `claude -p` invocations). Lock down the JSON schema before splitting; otherwise the two passes drift.
+- Content-reduction heuristics are easy to over-tune. Each cut needs to be justified by a specific measured cost, not "this looks redundant."
 
 ---
 
 ## Deferred / not yet scoped
 
-Items collected for future consideration but not yet planned. Add to this section when an idea surfaces that doesn't yet have an iteration target.
+Items collected for future consideration but without a sized approach yet. Add to this section when an idea surfaces that doesn't have a concrete plan.
 
 - **Per-section confidence tags in the daily digest header.** "GitHub: 100% / HIP: partial (rate-limited) / Notion keywords: skipped (MCP down)" so a reader instantly sees what to trust today.
 - **Notion-side filter UI for the digest database.** A Notion view that hides "Auto" status pages by default, surfaces "Edited after auto-generation" pages explicitly. Quality-of-life, not functional.

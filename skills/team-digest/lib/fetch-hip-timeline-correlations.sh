@@ -48,7 +48,7 @@ else
 fi
 WINDOW_END="$DATE_LABEL"
 
-# Phase 1: get today's status-changed HIPs (with valid prev_status)
+# Step 1: get today's status-changed HIPs (with valid prev_status)
 HIPS_RAW=$(bash "$LIB_DIR/fetch-hip-updates.sh" "$DATE_LABEL" 2>/dev/null || echo '[]')
 
 STATUS_CHANGED_HIPS=$(echo "$HIPS_RAW" | jq '[.[] | select(.status_changed == true and .prev_status != null and .prev_status != "Unknown" and (.prev_status | length > 0))]')
@@ -61,7 +61,7 @@ fi
 # Cap at MAX_HIPS
 STATUS_CHANGED_HIPS=$(echo "$STATUS_CHANGED_HIPS" | jq --argjson cap "$MAX_HIPS" '.[:$cap]')
 
-# Phase 2: extract keywords per HIP via python (stopwords + len >= 4 + cap 5)
+# Step 2: extract keywords per HIP via python (stopwords + len >= 4 + cap 5)
 HIPS_WITH_KEYWORDS=$(STATUS_CHANGED_HIPS="$STATUS_CHANGED_HIPS" python3 - <<'PY'
 import json, os, re
 
@@ -95,7 +95,7 @@ print(json.dumps(data))
 PY
 )
 
-# Phase 3: batched per-org search. Build one query per org combining HIP-N OR keywords.
+# Step 3: batched per-org search. Build one query per org combining HIP-N OR keywords.
 RESULTS_FILE=$(mktemp)
 ERR_FILE=$(mktemp)
 trap 'rm -f "$RESULTS_FILE" "$ERR_FILE"' EXIT
@@ -174,7 +174,7 @@ while IFS= read -r ORG; do
 
   [ -z "$PRS_RAW" ] && PRS_RAW="[]"
 
-  # Phase 4: score each PR against each HIP (keyword overlap + category tiebreak)
+  # Step 4: score each PR against each HIP (keyword overlap + category tiebreak)
   SCORED=$(HIPS_WITH_KEYWORDS="$HIPS_WITH_KEYWORDS" \
            PRS_RAW="$PRS_RAW" \
            CATEGORY_MAP="$CATEGORY_MAP" \
@@ -291,8 +291,8 @@ PY
 
 done <<< "$ORGS"
 
-# F5.3 sidecar: also write to $TEAM_DIGEST_MATCHES_DIR if set, so the
-# wrapper's consolidator can read Strategy 3 records deterministically.
+# Sidecar: also write to $TEAM_DIGEST_MATCHES_DIR if set, so the wrapper's
+# consolidator can read Strategy 3 records deterministically.
 if [ -n "${TEAM_DIGEST_MATCHES_DIR:-}" ]; then
   mkdir -p "$TEAM_DIGEST_MATCHES_DIR" 2>/dev/null && \
     cp "$RESULTS_FILE" "$TEAM_DIGEST_MATCHES_DIR/strategy3.json" 2>/dev/null && \

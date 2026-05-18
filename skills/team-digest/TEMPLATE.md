@@ -115,7 +115,7 @@ _(10-HIP implementation-expansion cap reached; HIPs above this line did not get 
 
 <!-- Verbose-only subsection (rendered when TEAM_DIGEST_HIP_VERBOSE=1). -->
 <!-- Contains medium- and low-confidence matches from Strategies 2, 3, and 4. -->
-<!-- Iteration-2 contract; see docs/hip-tracking.md "Verbose mode". -->
+<!-- Verbose-mode contract; see docs/hip-tracking.md "Verbose mode". -->
 ### Lower-Confidence Matches
 
 _Surfaced because `TEAM_DIGEST_HIP_VERBOSE=1`. Signal-quality varies; cross-check before citing._
@@ -193,7 +193,7 @@ NOTE: Cap each repo at the top 3-5 items; trailing routine work goes in a final 
 
 NOTE: "<count summary>" examples: "1 merged, 3 open", "5 open PRs, 2 open issues", "[v0.155.0-rc1](url) released, 1 open PR".
 NOTE: If a repo's only activity is one routine item (typo fix, CODEOWNERS, dep bump), the H3 heading + single bullet is fine.
-NOTE: For Mechanism A HIP annotations, sub-bullets that touch a HIP should include the linked `[HIP-N](url)` in the bold lead or follow with "(implements [HIP-N](url))". As of iteration 2, the `Linked HIPs:` annotation line that the underlying helpers emit includes the confidence label inline (e.g. `HIP-1137 (high)`); preserve that label in the rendered sub-bullet so readers can see the source/confidence at a glance: `(implements [HIP-1137](url), high)`.
+NOTE: For Mechanism A HIP annotations, sub-bullets that touch a HIP should include the linked `[HIP-N](url)` in the bold lead or follow with "(implements [HIP-N](url))". The `Linked HIPs:` annotation line that the underlying helpers emit includes the confidence label inline (e.g. `HIP-1137 (high)`); preserve that label in the rendered sub-bullet so readers can see the source/confidence at a glance: `(implements [HIP-1137](url), high)`.
 
 ---
 

@@ -141,7 +141,7 @@ bash skills/team-digest/lib/calibrate-hip-matches.sh --baseline \
     /tmp/team-digest-dry-runs/team-digest-2026-05-06-v1.md
 ```
 
-Re-run the baseline when any of the recalibration triggers fire: labeled set > 6 months old; new HIP-N where N exceeds labeled-set max by 100+; Phase 2 (Strategy 4) has been triggered; the per-run drift warning fires 3+ times in a 30-day window. Edit `~/.config/team-digest/hip-code-mapper-labeled-set.json` to add new positive / negative examples as the codebase + HIP space evolves.
+Re-run the baseline when any of the recalibration triggers fire: labeled set > 6 months old; new HIP-N where N exceeds labeled-set max by 100+; Strategy 4 has been triggered by the gate; the per-run drift warning fires 3+ times in a 30-day window. Edit `~/.config/team-digest/hip-code-mapper-labeled-set.json` to add new positive / negative examples as the codebase + HIP space evolves.
 
 ### Strategy 3 timeline correlation hit rate-limit
 
@@ -153,9 +153,9 @@ If skips are recurring:
 - Raise `strategy3.per_org_search_budget` if you have headroom on your `gh` token's rate limit.
 - Check that the digest is running under a token, not gh CLI guest mode (`gh auth status`).
 
-### Strategy 4 budget exhausted (Phase 2 only)
+### Strategy 4 budget exhausted (only when gate has triggered)
 
-If iteration 2's gate triggered Phase 2 and Strategy 4 is running, every digest run logs cumulative LLM spend. At 80% of `strategy4.cost_cap_usd` (default $2.00), a `[WARN]` fires on stderr; at 100%, the strategy circuit-breaks and the digest emits a `Strategy 4 budget exhausted at $X.XX — N HIPs unscored` footnote in the HIP Activity section header.
+If the calibration gate has triggered Strategy 4 and it is running, every digest run logs cumulative LLM spend. At 80% of `strategy4.cost_cap_usd` (default $2.00), a `[WARN]` fires on stderr; at 100%, the strategy circuit-breaks and the digest emits a `Strategy 4 budget exhausted at $X.XX — N HIPs unscored` footnote in the HIP Activity section header.
 
 Options:
 

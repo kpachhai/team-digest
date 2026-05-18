@@ -6,8 +6,8 @@
 #
 #   calibrate-hip-matches.sh --baseline <dry-run-output-file>
 #     Reads ~/.config/team-digest/hip-code-mapper-labeled-set.json + the
-#     <dry-run-output-file>'s companion <...>-matches.json. Computes precision,
-#     recall, F1 per strategy AND overall. Writes
+#     <dry-run-output-file>'s companion <...>-matches.json. Computes
+#     precision/recall/F1 per strategy AND overall. Writes
 #     ~/.config/team-digest/hip-calibration-baseline.json with timestamp.
 #
 #   calibrate-hip-matches.sh --current-only [dry-run-output-file]
@@ -43,12 +43,12 @@ case "$MODE" in
       esac
     done
     if [ ! -f "$LABELED_SET" ]; then
-      echo "ERROR: labeled set not found at $LABELED_SET; run T2 (build-labeled-set) first" >&2
+      echo "ERROR: labeled set not found at $LABELED_SET; build it first (see docs/hip-tracking.md Calibration section)" >&2
       exit 1
     fi
     MATCHES_JSON="${DRY_RUN_OUTPUT%.md}-matches.json"
     if [ ! -f "$MATCHES_JSON" ]; then
-      echo "ERROR: matches JSON not found at $MATCHES_JSON. Step 2.3 emits this file alongside the dry-run safety file; ensure the dry-run was iteration-2 aware." >&2
+      echo "ERROR: matches JSON not found at $MATCHES_JSON. The wrapper emits this file alongside the dry-run safety file via consolidate-matches.sh; ensure the dry-run completed successfully." >&2
       exit 1
     fi
     LABELED_SET="$LABELED_SET" \
@@ -80,10 +80,10 @@ def in_window(entry):
     attributed_to_releases date falls in the window. Entries without any
     date are treated as in-scope by default (back-compat).
 
-    F6 (iteration 6): the attributed_to_releases list captures Strategy 2's
-    semantic - a PR may have merged before the window but be attributed to
-    a release published in the window. Without this, S2's true positives
-    are systematically under-counted because pr_merged_at is too narrow."""
+    The attributed_to_releases list captures Strategy 2's semantic - a PR
+    may have merged before the window but be attributed to a release
+    published in the window. Without this, S2's true positives are
+    systematically under-counted because pr_merged_at is too narrow."""
     if not window_active:
         return True
     candidate_dates = []
@@ -202,12 +202,12 @@ for lens_name, lens_data in per_lens.items():
             continue
         print(f"    {s:>8}: p={m['precision']:.2f} r={m['recall']:.2f} f1={m['f1']:.2f} (tp={m['tp']} fp={m['fp']} fn={m['fn']})")
 
-# Phase 1 acceptance gate: uses the broader useful_signal lens
+# Acceptance gate: uses the broader useful_signal lens
 useful = per_lens["useful_signal"]["overall"]
 ok_recall = useful["recall"] >= 0.7
 ok_missed = useful["fn"] <= 5
 if ok_recall and ok_missed:
-    print(f"Phase 1 acceptance (useful_signal lens): PASS "
+    print(f"Acceptance (useful_signal lens): PASS "
           f"(recall {useful['recall']:.2f} >= 0.7 AND missed {useful['fn']} <= 5)")
 else:
     reasons = []
@@ -215,7 +215,7 @@ else:
         reasons.append(f"recall {useful['recall']:.2f} < 0.7")
     if not ok_missed:
         reasons.append(f"missed {useful['fn']} >= 5")
-    print(f"Phase 1 acceptance (useful_signal lens): FAIL ({'; '.join(reasons)}) - Phase 2 (Strategy 4) is unlocked", file=sys.stderr)
+    print(f"Acceptance (useful_signal lens): FAIL ({'; '.join(reasons)}) - Strategy 4 is unlocked", file=sys.stderr)
 PY
     ;;
 

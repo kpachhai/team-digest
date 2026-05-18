@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# phase2-gate.sh - Iteration 2 Phase 2 (Strategy 4) gate decision.
+# strategy4-gate.sh - Strategy 4 (LLM identifier-generation) gate decision.
 #
 # Reads ~/.config/team-digest/hip-calibration-baseline.json (produced by
 # calibrate-hip-matches.sh --baseline) and applies the OR rule:
 #
-#   TRIGGER Phase 2 if  recall < 0.7  OR  missed >= 5
+#   TRIGGER Strategy 4 if  recall < 0.7  OR  missed >= 5
 #
-# Writes the decision to ~/.config/team-digest/iteration-2-phase2-decision.json
+# Writes the decision to ~/.config/team-digest/strategy4-gate-decision.json
 # with timestamp + the metrics used. Prints the decision to stdout.
 #
 # If no baseline exists yet, writes a DEFERRED_AWAITING_BASELINE decision
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 BASELINE_FILE="$HOME/.config/team-digest/hip-calibration-baseline.json"
-DECISION_FILE="$HOME/.config/team-digest/iteration-2-phase2-decision.json"
+DECISION_FILE="$HOME/.config/team-digest/strategy4-gate-decision.json"
 
 mkdir -p "$(dirname "$DECISION_FILE")"
 
@@ -45,10 +45,9 @@ import datetime, json, os, sys
 with open(os.environ["BASELINE_FILE"]) as f:
     baseline = json.load(f)
 
-# Iteration 3: baseline schema gained a "lenses" object. Gate decision uses
-# the useful_signal lens (broader than implementation; better aligned with
-# what the digest actually surfaces). Back-compat: fall through to the
-# pre-iter3 "overall" shape if "lenses" is absent.
+# Gate uses the useful_signal lens (broader than implementation; better
+# aligned with what the digest actually surfaces). Falls back to a legacy
+# "overall" shape if the lens object is absent.
 if "lenses" in baseline and "useful_signal" in baseline["lenses"]:
     lens_used = "useful_signal"
     overall = baseline["lenses"]["useful_signal"]["overall"]
@@ -76,15 +75,15 @@ out = {
     "baseline_captured_at": baseline.get("captured_at"),
     "baseline_team_digest_sha": baseline.get("baseline_team_digest_sha"),
     "reason": (
-        f"Phase 1 met acceptance criteria on the {lens_used} lens "
+        f"Calibration met acceptance criteria on the {lens_used} lens "
         f"(recall {recall:.2f} >= 0.7 AND missed {missed} <= 5). "
         f"Strategy 4 deferred-with-evidence."
         if not trigger else
-        f"Phase 1 missed acceptance on the {lens_used} lens ("
+        f"Calibration missed acceptance on the {lens_used} lens ("
         + (f"recall {recall:.2f} < 0.7" if recall < 0.7 else "")
         + (" AND " if (recall < 0.7 and missed >= 5) else "")
         + (f"missed {missed} >= 5" if missed >= 5 else "")
-        + "). Strategy 4 (Phase 2) is unlocked."
+        + "). Strategy 4 is unlocked."
     ),
 }
 with open(os.environ["DECISION_FILE"], "w") as f:

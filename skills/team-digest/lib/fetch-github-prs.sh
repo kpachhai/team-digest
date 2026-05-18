@@ -9,12 +9,13 @@
 # and a 150-char description excerpt. The skill consumes this output as
 # plain text.
 #
-# F5 side effect: if $TEAM_DIGEST_MATCHES_DIR is set in the environment, the
-# helper also writes a structured Mech A match-records JSON file at
-# $TEAM_DIGEST_MATCHES_DIR/mech_a-prs-<org>.json with one entry per
-# (hip_id, repo, pr_number) tuple. This file is consumed by SKILL.md
-# Phase 3d to build the canonical matches.json deterministically (no
-# context-held re-extraction required).
+# Match-record sidecar: if $TEAM_DIGEST_MATCHES_DIR is set in the
+# environment, the helper also writes a structured Mech A match-records
+# JSON file at $TEAM_DIGEST_MATCHES_DIR/mech_a-prs-<org>.json with one
+# entry per (hip_id, repo, pr_number) tuple. The wrapper's
+# consolidate-matches.sh reads these sidecars after Claude exits, so the
+# canonical matches.json is built deterministically rather than re-parsed
+# from this helper's text output.
 
 set -euo pipefail
 
@@ -59,7 +60,7 @@ repos = {}
 for pr in data:
     repos.setdefault(pr['repository']['name'], []).append(pr)
 
-# F5: structured Mech A match records emitted to disk when
+# Structured Mech A match records emitted to disk when
 # $TEAM_DIGEST_MATCHES_DIR is set. The helper has reliable in-process state
 # (the gh JSON + extract_hips output), so writing here is more robust than
 # asking the skill body to re-parse the text output.
@@ -101,7 +102,7 @@ for repo in sorted(repos):
             # PR title or body, filtered through the known-HIPs index.
             hip_list = ', '.join(f'HIP-{n} (high)' for n in hips)
             print(f'    Linked HIPs: {hip_list}')
-            # F5: structured record for the canonical matches.json.
+            # Structured record for the canonical matches.json sidecar.
             repo_full = pr.get('repository', {}).get('nameWithOwner') or f'{org_name}/{repo}'
             for n in hips:
                 mech_a_records.append({
@@ -120,9 +121,9 @@ for repo in sorted(repos):
                 })
         print()
 
-# F5 side-effect: emit structured Mech A records to a known location so the
-# skill's Phase 3d can read them deterministically instead of re-parsing the
-# text output above.
+# Side-effect: emit structured Mech A records to a known location so the
+# wrapper's consolidate-matches.sh can read them deterministically instead
+# of re-parsing the text output above.
 matches_dir = os.environ.get('TEAM_DIGEST_MATCHES_DIR', '')
 if matches_dir:
     try:

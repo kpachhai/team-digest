@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # consolidate-matches.sh - merge per-strategy match-record JSONs into the
-# canonical matches.json. Replaces the in-Claude-context Phase 3b merge that
-# F4 surfaced as unreliable under high-volume PR scans.
+# canonical matches.json. Replaces an earlier in-Claude-context merge that
+# proved unreliable under high-volume PR scans.
 #
 # Usage: consolidate-matches.sh <matches-dir> [<output-path>]
 #
@@ -11,10 +11,9 @@
 # MAX-confidence rule (high > medium > low), unions sources[] and per_source
 # maps, and emits the merged array to stdout (or <output-path> if given).
 #
-# F5 (iteration 5): this helper IS the canonical source of matches.json. The
-# previous design relied on the skill body to hold the merged list across
-# many Step 2.3 → Step 5 phases; with high PR volume that became lossy.
-# This helper is deterministic - no Claude context-holding required.
+# This helper IS the canonical source of matches.json. Doing the merge in
+# deterministic shell - rather than relying on Claude to hold the merged
+# list across many SKILL.md steps - prevents data loss under high PR volume.
 #
 # Empty <matches-dir> or a dir with no JSON files yields `[]`.
 

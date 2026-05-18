@@ -15,8 +15,8 @@
 #
 # Exit non-zero on invalid input. Errors go to stderr.
 #
-# F4 (iteration 4): LOOKBACK_START is the wider-window start for the GitHub
-# PR/issue scan. When --lookback-days N > 0, LOOKBACK_START =
+# LOOKBACK_START is the wider-window start for the GitHub PR/issue scan.
+# When --lookback-days N > 0, LOOKBACK_START =
 # (DATE_LABEL - N days) T00:00:00Z so `fetch-github-prs.sh org $LOOKBACK_START $END`
 # surfaces PRs merged earlier in the week. Default N=0 preserves daily-cron
 # behavior; daily-only digests pass $START. Backfill / weekly-catchup runs

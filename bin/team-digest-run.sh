@@ -162,20 +162,20 @@ PROMPT="/team-digest"
 
 echo "Running: $PROMPT" | tee -a "$LOG"
 
-# ---- F5 (iteration 5): deterministic matches.json consolidation ------------
+# ---- Deterministic matches.json consolidation ------------------------------
 # Set up the matches sidecar dir BEFORE invoking claude so helpers (which see
 # this env var when claude -p propagates env to its Bash tool subshells) can
-# write structured Mech A records during the run. SKILL.md Phase 3d also
-# writes Mech B / Strategy 2 / Strategy 3 captured outputs into this dir.
-# After claude exits, we deterministically consolidate everything into
-# matches.json regardless of what Claude remembered to do at Step 5.0.
+# write structured Mech A / Mech B / Strategy 2 / Strategy 3 records during
+# the run. After claude exits, we deterministically consolidate everything
+# into matches.json regardless of what Claude remembered to do at Step 5.0.
 #
-# F5.1: env-var propagation across `claude -p` subprocesses is unreliable in
-# practice - some harness versions strip env. We still export the var for the
-# benefit of any path where it does work, but the SKILL.md code falls back to
-# its own dir name pattern (`/tmp/team-digest-matches-<DATE_LABEL>-<skill-PID>`)
-# when the env var doesn't propagate. The wrapper then discovers whichever
-# dir actually got written by listing /tmp/team-digest-matches-* by mtime.
+# Env-var propagation across `claude -p` subprocesses is unreliable in
+# practice - some harness versions strip env. We still export the var for
+# the benefit of any path where it does work, but the SKILL.md code falls
+# back to its own dir name pattern
+# (`/tmp/team-digest-matches-<DATE_LABEL>-<skill-PID>`) when the env var
+# doesn't propagate. The wrapper then discovers whichever dir actually got
+# written by listing /tmp/team-digest-matches-* by mtime.
 TEAM_DIGEST_MATCHES_DIR="/tmp/team-digest-matches-$$"
 export TEAM_DIGEST_MATCHES_DIR
 mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
@@ -200,13 +200,14 @@ if [ -d "$DRY_DIR" ]; then
   fi
 fi
 
-# Find the matches dir Claude's helpers actually wrote to. F5.2/F5.3 had a
-# bug where the wrapper preferred its own dir even when Claude re-exported
-# a different path mid-run (after a Write-tool error recovery): wrapper's
-# dir ended up with just 1 sidecar while the SKILL's recovery dir had the
-# full set. F5.4 fix: iterate all candidate dirs, pick the one with the MOST
-# JSON files newer than the pre-run reference. Winner-by-volume - whichever
-# dir got the real workload wins, regardless of which name pattern was used.
+# Find the matches dir Claude's helpers actually wrote to. The wrapper
+# can't assume Claude used the env-var path: a Write-tool error mid-run
+# can prompt the skill body to re-export TEAM_DIGEST_MATCHES_DIR to a
+# different path before recovering. Result: wrapper's dir has 1 sidecar,
+# SKILL's recovery dir has the full set. Winner-by-volume discovery:
+# iterate all candidate dirs, pick the one with the MOST JSON files newer
+# than the pre-run reference. Whichever dir got the real workload wins,
+# regardless of which name pattern was used.
 discover_matches_dir() {
   local best_dir=""
   local best_count=0
@@ -246,7 +247,7 @@ if [ -n "$LATEST_SAFETY" ] && [ "$SIDECAR_COUNT" -gt 0 ]; then
     echo "[post-run] WARN: consolidator not at $CONSOLIDATOR; skipping" | tee -a "$LOG"
   fi
 
-  # Calibration drift snapshot (iteration 2). Non-fatal.
+  # Calibration drift snapshot. Non-fatal.
   CALIBRATOR="$HOME/.claude/skills/team-digest/lib/calibrate-hip-matches.sh"
   if [ -x "$CALIBRATOR" ] && [ -f "$MATCHES_OUT" ]; then
     bash "$CALIBRATOR" --current-only "$LATEST_SAFETY" 2>&1 | tee -a "$LOG" || true

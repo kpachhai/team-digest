@@ -27,8 +27,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-# F4 (iteration 4): SINCE can be overridden to widen the per-HIP search window
-# beyond the digest day. Default = digest day start.
+# SINCE can be overridden to widen the per-HIP search window beyond the
+# digest day (used with the github.pr_lookback_days config knob).
+# Default = digest day start.
 SINCE="${SINCE_OVERRIDE:-${TARGET_DATE}T00:00:00Z}"
 UNTIL="${TARGET_DATE}T23:59:59Z"
 
@@ -101,9 +102,9 @@ commits = [
 output = {'hip': hip_n, 'prs': prs, 'commits': commits}
 print(json.dumps(output, indent=2))
 
-# F5.3 sidecar: also write to $TEAM_DIGEST_MATCHES_DIR if set, so the
-# wrapper's consolidator can read Mech B records deterministically without
-# requiring Claude to dump captured stdout to disk at Phase 3d.
+# Sidecar: also write to $TEAM_DIGEST_MATCHES_DIR if set, so the wrapper's
+# consolidator can read Mech B records deterministically without requiring
+# Claude to dump captured stdout to disk.
 matches_dir = os.environ.get('TEAM_DIGEST_MATCHES_DIR', '')
 if matches_dir:
     try:

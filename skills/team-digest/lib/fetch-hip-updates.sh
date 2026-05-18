@@ -18,7 +18,7 @@ PATH_PREFIX="HIP"
 SINCE="${TARGET_DATE}T00:00:00Z"
 UNTIL="${TARGET_DATE}T23:59:59Z"
 
-# Phase 1: list commits in the window that touched the HIP path.
+# Step 1: list commits in the window that touched the HIP path.
 # Use query-string-in-URL form. The `-f path=HIP -f since=...` form returns
 # 404 because gh treats `path` as a special routing token. Direct URL query
 # string works. Also: no --paginate (it concatenates arrays as `[][]`, which
@@ -26,7 +26,7 @@ UNTIL="${TARGET_DATE}T23:59:59Z"
 COMMITS_URL="repos/$REPO/commits?since=$SINCE&until=$UNTIL&path=$PATH_PREFIX&per_page=100"
 COMMITS_JSON=$(gh api "$COMMITS_URL" 2>/dev/null || echo '[]')
 
-# Phase 1b: also fetch open PRs against the HIP repo updated in the window (proposal PRs).
+# Step 2: also fetch open PRs against the HIP repo updated in the window (proposal PRs).
 PROPOSAL_PRS_JSON=$(gh search prs --repo="$REPO" --updated="$SINCE..$UNTIL" --state=open \
   --json number,title,url,author,headRefOid,body --limit 20 2>/dev/null || echo '[]')
 

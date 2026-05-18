@@ -36,7 +36,7 @@ team-digest/
 ├── config.json                       # Gitignored - your Notion IDs + structural settings
 ├── profiles/
 │   ├── team-digest.template.md         # Committed minimal placeholder (copied by setup.sh)
-│   ├── team-digest.example.md          # Committed Solutions Architect worked example (iter-2)
+│   ├── team-digest.example.md          # Committed Solutions Architect worked example
 │   └── team-digest.md                  # Gitignored - your personalized profile
 ├── skills/
 │   ├── team-digest/                    # Daily digest
@@ -51,12 +51,12 @@ team-digest/
 │   │       ├── fetch-gh-commits.sh   # GitHub commits on a date (for spec sets w/o RSS)
 │   │       ├── fetch-hip-updates.sh  # HIPs touched on a date in the HIP repo (+ status detection)
 │   │       ├── fetch-hip-implementation-prs.sh  # Per-HIP cross-repo PR/commit search (Mechanism B)
-│   │       ├── fetch-hip-release-refs.sh        # Strategy 2 - release-note analysis (iter-2)
-│   │       ├── fetch-hip-timeline-correlations.sh  # Strategy 3 - timeline correlation (iter-2)
+│   │       ├── fetch-hip-release-refs.sh        # Strategy 2 - release-note analysis
+│   │       ├── fetch-hip-timeline-correlations.sh  # Strategy 3 - timeline correlation
 │   │       ├── extract-hip-refs.sh   # Extract HIP-N patterns from arbitrary text on stdin
 │   │       ├── refresh-hip-index.sh  # Maintain known-HIPs index for false-positive filtering
-│   │       ├── calibrate-hip-matches.sh  # Precision/recall/F1 vs labeled set (iter-2)
-│   │       ├── phase2-gate.sh        # Phase 2 (Strategy 4) gate decision (iter-2)
+│   │       ├── calibrate-hip-matches.sh  # Precision/recall/F1 vs labeled set
+│   │       ├── strategy4-gate.sh        # Strategy 4 gate decision (calibration-driven)
 │   │       └── README.md             # Helper inventory and conventions
 │   └── team-weekly/                    # Weekly rollup of dailies
 │       ├── SKILL.md                  # Reads dailies from Notion DB, synthesizes cross-day themes
@@ -98,19 +98,20 @@ Each source is independent; if one fails, the rest still run and the digest is p
 
 ### HIP Pipeline (Step 2.3)
 
-As of iteration 2, the pipeline runs in five phases that emit matches into a unified `MatchRecord` schema with `(hip_id, repo, pr_number)` dedup key and `confidence: high|medium|low`:
+The HIP pipeline emits matches into a unified `MatchRecord` schema with `(hip_id, repo, pr_number)` dedup key and `confidence: high|medium|low`. Five match-producing stages run, then a deterministic consolidation step merges their output:
 
-- **Phase 1** - `lib/fetch-hip-updates.sh` finds HIPs touched on the digest day in `hiero-ledger/hiero-improvement-proposals`, with status-change detection.
-- **Phase 2 (Mechanism B)** - top-N HIPs (ranked status-changed-first, capped by `max_hips_with_implementation_expansion`) get a per-HIP `gh search` across `hip_tracking.implementation_orgs`. Emits `confidence: high` for every hit because the search query was HIP-N itself.
-- **Phase 2b (Strategy 2 - release-note analysis)** - `lib/fetch-hip-release-refs.sh` scans release notes from implementation_orgs repos for HIP references. `high` if HIP-N is in the release tag, `medium` if only in the body. PRs attributed via compare-against-prev-tag commit-message parsing.
-- **Phase 2c (Strategy 3 - timeline correlation)** - `lib/fetch-hip-timeline-correlations.sh` runs one batched `gh search prs` per org with the HIP-N OR keyword-from-HIP-title disjunction. Per-org budget + 429 backoff; rate-limit-after-retries emits a graceful `source: "s3_skipped"` record without crashing. Scores ≥ 3 keyword overlap → `medium`; 1-2 + category-tiebreaker repo match → `low`.
-- **Phase 3 + 3b (cross-link + MAX-confidence merge)** - dedup by `(hip_id, repo, pr_number)`; MAX confidence wins; union `sources[]` and `per_source` maps. Mechanism A (regex annotation in `fetch-github-prs.sh` / `fetch-github-issues.sh`) emits `(high)` inline confidence labels that get parsed into the same MatchRecord shape.
-- **Phase 3c (verbose filter)** - read `TEAM_DIGEST_HIP_VERBOSE` (default `0`); render only `confidence: high` in the main HIP Activity section. With `=1`, append a `### Lower-Confidence Matches` H3 subsection with medium and low matches plus `s3_skipped` records.
-- **Phase 3d + Step 5.0 (matches.json + calibration)** - the merged list emits as a peer JSON file alongside the dry-run safety file at `${SAFETY_PATH%.md}-matches.json`. `lib/calibrate-hip-matches.sh --current-only` then runs and warns on stderr if the calibration baseline is >180 days old.
+- **HIP detection** - `lib/fetch-hip-updates.sh` finds HIPs touched on the digest day in `hiero-ledger/hiero-improvement-proposals`, with status-change detection.
+- **Mechanism A (regex annotation)** - inline in `fetch-github-prs.sh` / `fetch-github-issues.sh`. Emits `(high)` inline confidence labels parsed into MatchRecord shape.
+- **Mechanism B (per-HIP search)** - top-N HIPs (ranked status-changed-first, capped by `max_hips_with_implementation_expansion`) get a per-HIP `gh search` across `hip_tracking.implementation_orgs`. Emits `confidence: high` for every hit because the search query was HIP-N itself.
+- **Strategy 2 (release-note analysis)** - `lib/fetch-hip-release-refs.sh` scans release notes from implementation_orgs repos for HIP references. `high` if HIP-N is in the release tag, `medium` if only in the body. PRs attributed via compare-against-prev-tag commit-message parsing.
+- **Strategy 3 (timeline correlation)** - `lib/fetch-hip-timeline-correlations.sh` runs one batched `gh search prs` per org with the HIP-N OR keyword-from-HIP-title disjunction. Per-org budget + 429 backoff; rate-limit-after-retries emits a graceful `source: "s3_skipped"` record without crashing. Scores ≥ 3 keyword overlap → `medium`; 1-2 + category-tiebreaker repo match → `low`.
+- **Sidecar consolidation** - each match-producer writes structured JSON sidecars into `$TEAM_DIGEST_MATCHES_DIR`. After Claude exits, `bin/team-digest-run.sh` invokes `lib/consolidate-matches.sh` to dedup by `(hip_id, repo, pr_number)` with MAX-confidence rule, union `sources[]` + `per_source` maps. Moving the merge out of Claude's in-context state into deterministic shell prevents data loss under high PR volume.
+- **Verbose filter** - read `TEAM_DIGEST_HIP_VERBOSE` (default `0`); render only `confidence: high` in the main HIP Activity section. With `=1`, append a `### Lower-Confidence Matches` H3 subsection with medium and low matches plus `s3_skipped` records.
+- **Calibration** - `lib/calibrate-hip-matches.sh --current-only` runs after consolidation and warns on stderr if the calibration baseline is >180 days old.
 
-The whole pipeline gates on `hip_tracking.enabled: true` in config (default), with an additional opt-out via the `TEAM_DIGEST_HIP_ENABLED=0` env var. The `lib/refresh-hip-index.sh` helper maintains the weekly-refreshed known-HIPs index at `~/.config/team-digest/hip-numbers.txt`; iteration 2 widened the HIP-N regex to `\d{1,5}` and added a placeholder blocklist (HIP-0000, HIP-9999).
+The whole pipeline gates on `hip_tracking.enabled: true` in config (default), with an additional opt-out via the `TEAM_DIGEST_HIP_ENABLED=0` env var. The `lib/refresh-hip-index.sh` helper maintains the weekly-refreshed known-HIPs index at `~/.config/team-digest/hip-numbers.txt`; the HIP-N regex matches `\d{1,5}` with a placeholder blocklist (HIP-0000, HIP-9999) to avoid false positives.
 
-**Phase 2 gate (Strategy 4):** the LLM-driven Strategy 4 is gated by `lib/phase2-gate.sh` against a strategy-independent labeled set at `~/.config/team-digest/hip-code-mapper-labeled-set.json`. State machine: `DEFERRED_AWAITING_BASELINE` → `DEFER` (Phase 1 met `recall >= 0.7 AND missed <= 5`) or `TRIGGER` (otherwise). Strategy 4 ships only on `TRIGGER`.
+**Strategy 4 gate:** the LLM-driven Strategy 4 is gated by `lib/strategy4-gate.sh` against a strategy-independent labeled set at `~/.config/team-digest/hip-code-mapper-labeled-set.json`. State machine: `DEFERRED_AWAITING_BASELINE` → `DEFER` (calibration met `recall >= 0.7 AND missed <= 5` on the `useful_signal` lens) or `TRIGGER` (otherwise). Strategy 4 ships only on `TRIGGER`.
 
 ### Team Profile System
 
