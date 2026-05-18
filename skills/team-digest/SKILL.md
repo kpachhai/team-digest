@@ -561,9 +561,17 @@ bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$DA
 
 Capture each as JSON.
 
+**Phase 2b — Strategy 2 (release-note analysis):**
+
+```bash
+bash ~/.claude/skills/team-digest/lib/fetch-hip-release-refs.sh "$DATE_LABEL"
+```
+
+Capture stdout as a JSON array of MatchRecord entries (`{hip_id, repo, pr_number, confidence, sources: ["s2"], per_source.s2.reason: "in_tag"|"in_body", release_tag, release_url}`). Empty array `[]` → no release-note HIP signal today; continue. Non-zero exit → log inline `(Strategy 2: <error>)` and continue with the rest of HIP Activity (do NOT abort the digest on a single-strategy failure).
+
 **Phase 3 — cross-link with Step 2 data:**
 
-For each PR returned by Phase 2: if the same PR (by `url`) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-Phase-1))`.
+For each PR returned by Phase 2 or Phase 2b: if the same PR (by `url` or `(repo, pr_number)` tuple) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-Phase-1))`.
 
 **Render the HIP Activity section** under each org header in `hip_tracking.implementation_orgs`, BEFORE the Priority Repos subsection. See the entry shapes in `TEMPLATE.md` for the exact format (Tier 1 / Tier 2 / Tier 2b / overflow).
 

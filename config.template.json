@@ -31,7 +31,15 @@
       "implementation_orgs": ["hiero-ledger"],
       "implementation_orgs_help": "Orgs to search for HIP-referencing PRs/commits (Mechanism B). Defaults to hiero-ledger; add others if your team's integration repos reference HIPs.",
       "max_hips_with_implementation_expansion": 10,
-      "max_hips_with_implementation_expansion_help": "Cap on how many of today's touched HIPs get full implementation-PR lookup. HIPs above this cap appear in an 'Other HIPs touched today' overflow list without implementation expansion."
+      "max_hips_with_implementation_expansion_help": "Cap on how many of today's touched HIPs get full implementation-PR lookup. HIPs above this cap appear in an 'Other HIPs touched today' overflow list without implementation expansion.",
+      "strategy2": {
+        "max_refs_per_release": 50,
+        "max_refs_per_release_help": "Cap on HIP references extracted from a single release (tag/name + body). Overflow logs a [Notice] and is truncated.",
+        "max_backfill_days": 30,
+        "max_backfill_days_help": "Cap on --backfill N days for fetch-hip-release-refs.sh. Larger windows require --force-backfill.",
+        "max_pr_attribution_lookups_per_release": 10
+      },
+      "strategy2_help": "Strategy 2 (release-note analysis) settings. Scans release notes from implementation_orgs repos for HIP references; high confidence if HIP-N is in tag/name, medium if only in body. See docs/hip-tracking.md."
     },
     "defaults": {
       "keywords": [],
