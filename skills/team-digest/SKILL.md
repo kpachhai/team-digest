@@ -569,9 +569,21 @@ bash ~/.claude/skills/team-digest/lib/fetch-hip-release-refs.sh "$DATE_LABEL"
 
 Capture stdout as a JSON array of MatchRecord entries (`{hip_id, repo, pr_number, confidence, sources: ["s2"], per_source.s2.reason: "in_tag"|"in_body", release_tag, release_url}`). Empty array `[]` → no release-note HIP signal today; continue. Non-zero exit → log inline `(Strategy 2: <error>)` and continue with the rest of HIP Activity (do NOT abort the digest on a single-strategy failure).
 
+**Phase 2c — Strategy 3 (timeline correlation):**
+
+```bash
+bash ~/.claude/skills/team-digest/lib/fetch-hip-timeline-correlations.sh "$DATE_LABEL"
+```
+
+Capture stdout as a JSON array of MatchRecord entries (`{hip_id, repo, pr_number, confidence, sources: ["s3"], per_source.s3.reason: <keyword_overlap_3plus | keyword_overlap_1or2_plus_category_tiebreak | high-volume area (downgraded)>, matched_keywords, category_tiebreak?}`). The helper batches one `gh search prs` call per org (HIP-N OR <keywords>), respects `strategy3.per_org_search_budget` with exponential 1s/2s/4s backoff on 429 responses, applies the `noise_ceiling_commits_per_day` downgrade for high-volume repos, and emits a single `source: "s3_skipped"` record on rate-limit-after-3-retries instead of crashing. Same non-fatal contract as Phase 2b.
+
 **Phase 3 — cross-link with Step 2 data:**
 
-For each PR returned by Phase 2 or Phase 2b: if the same PR (by `url` or `(repo, pr_number)` tuple) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-Phase-1))`.
+For each PR returned by Phase 2, Phase 2b, or Phase 2c: if the same PR (by `url` or `(repo, pr_number)` tuple) appeared in Step 2's `fetch-github-prs.sh` output (it would have a `Linked HIPs:` annotation), mark it as "already shown in priority-repo narrative below." When writing the priority-repo narrative, add a backlink for that PR: `(implements [HIP-N](raw_url-from-Phase-1))`.
+
+**Phase 3b — MAX-confidence dedup merge:**
+
+Combine the MatchRecord arrays from Mechanism A (extracted from Step 2's `Linked HIPs:` annotations), Mechanism B (Phase 2 output), Strategy 2 (Phase 2b output), Strategy 3 (Phase 2c output) using dedup key `(hip_id, repo, pr_number)`. When two records share the dedup key, MAX their confidence (high > medium > low) and union their `sources[]` and `per_source` maps. The merged-and-deduped list is what gets rendered in the HIP Activity section.
 
 **Render the HIP Activity section** under each org header in `hip_tracking.implementation_orgs`, BEFORE the Priority Repos subsection. See the entry shapes in `TEMPLATE.md` for the exact format (Tier 1 / Tier 2 / Tier 2b / overflow).
 

@@ -39,7 +39,32 @@
         "max_backfill_days_help": "Cap on --backfill N days for fetch-hip-release-refs.sh. Larger windows require --force-backfill.",
         "max_pr_attribution_lookups_per_release": 10
       },
-      "strategy2_help": "Strategy 2 (release-note analysis) settings. Scans release notes from implementation_orgs repos for HIP references; high confidence if HIP-N is in tag/name, medium if only in body. See docs/hip-tracking.md."
+      "strategy2_help": "Strategy 2 (release-note analysis) settings. Scans release notes from implementation_orgs repos for HIP references; high confidence if HIP-N is in tag/name, medium if only in body. See docs/hip-tracking.md.",
+      "strategy3": {
+        "max_correlation_hips": 10,
+        "max_correlation_hips_help": "Cap on how many status-changed HIPs Strategy 3 correlates against PRs per run.",
+        "per_org_search_budget": 10,
+        "per_org_search_budget_help": "Cap on gh search calls per org per run. Exponential 1s/2s/4s backoff on 429; after 3 retries, the org is skipped with a s3_skipped MatchRecord.",
+        "noise_ceiling_commits_per_day": 20,
+        "noise_ceiling_commits_per_day_help": "Repos with more than N commits on the digest day get their Strategy 3 matches downgraded to low confidence (high-volume area, attribution ambiguous).",
+        "category_to_repos": {
+          "HTS": ["hiero-ledger/hiero-consensus-node", "hiero-ledger/hiero-contracts"],
+          "HSS": ["hiero-ledger/hiero-contracts", "hiero-ledger/hiero-consensus-node"],
+          "HCS": ["hiero-ledger/hiero-consensus-node"],
+          "Mirror Node": ["hiero-ledger/hiero-mirror-node"],
+          "SDK": [
+            "hiero-ledger/hiero-sdk-js",
+            "hiero-ledger/hiero-sdk-java",
+            "hiero-ledger/hiero-sdk-go",
+            "hiero-ledger/hiero-sdk-cpp",
+            "hiero-ledger/hiero-sdk-python",
+            "hiero-ledger/hiero-sdk-rust",
+            "hiero-ledger/hiero-sdk-swift"
+          ]
+        },
+        "category_to_repos_help": "Tiebreaker map used when Strategy 3 keyword overlap is 1-2 tokens. If a candidate PR's repo is in the list for the HIP's category, the match is emitted as low confidence; otherwise the match is dropped."
+      },
+      "strategy3_help": "Strategy 3 (timeline correlation) settings. Searches past-7d PRs in implementation_orgs that mention HIP-N or share keywords with the HIP title. Falls back to category-to-repo tiebreaker when keyword overlap is 1-2. See docs/hip-tracking.md."
     },
     "defaults": {
       "keywords": [],
