@@ -76,14 +76,27 @@ with open(matches_path) as f:
 
 
 def in_window(entry):
-    """Return True if the entry's pr_merged_at falls in the window. Entries
-    without pr_merged_at are treated as in-scope by default (back-compat)."""
+    """Return True if the entry's pr_merged_at OR any
+    attributed_to_releases date falls in the window. Entries without any
+    date are treated as in-scope by default (back-compat).
+
+    F6 (iteration 6): the attributed_to_releases list captures Strategy 2's
+    semantic - a PR may have merged before the window but be attributed to
+    a release published in the window. Without this, S2's true positives
+    are systematically under-counted because pr_merged_at is too narrow."""
     if not window_active:
         return True
+    candidate_dates = []
     merged_at = entry.get("pr_merged_at")
-    if not merged_at:
-        return True  # back-compat: no date -> assume in scope
-    return window_start <= merged_at <= window_end
+    if merged_at:
+        candidate_dates.append(merged_at)
+    attributions = entry.get("attributed_to_releases") or []
+    for d in attributions:
+        if d:
+            candidate_dates.append(d)
+    if not candidate_dates:
+        return True  # back-compat: no date metadata -> assume in scope
+    return any(window_start <= d <= window_end for d in candidate_dates)
 
 
 # Two label sets per "lens":
