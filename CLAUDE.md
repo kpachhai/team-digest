@@ -35,12 +35,13 @@ team-digest/
 ├── config.template.json              # Committed config template
 ├── config.json                       # Gitignored - your Notion IDs + structural settings
 ├── profiles/
-│   ├── team-digest.template.md         # Committed team profile template
+│   ├── team-digest.template.md         # Committed minimal placeholder (copied by setup.sh)
+│   ├── team-digest.example.md          # Committed Solutions Architect worked example (iter-2)
 │   └── team-digest.md                  # Gitignored - your personalized profile
 ├── skills/
 │   ├── team-digest/                    # Daily digest
 │   │   ├── SKILL.md                  # Skill body: orchestration + MCP calls + writing rules
-│   │   └── lib/                      # Shell helpers (no MCP - those only work inside Claude)
+│   │   └── lib/                      # 15 shell helpers (no MCP - those only work inside Claude)
 │   │       ├── compute-window.sh     # Resolve date arg → DATE_LABEL/START/END
 │   │       ├── load-config.sh        # Read + validate config.json (used by team-weekly too)
 │   │       ├── fetch-github-prs.sh   # gh search prs + python parsing
@@ -50,8 +51,12 @@ team-digest/
 │   │       ├── fetch-gh-commits.sh   # GitHub commits on a date (for spec sets w/o RSS)
 │   │       ├── fetch-hip-updates.sh  # HIPs touched on a date in the HIP repo (+ status detection)
 │   │       ├── fetch-hip-implementation-prs.sh  # Per-HIP cross-repo PR/commit search (Mechanism B)
+│   │       ├── fetch-hip-release-refs.sh        # Strategy 2 - release-note analysis (iter-2)
+│   │       ├── fetch-hip-timeline-correlations.sh  # Strategy 3 - timeline correlation (iter-2)
 │   │       ├── extract-hip-refs.sh   # Extract HIP-N patterns from arbitrary text on stdin
 │   │       ├── refresh-hip-index.sh  # Maintain known-HIPs index for false-positive filtering
+│   │       ├── calibrate-hip-matches.sh  # Precision/recall/F1 vs labeled set (iter-2)
+│   │       ├── phase2-gate.sh        # Phase 2 (Strategy 4) gate decision (iter-2)
 │   │       └── README.md             # Helper inventory and conventions
 │   └── team-weekly/                    # Weekly rollup of dailies
 │       ├── SKILL.md                  # Reads dailies from Notion DB, synthesizes cross-day themes
@@ -93,11 +98,23 @@ Each source is independent; if one fails, the rest still run and the digest is p
 
 ### HIP Pipeline (Step 2.3)
 
-The daily skill scans `hiero-ledger/hiero-improvement-proposals` for HIPs touched on the digest day via `lib/fetch-hip-updates.sh`, then for the top 10 touched HIPs (ranked status-changed-first), searches `hiero-ledger/*` for PRs and commits that reference each HIP via `lib/fetch-hip-implementation-prs.sh` (Mechanism B). Existing `lib/fetch-github-prs.sh` and `lib/fetch-github-issues.sh` annotate each PR/issue with `Linked HIPs: HIP-N` when the body or title matches the HIP regex (Mechanism A). The `lib/refresh-hip-index.sh` helper maintains a weekly-refreshed list of known HIP numbers at `~/.config/team-digest/hip-numbers.txt` to filter false-positive regex matches. The whole pipeline gates on `hip_tracking.enabled: true` in config (default), with an additional opt-out via the `TEAM_DIGEST_HIP_ENABLED=0` env var.
+As of iteration 2, the pipeline runs in five phases that emit matches into a unified `MatchRecord` schema with `(hip_id, repo, pr_number)` dedup key and `confidence: high|medium|low`:
+
+- **Phase 1** - `lib/fetch-hip-updates.sh` finds HIPs touched on the digest day in `hiero-ledger/hiero-improvement-proposals`, with status-change detection.
+- **Phase 2 (Mechanism B)** - top-N HIPs (ranked status-changed-first, capped by `max_hips_with_implementation_expansion`) get a per-HIP `gh search` across `hip_tracking.implementation_orgs`. Emits `confidence: high` for every hit because the search query was HIP-N itself.
+- **Phase 2b (Strategy 2 - release-note analysis)** - `lib/fetch-hip-release-refs.sh` scans release notes from implementation_orgs repos for HIP references. `high` if HIP-N is in the release tag, `medium` if only in the body. PRs attributed via compare-against-prev-tag commit-message parsing.
+- **Phase 2c (Strategy 3 - timeline correlation)** - `lib/fetch-hip-timeline-correlations.sh` runs one batched `gh search prs` per org with the HIP-N OR keyword-from-HIP-title disjunction. Per-org budget + 429 backoff; rate-limit-after-retries emits a graceful `source: "s3_skipped"` record without crashing. Scores ≥ 3 keyword overlap → `medium`; 1-2 + category-tiebreaker repo match → `low`.
+- **Phase 3 + 3b (cross-link + MAX-confidence merge)** - dedup by `(hip_id, repo, pr_number)`; MAX confidence wins; union `sources[]` and `per_source` maps. Mechanism A (regex annotation in `fetch-github-prs.sh` / `fetch-github-issues.sh`) emits `(high)` inline confidence labels that get parsed into the same MatchRecord shape.
+- **Phase 3c (verbose filter)** - read `TEAM_DIGEST_HIP_VERBOSE` (default `0`); render only `confidence: high` in the main HIP Activity section. With `=1`, append a `### Lower-Confidence Matches` H3 subsection with medium and low matches plus `s3_skipped` records.
+- **Phase 3d + Step 5.0 (matches.json + calibration)** - the merged list emits as a peer JSON file alongside the dry-run safety file at `${SAFETY_PATH%.md}-matches.json`. `lib/calibrate-hip-matches.sh --current-only` then runs and warns on stderr if the calibration baseline is >180 days old.
+
+The whole pipeline gates on `hip_tracking.enabled: true` in config (default), with an additional opt-out via the `TEAM_DIGEST_HIP_ENABLED=0` env var. The `lib/refresh-hip-index.sh` helper maintains the weekly-refreshed known-HIPs index at `~/.config/team-digest/hip-numbers.txt`; iteration 2 widened the HIP-N regex to `\d{1,5}` and added a placeholder blocklist (HIP-0000, HIP-9999).
+
+**Phase 2 gate (Strategy 4):** the LLM-driven Strategy 4 is gated by `lib/phase2-gate.sh` against a strategy-independent labeled set at `~/.config/team-digest/hip-code-mapper-labeled-set.json`. State machine: `DEFERRED_AWAITING_BASELINE` → `DEFER` (Phase 1 met `recall >= 0.7 AND missed <= 5`) or `TRIGGER` (otherwise). Strategy 4 ships only on `TRIGGER`.
 
 ### Team Profile System
 
-Profiles (`profiles/*.template.md`) describe a team's role, priorities, and what "relevant" means. Claude reads the profile to write contextual "Relevance" paragraphs in the digest. Only the generic `team-digest.template.md` is committed; personalized copies (without `.template` suffix) and any team-specific templates are gitignored.
+Profiles describe a team's role, priorities, and what "relevant" means. Claude reads the profile to write contextual "Relevance" paragraphs in the digest. Two committed files: `team-digest.template.md` is a minimal placeholder (setup.sh copies it to `team-digest.md` on first run); `team-digest.example.md` is a worked Solutions Architect example users can copy over if their team shape matches. Personalized copies (without `.template`/`.example` suffix) and any team-specific files are gitignored.
 
 ## Conventions
 
