@@ -22,7 +22,7 @@ team-digest/
 │   │   └── lib/           # compute-window, load-config, fetch-github-*, fetch-rss, fetch-gh-commits,
 │   │                       # fetch-hip-* (4 helpers: updates, implementation-prs, release-refs,
 │   │                       # timeline-correlations), extract-hip-refs, refresh-hip-index,
-│   │                       # calibrate-hip-matches, phase2-gate (15 helpers total)
+│   │                       # consolidate-matches, calibrate-hip-matches, strategy4-gate (16 helpers total)
 │   └── team-weekly/         # Weekly rollup of daily digests
 │       ├── SKILL.md       # Reads dailies from Notion, synthesizes cross-day themes
 │       └── lib/           # compute-week-window
@@ -87,6 +87,14 @@ Pages found through multiple sources are deduplicated by page ID across sections
 - **Day-by-Day Index** - one linked entry per daily for fast navigation
 
 Critically, `/team-weekly` does NOT re-scan GitHub, Notion, or RSS - the dailies have already done that work. The weekly is a pure synthesis layer over the daily output, which keeps token cost bounded and avoids drift between what each cadence "saw."
+
+### Under the hood
+
+Three architectural pieces are worth knowing about before reading the skill bodies. Full deep-dive in [docs/architecture.md](docs/architecture.md):
+
+- **Deterministic matches.json consolidation.** Every HIP match-producing helper (`fetch-github-prs.sh`, `fetch-github-issues.sh`, `fetch-hip-implementation-prs.sh`, `fetch-hip-release-refs.sh`, `fetch-hip-timeline-correlations.sh`) writes structured JSON sidecars to `$TEAM_DIGEST_MATCHES_DIR` during the run. After Claude exits, `bin/team-digest-run.sh` invokes `consolidate-matches.sh` to merge them with MAX-confidence dedup on `(hip_id, repo, pr_number)`. Moving the merge out of Claude's in-context state into deterministic shell prevents data loss under high PR volume.
+- **`pr_lookback_days` window knob.** `github.pr_lookback_days` (default `0`) widens the PR/issue scan backward by N days while keeping releases on the digest day. Use `7` for weekly-catchup runs or to surface PRs that merged earlier in the week. Each PR gets a `(merged YYYY-MM-DD)` annotation so readers distinguish today's signal from backfill.
+- **Two-lens calibration + Strategy 4 gate.** `calibrate-hip-matches.sh` measures precision/recall/F1 against a labeled set under two lenses: `implementation` (narrow, production-codebase code change) and `useful_signal` (broader, includes HIP-doc-update PRs). `strategy4-gate.sh` uses the `useful_signal` lens to decide whether to unlock Strategy 4 (LLM identifier-generation). The gate writes `~/.config/team-digest/strategy4-gate-decision.json` with one of `DEFERRED_AWAITING_BASELINE`, `DEFER`, or `TRIGGER`.
 
 ### Quick Start (under 10 minutes)
 

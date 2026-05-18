@@ -122,3 +122,12 @@ Each team's config key matches its skill directory name. Multiple digests coexis
 | GitHub rate limiting | Run `gh api rate_limit --jq '.rate'` to check. Normal digest uses ~45 API calls; limit is 5,000/hour. |
 | Want to change Notion IDs | Run `/team-digest setup` to update |
 | Duplicate digest pages | Check database before running manually. Automated runs have Status: "Auto". |
+
+## See also
+
+- [`docs/architecture.md`](architecture.md) - under-the-hood explainer: daily pipeline phases, HIP matching subsystem, sidecar consolidation, calibration loop
+- [`docs/configuration.md`](configuration.md) - every config knob with defaults and trade-offs
+- [`docs/hip-tracking.md`](hip-tracking.md) - HIP Activity behavior, confidence model, verbose mode, opt-out
+- [`docs/scheduling.md`](scheduling.md) - launchd plist and cron syntax for production scheduling
+- [`docs/troubleshooting.md`](troubleshooting.md) - empty section recovery, `--from-file` recovery, rate-limit handling
+- [`docs/roadmap.md`](roadmap.md) - shipped capabilities and parked items

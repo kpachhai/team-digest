@@ -69,7 +69,7 @@ Run on Monday morning, after Friday's daily had a chance to land. macOS launchd 
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/YOUR_USERNAME/.local/bin/team-weekly-run.sh</string>
+    <string>/Users/YOUR_USERNAME/.local/bin/team-weekly-run.sh</string> <!-- pii-allow:launchd-placeholder -->
   </array>
 
   <!-- Mondays at 9:00 AM local time -->
@@ -83,10 +83,10 @@ Run on Monday morning, after Friday's daily had a chance to land. macOS launchd 
   </array>
 
   <key>StandardOutPath</key>
-  <string>/Users/YOUR_USERNAME/.local/log/team-weekly-launchd.log</string>
+  <string>/Users/YOUR_USERNAME/.local/log/team-weekly-launchd.log</string> <!-- pii-allow:launchd-placeholder -->
 
   <key>StandardErrorPath</key>
-  <string>/Users/YOUR_USERNAME/.local/log/team-weekly-launchd.log</string>
+  <string>/Users/YOUR_USERNAME/.local/log/team-weekly-launchd.log</string> <!-- pii-allow:launchd-placeholder -->
 
   <key>RunAtLoad</key>
   <false/>
@@ -111,3 +111,11 @@ Filter the database view by `Digest Type` to separate weekly rollups from daily 
 - **No dailies in window** - skill aborts with a clear message. Generate the dailies first via `/team-digest <date>` for each missing day.
 - **Some dailies missing (e.g., Wednesday's run was skipped)** - skill produces a partial weekly with a "no daily digest run" note in the Day-by-Day Index. Synthesis proceeds with the days that ARE present.
 - **A daily-fetch fails (page deleted or moved)** - skill notes the gap and synthesizes from the rest.
+
+## See also
+
+- [`docs/architecture.md`](architecture.md) - under-the-hood explainer including why team-weekly is a synthesis layer over the dailies, not a parallel scanner
+- [`docs/configuration.md`](configuration.md) - shared configuration with team-digest (no separate config block needed)
+- [`docs/team-digest-quickstart.md`](team-digest-quickstart.md) - set up the daily skill first; weekly depends on dailies already being in Notion
+- [`docs/scheduling.md`](scheduling.md) - launchd plist and cron syntax for production scheduling
+- [`docs/troubleshooting.md`](troubleshooting.md) - common failure modes and recovery paths
