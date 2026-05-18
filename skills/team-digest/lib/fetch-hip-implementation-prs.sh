@@ -98,5 +98,20 @@ commits = [
     }
     for c in commits_raw[:20]
 ]
-print(json.dumps({'hip': hip_n, 'prs': prs, 'commits': commits}, indent=2))
+output = {'hip': hip_n, 'prs': prs, 'commits': commits}
+print(json.dumps(output, indent=2))
+
+# F5.3 sidecar: also write to $TEAM_DIGEST_MATCHES_DIR if set, so the
+# wrapper's consolidator can read Mech B records deterministically without
+# requiring Claude to dump captured stdout to disk at Phase 3d.
+matches_dir = os.environ.get('TEAM_DIGEST_MATCHES_DIR', '')
+if matches_dir:
+    try:
+        os.makedirs(matches_dir, exist_ok=True)
+        out_path = os.path.join(matches_dir, f'mech_b-hip-{hip_n}.json')
+        with open(out_path, 'w') as f:
+            json.dump(output, f, indent=2)
+        print(f'(structured mech_b sidecar: {out_path})', file=sys.stderr)
+    except Exception as e:
+        print(f'WARN: failed to write mech_b sidecar to {matches_dir}: {e}', file=sys.stderr)
 PY

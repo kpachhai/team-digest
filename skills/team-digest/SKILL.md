@@ -619,24 +619,19 @@ The H3 subsection is contained within the H2 `## HIP Activity` boundary, so the 
 
 Pass-through for `s3_skipped` records: these were emitted by Strategy 3 when an org hit rate-limit retries. Render them in the verbose subsection only, with a special row form `_Strategy 3 skipped for <org>/_meta — <reason>_` (no PR link, no HIP-N link). In default (non-verbose) mode, omit `s3_skipped` records entirely.
 
-**Phase 3d — persist Mech B / Strategy 2 / Strategy 3 outputs to `$TEAM_DIGEST_MATCHES_DIR`:**
+**Phase 3d — match-record sidecars (FULLY AUTOMATIC, no skill-body action required):**
 
-F5 (iteration 5) moved the canonical matches.json merge from in-Claude-context to a deterministic on-disk consolidation. The Mech A sidecars are written automatically by `fetch-github-prs.sh` / `fetch-github-issues.sh` because the `$TEAM_DIGEST_MATCHES_DIR` env var is exported (see Step 1). For the other strategies, write their captured JSON outputs to the same dir:
+F5.3 (iteration 5) made every match-producing helper write structured JSON sidecars to `$TEAM_DIGEST_MATCHES_DIR` directly. By the time the helpers in Phase 2 / 2b / 2c return, the dir contains:
 
-```bash
-# Mech B - dispatched in Phase 2; each (hip, date) call returned JSON.
-# Concatenate all those outputs into a single JSON array file. The
-# consolidator handles the {hip, prs, commits} Mech B shape.
-echo '<JSON array of all Mech B outputs combined>' > "$TEAM_DIGEST_MATCHES_DIR/mech_b.json"
+- `mech_a-prs-<org>.json` (one per github org) — from `fetch-github-prs.sh`
+- `mech_a-issues-<org>.json` (one per github org) — from `fetch-github-issues.sh`
+- `mech_b-hip-<N>.json` (one per touched HIP) — from `fetch-hip-implementation-prs.sh`
+- `strategy2.json` (one file total) — from `fetch-hip-release-refs.sh`
+- `strategy3.json` (one file total) — from `fetch-hip-timeline-correlations.sh`
 
-# Strategy 2 - the JSON array captured from Phase 2b.
-echo '<Strategy 2 JSON array>' > "$TEAM_DIGEST_MATCHES_DIR/strategy2.json"
+**You do NOT need to write anything to `$TEAM_DIGEST_MATCHES_DIR` from the skill body.** The helpers handled it.
 
-# Strategy 3 - the JSON array captured from Phase 2c.
-echo '<Strategy 3 JSON array>' > "$TEAM_DIGEST_MATCHES_DIR/strategy3.json"
-```
-
-The dir already contains `mech_a-prs-<org>.json` and `mech_a-issues-<org>.json` for each org scanned in Step 2 (helpers wrote them automatically). Step 5.0 consolidates everything; no in-context merge required here.
+After this phase, the dir is the canonical source of truth for matches. The wrapper (`bin/team-digest-run.sh`) calls `consolidate-matches.sh` on this dir after the skill returns; see Step 5.0 below.
 
 To re-baseline (one-shot, run by the maintainer outside the daily cron):
 

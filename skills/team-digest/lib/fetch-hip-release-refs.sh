@@ -224,4 +224,13 @@ if [ "$errcount" -gt 0 ]; then
   echo "WARN: $errcount errors during Strategy 2 release-note analysis (rate limit, auth, or missing endpoints)" >&2
 fi
 
+# F5.3 sidecar: also write to $TEAM_DIGEST_MATCHES_DIR if set, so the
+# wrapper's consolidator can read Strategy 2 records deterministically.
+if [ -n "${TEAM_DIGEST_MATCHES_DIR:-}" ]; then
+  mkdir -p "$TEAM_DIGEST_MATCHES_DIR" 2>/dev/null && \
+    cp "$RESULTS_FILE" "$TEAM_DIGEST_MATCHES_DIR/strategy2.json" 2>/dev/null && \
+    echo "(structured strategy2 sidecar: $TEAM_DIGEST_MATCHES_DIR/strategy2.json)" >&2 || \
+    echo "WARN: failed to write strategy2 sidecar to $TEAM_DIGEST_MATCHES_DIR" >&2
+fi
+
 cat "$RESULTS_FILE"
