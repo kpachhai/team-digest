@@ -596,26 +596,9 @@ The H3 subsection is contained within the H2 `## HIP Activity` boundary, so the 
 
 Pass-through for `s3_skipped` records: these were emitted by Strategy 3 when an org hit rate-limit retries. Render them in the verbose subsection only, with a special row form `_Strategy 3 skipped for <org>/_meta — <reason>_` (no PR link, no HIP-N link). In default (non-verbose) mode, omit `s3_skipped` records entirely.
 
-**Phase 3d — emit matches.json + run --current-only calibration:**
+**Phase 3d — hold the merged matches list for Step 5 finalize:**
 
-The dedup-merged match list is the canonical iteration-2 artifact. Emit it as a peer file alongside the dry-run safety file at `${SAFETY_PATH%.md}-matches.json` so the calibration helper can consume it.
-
-```python
-# Inline-python at SKILL.md execution time. matches_merged is the list-of-dicts
-# from Phase 3b after the MAX-confidence dedup. SAFETY_PATH is set in Step 5.
-import json, os
-matches_json_path = SAFETY_PATH.removesuffix(".md") + "-matches.json"
-with open(matches_json_path, "w") as f:
-    json.dump(matches_merged, f, indent=2)
-```
-
-Then invoke the calibration helper in `--current-only` mode to emit a per-strategy match-count distribution + drift-warning if the baseline is stale (>180 days). Non-fatal: a calibration warning is a `[Notice]` in the digest header, not a digest-abort.
-
-```bash
-bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --current-only "$SAFETY_PATH"
-```
-
-Capture stderr; if it contains a `[WARN] HIP calibration baseline is ... old` line, surface it as a `[Notice]` in the digest header so the maintainer notices.
+Hold the dedup-merged matches list in conversation context. Do NOT write it to disk yet — the canonical artifact path depends on `$SAFETY_PATH`, which is determined in Step 5 (the v-counter loop picks the next free version number). Step 5 below has an iteration-2 sub-step that writes the matches list to `${SAFETY_PATH%.md}-matches.json` alongside the safety file, then invokes `calibrate-hip-matches.sh --current-only` for drift detection. Keeping the merged list in context across steps preserves the merge work without a redundant on-disk roundtrip.
 
 To re-baseline (one-shot, run by the maintainer outside the daily cron):
 
@@ -866,7 +849,27 @@ Use the `Write` tool to write the content **in Notion-flavored Markdown** (keep 
 
 After writing, print a single line: `Safety backup: <SAFETY_PATH>` so the user knows where to find it if the Notion write fails.
 
-**If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path.)
+**Step 5.0 (iteration-2): emit matches.json peer + run --current-only calibration.**
+
+Right after the safety file is written, persist the dedup-merged matches list (held in conversation context from Phase 3d) to a peer JSON file alongside the safety file. The path mirrors the safety file's pattern so `calibrate-hip-matches.sh --baseline <safety-file>` can derive it deterministically.
+
+```python
+# Use the Write tool to emit the peer file. matches_merged is the list-of-dicts
+# from Step 2.3 Phase 3b after the MAX-confidence dedup.
+import json, os
+matches_path = SAFETY_PATH.removesuffix(".md") + "-matches.json"
+# Write matches_path with content = json.dumps(matches_merged, indent=2)
+```
+
+Then invoke the calibration helper in `--current-only` mode to emit a per-strategy match-count distribution and surface a drift warning if the baseline is older than 180 days. Non-fatal: a calibration warning is a `[Notice]` in the digest header, not a digest-abort.
+
+```bash
+bash ~/.claude/skills/team-digest/lib/calibrate-hip-matches.sh --current-only "$SAFETY_PATH"
+```
+
+Capture stderr; if it contains `[WARN] HIP calibration baseline is ... old`, surface it as a `[Notice]` line in the digest header so the maintainer notices and can run `--baseline` against a fresh dry-run.
+
+**If `$DRY_RUN` is set:** also print `Dry-run output: <SAFETY_PATH>` and stop. Skip the rest of Step 5. (The safety file IS the dry-run output - same content, same path. The matches.json peer file at `${SAFETY_PATH%.md}-matches.json` is the canonical iteration-2 calibration input.)
 
 **If `$DRY_RUN` is NOT set:** proceed with the SPLIT-WRITE procedure to avoid the stream-timeout failure mode that hit single-call `notion-create-pages` writes when the body grew large. The split moves the heavy payload into a separate `notion-update-page` call so the small `notion-create-pages` call almost never fails, and a failure on the update step can be retried independently without losing the page.
 
