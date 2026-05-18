@@ -585,6 +585,17 @@ For each PR returned by Phase 2, Phase 2b, or Phase 2c: if the same PR (by `url`
 
 Combine the MatchRecord arrays from Mechanism A (extracted from Step 2's `Linked HIPs:` annotations), Mechanism B (Phase 2 output), Strategy 2 (Phase 2b output), Strategy 3 (Phase 2c output) using dedup key `(hip_id, repo, pr_number)`. When two records share the dedup key, MAX their confidence (high > medium > low) and union their `sources[]` and `per_source` maps. The merged-and-deduped list is what gets rendered in the HIP Activity section.
 
+**Phase 3c — verbose-mode filter:**
+
+Read the env var `TEAM_DIGEST_HIP_VERBOSE` (default `0` if unset). Persistent setting lives in `~/.config/team-digest/env` (sourced by `bin/team-digest-run.sh` as of commit `251830a`). Two behaviors:
+
+- `TEAM_DIGEST_HIP_VERBOSE=0` (default): filter the merged list to entries with `confidence == "high"`. Medium and low matches are dropped from the rendered output entirely. Render the standard HIP Activity Tier 1 / Tier 2 / Tier 2b / overflow shapes.
+- `TEAM_DIGEST_HIP_VERBOSE=1`: render high-confidence matches as above. After the standard HIP Activity content (including any Tier 3 overflow), emit a `### Lower-Confidence Matches` H3 subsection containing every medium- and low-confidence match. Each row uses the verbose template from `TEMPLATE.md` (source label, confidence, matched_keywords if Strategy 3, category_tiebreak if Strategy 3, per_source primary reason). Sort rows by `hip_id` ascending then `confidence` descending (medium before low). If verbose=1 but no medium/low matches exist for the day, omit the subsection entirely (no empty-state filler).
+
+The H3 subsection is contained within the H2 `## HIP Activity` boundary, so the chunked-write logic in Step 5.3 (sentinel-driven, H2-split, ~4KB chunks) is unaffected — the verbose subsection rides inside the HIP Activity chunk.
+
+Pass-through for `s3_skipped` records: these were emitted by Strategy 3 when an org hit rate-limit retries. Render them in the verbose subsection only, with a special row form `_Strategy 3 skipped for <org>/_meta — <reason>_` (no PR link, no HIP-N link). In default (non-verbose) mode, omit `s3_skipped` records entirely.
+
 **Render the HIP Activity section** under each org header in `hip_tracking.implementation_orgs`, BEFORE the Priority Repos subsection. See the entry shapes in `TEMPLATE.md` for the exact format (Tier 1 / Tier 2 / Tier 2b / overflow).
 
 **Section-empty fallback:** if Phase 1 returned `[]` and no proposal PRs were found, omit the entire HIP Activity section (no "no HIPs today" filler).
