@@ -19,12 +19,16 @@ team-digest/
 ├── skills/                # One skill per team/digest type and cadence
 │   ├── team-digest/         # Daily
 │   │   ├── SKILL.md       # Skill body: orchestration + MCP calls + writing rules
-│   │   └── lib/           # compute-window, load-config, fetch-github-*, fetch-rss, fetch-gh-commits
+│   │   └── lib/           # compute-window, load-config, fetch-github-*, fetch-rss, fetch-gh-commits,
+│   │                       # fetch-hip-* (4 helpers: updates, implementation-prs, release-refs,
+│   │                       # timeline-correlations), extract-hip-refs, refresh-hip-index,
+│   │                       # calibrate-hip-matches, phase2-gate (15 helpers total)
 │   └── team-weekly/         # Weekly rollup of daily digests
 │       ├── SKILL.md       # Reads dailies from Notion, synthesizes cross-day themes
 │       └── lib/           # compute-week-window
 ├── profiles/              # Team profiles describing role, priorities, glossary
-│   ├── team-digest.template.md   # Committed template
+│   ├── team-digest.template.md   # Committed minimal placeholder (setup.sh copies to team-digest.md)
+│   ├── team-digest.example.md    # Committed worked example (Solutions Architect profile)
 │   └── team-digest.md            # Your personalized copy (gitignored)
 ├── docs/                  # Setup, configuration, scheduling, troubleshooting
 └── README.md
@@ -62,7 +66,7 @@ Both write to the SAME Notion database, distinguished by the `Digest Type` prope
 
 1. **GitHub Activity** - PRs, issues, and releases across configured GitHub orgs. Priority repos get rich narrative summaries with synthesized themes, **Relevance** notes, and Mermaid diagrams for architectural changes; every other repo with activity in the date window gets a row in the **Other Active Repos** table.
 2. **Industry News** - public RSS/Atom feeds plus GitHub commit-watching for spec sets that don't publish RSS. Configured via `rss_feeds` in `config.json`. Items dated to the digest day are grouped by category in an **Industry News** section.
-3. **HIP Activity** - HIPs touched in `hiero-ledger/hiero-improvement-proposals` on the digest day, with status-change detection (e.g., `Status: Draft -> Last Call`) and cross-references to implementation PRs/commits across `hiero-ledger/*`. Configurable via `hip_tracking` in `config.json`; opt out with `hip_tracking.enabled: false`. See [docs/hip-tracking.md](docs/hip-tracking.md).
+3. **HIP Activity** - HIPs touched in `hiero-ledger/hiero-improvement-proposals` on the digest day, with status-change detection (e.g., `Status: Draft -> Last Call`) and cross-references to implementation PRs/commits across `hiero-ledger/*`. As of iteration 2, four matching strategies fire per HIP (Mechanism A regex annotation, Mechanism B per-HIP `gh search`, Strategy 2 release-note analysis, Strategy 3 timeline correlation), each emitting matches with a unified `confidence: high|medium|low` field. High matches render in the main HIP Activity section; medium and low surface in a `### Lower-Confidence Matches` subsection when `TEAM_DIGEST_HIP_VERBOSE=1`. A calibration helper measures precision/recall against a strategy-independent labeled set. Configurable via `hip_tracking` in `config.json`; opt out with `hip_tracking.enabled: false`. See [docs/hip-tracking.md](docs/hip-tracking.md).
 4. **Notion Keyword Monitor** - searches the Notion workspace for pages **created** on the digest day matching configured keywords. One narrative summary per matched page with linked title, matched keywords, and relevance.
 5. **Notion Favorites** - reads a user-curated list of Notion page URLs from a **Favorites** heading on the Notion config page (since Notion's API does not expose sidebar Favorites). For each favorite, fetches `last_edited_time`; if the page was edited on the digest day it gets a summary. Single-level child descent: if a favorite is an *index* page, the digest also fetches each linked page (one hop, capped at 50 children) and includes those edited that day.
 6. **Partner Conversations** - searches Notion for pages with titles matching configured patterns (`Meeting with`, `Call with`, `Catch up with`, `Deep dive`, etc.). Grouped by company, with extracted action items.
@@ -176,7 +180,7 @@ Three layers of configuration - no hardcoded Notion links anywhere:
 2. **Notion config page** - Live, team-editable settings (keywords, partner patterns). Anyone on the team can update it without touching files.
 3. **`profiles/team-digest.md`** (gitignored) - Your team profile. Describes your role, what you care about, and what "relevant" means for your work. Claude reads this to write the **Relevance** section in each digest. Edit it to match your actual priorities.
 
-`setup.sh` copies `profiles/team-digest.template.md` to `profiles/team-digest.md` on first run. Edit the `.md` file directly - it's yours and won't be overwritten by `update.sh`.
+`setup.sh` copies `profiles/team-digest.template.md` (a minimal placeholder) to `profiles/team-digest.md` on first run. If you'd rather start from a worked example, copy `profiles/team-digest.example.md` (a fully-populated Solutions Architect profile, ~200 lines) over your personalized file: `cp profiles/team-digest.example.md profiles/team-digest.md`. Edit the `.md` file directly - it's yours and won't be overwritten by `update.sh`.
 
 See [docs/configuration.md](docs/configuration.md).
 
@@ -359,7 +363,8 @@ Team C ──> /<team-c>-digest ──> Team C Daily Digest database
 | `config.template.json`                          | Yes             | Template with empty Notion IDs; starting point for new users                  |
 | `config.json`                                   | No (gitignored) | Your actual Notion IDs; created by `setup.sh` from template                   |
 | `~/.config/team-digest/config.json`             | N/A (local)     | Global copy synced by `setup.sh`; skills read from here                       |
-| `profiles/<team>.template.md`                   | Yes             | Team profile template; describes role, priorities, relevance criteria, glossary |
+| `profiles/<team>.template.md`                   | Yes             | Minimal placeholder profile template; describes the shape of role + relevance + glossary sections |
+| `profiles/<team>.example.md`                    | Yes             | Worked example profile (Solutions Architect), ~200 lines, ready to copy as a starting point |
 | `profiles/<team>.md`                            | No (gitignored) | Your personalized profile; created from template by `setup.sh`                |
 | `~/.config/team-digest/profiles/<team>.md`      | N/A (local)     | Global copy synced by `setup.sh`; skills read from here                       |
 | `/tmp/team-digest-dry-runs/`                    | N/A (local)     | `--dry-run` markdown output; ephemeral, cleared on reboot                     |

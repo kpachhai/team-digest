@@ -48,13 +48,18 @@ Either path saves your config to `~/.config/team-digest/config.json` and pre-fil
 
 ## Personalize with a Team Profile (Optional)
 
-Create a profile file to customize the "Relevance" sections in each digest:
+`setup.sh` already created `profiles/team-digest.md` from the minimal placeholder template. You have two starting points:
 
-```bash
-mkdir -p ~/.config/team-digest/profiles
-```
+- **Start from scratch (minimal):** edit `profiles/team-digest.md` directly. Replace the `<placeholder>` fields with your team's role, responsibilities, key repos, glossary, and audience.
+- **Start from a worked example (faster if your team is similar):** copy the bundled Solutions Architect example over your personalized file, then adjust:
+  ```bash
+  cp profiles/team-digest.example.md profiles/team-digest.md
+  # Edit profiles/team-digest.md to swap "Solutions Architect team" / responsibilities /
+  # priority repos / glossary entries for your team's reality
+  ```
+  The example covers Hedera/Hiero SDK + relay + mirror node + consensus node + HIP-tracking work plus a full Project Glossary; if your team is in a different ecosystem, the structure still translates - replace the substance.
 
-Create `~/.config/team-digest/profiles/team-digest.md` with your team's role and priorities. Use `profiles/team-digest.template.md` in the repo as a starting point - copy it and replace the `<placeholder>` fields with your team's actual context (role, responsibilities, key repos, glossary, audience).
+After editing, run `./update.sh` to sync `profiles/team-digest.md` to `~/.config/team-digest/profiles/team-digest.md` (the path the skills actually read from).
 
 The more specific you are, the more useful the Relevance sections become. Without a profile, the skill falls back to generic heuristics.
 
