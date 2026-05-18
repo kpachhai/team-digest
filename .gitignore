@@ -1,8 +1,9 @@
 # Local config with actual Notion IDs - each user has their own
 config.json
 
-# Personalized team profiles (gitignored; templates committed as *.template.md)
+# Personalized team profiles (gitignored; templates + worked examples committed)
 profiles/*.md
 !profiles/*.template.md
+!profiles/*.example.md
 
 docs/superpowers

@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy this file to config.json and fill in your Notion IDs. See docs/configuration.md for details. To add a new team digest, add a new top-level key (e.g. '<my-team>-digest') with the same structure.",
+  "_comment": "Copy this file to config.json and fill in your Notion IDs. See docs/configuration.md for details. The defaults below assume you're tracking the open-source Hiero ecosystem; add additional GitHub orgs / RSS feeds / keywords if you also follow employer-specific or extra-org repos. To add a new team digest, add a new top-level key (e.g. '<my-team>-digest') with the same structure.",
   "team-digest": {
     "notion": {
       "config_page_id": "",
@@ -10,16 +10,50 @@
     "github": {
       "orgs": [
         {
-          "name": "your-org",
-          "name_help": "GitHub org name",
-          "priority_repos": [],
+          "name": "hiero-ledger",
+          "name_help": "The Hiero (Linux Foundation) ecosystem org. Open-source.",
+          "priority_repos": [
+            "hiero-json-rpc-relay",
+            "hiero-mirror-node",
+            "hiero-consensus-node",
+            "hiero-block-node",
+            "hiero-improvement-proposals",
+            "hiero-contracts",
+            "solo",
+            "hiero-sdk-js",
+            "hiero-mirror-node-explorer"
+          ],
           "priority_repos_help": "Repos that get full narrative summaries. Empty list means no priority repos.",
-          "scan_all": true,
-          "scan_all_help": "true = scan all repos in the org; false = only scan priority repos"
+          "scan_all": false,
+          "scan_all_help": "true = scan all repos in the org; false = only scan priority repos. Default false for the Hiero org because its repo set is large; flip to true if you want full coverage."
+        },
+        {
+          "name": "hedera-dev",
+          "name_help": "Public Hedera/Hiero developer-focused org (community + workshop content).",
+          "priority_repos": [],
+          "priority_repos_help": "Empty + scan_all=true means every repo in this org gets the summary-table treatment without narrative expansion.",
+          "scan_all": true
         }
-      ]
+      ],
+      "orgs_help": "Add additional orgs you want to track here (e.g. your employer's GitHub org, an extra ecosystem partner's org). Each org gets its own entry with priority_repos + scan_all. Per-org GH_TOKEN scope: read:public_repo for fully-public orgs; repo scope only if you track a private repo."
     },
-    "rss_feeds": [],
+    "rss_feeds": [
+      {
+        "name": "Hedera Blog",
+        "url": "https://hedera.com/blog/rss.xml",
+        "category": "hedera"
+      },
+      {
+        "name": "Ethereum Foundation",
+        "url": "https://blog.ethereum.org/en/feed.xml",
+        "category": "ethereum"
+      },
+      {
+        "name": "EIPs (commits)",
+        "url": "github://ethereum/EIPs/EIPS",
+        "category": "eips"
+      }
+    ],
     "rss_feeds_help": "Public content sources monitored for items dated to the digest day. URLs starting with https:// are fetched as RSS/Atom via lib/fetch-rss.sh. URLs of the form github://<owner>/<repo>[/<path>] are fetched as commits via lib/fetch-gh-commits.sh - useful for spec sets that don't publish RSS but live in a public git repo. Add entries with the shape {\"name\": \"<display name>\", \"url\": \"<feed-or-github-url>\", \"category\": \"<grouping label>\"}.",
     "hip_tracking": {
       "enabled": true,
@@ -67,10 +101,20 @@
       "strategy3_help": "Strategy 3 (timeline correlation) settings. Searches past-7d PRs in implementation_orgs that mention HIP-N or share keywords with the HIP title. Falls back to category-to-repo tiebreaker when keyword overlap is 1-2. See docs/hip-tracking.md."
     },
     "defaults": {
-      "keywords": [],
-      "keywords_help": "Default keyword list used to scan Notion when the live config page is unreachable. Replace with your team's relevant terms.",
+      "keywords": [
+        "EVM",
+        "smart contracts",
+        "relay",
+        "JSON-RPC",
+        "mirror node",
+        "HIP",
+        "Hiero",
+        "consensus",
+        "block node",
+        "SDK"
+      ],
+      "keywords_help": "Default keyword list used to scan Notion when the live config page is unreachable. Edit to match your team's relevant terms; the live Notion config page overrides this at runtime.",
       "partner_patterns": [
-        "Discussion",
         "Meeting with",
         "Call with",
         "Catch up with",
@@ -79,7 +123,8 @@
         "Check-in with",
         "Follow up with",
         "Debrief"
-      ]
+      ],
+      "partner_patterns_help": "Phrases that mark a Notion page as a partner-conversation note. Step 4 of the daily pipeline searches for these patterns. Edit if your team uses different phrasing."
     }
   }
 }
