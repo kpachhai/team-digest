@@ -111,6 +111,30 @@ This computes precision/recall/F1 per strategy and overall, writes `~/.config/te
 
 Every digest run also invokes `calibrate-hip-matches.sh --current-only` at finalize, emitting a per-run match-count distribution at `~/.config/team-digest/hip-calibration-current.json` and warning on stderr if the baseline is more than 180 days old.
 
+### Calibration lenses + date-range window (iteration 3)
+
+As of iteration 3, the baseline measures matching quality under **two lenses** so the HIP-doc-update class can be classified without inflating "implementation" false positives:
+
+| Lens | What counts as a positive | What counts as a negative |
+|---|---|---|
+| `implementation` | PR is a code change in a production codebase (narrow) | PR is a HIP doc update OR test fixture |
+| `useful_signal` | PR is worth surfacing in the digest (HIP doc updates + implementations) | PR is a test fixture or template placeholder |
+
+The Phase 2 gate now uses the `useful_signal` lens because that's closer to the digest's actual purpose — every match should be useful signal regardless of whether it's production code.
+
+The baseline run also accepts optional `--window-start YYYY-MM-DD --window-end YYYY-MM-DD` args to restrict the labeled positives to those whose `pr_merged_at` falls within the window. This addresses the date-scope mismatch surfaced in iteration 2 (a single-day dry-run was being measured against a labeled set spanning multiple years).
+
+```bash
+# Full labeled set (no date filter) - useful for "all-time recall"
+bash skills/team-digest/lib/calibrate-hip-matches.sh --baseline /tmp/team-digest-dry-runs/team-digest-2026-05-06-v2.md
+
+# Past-week window - aligns with the digest's PR-update window
+bash skills/team-digest/lib/calibrate-hip-matches.sh --baseline /tmp/team-digest-dry-runs/team-digest-2026-05-06-v2.md \
+  --window-start 2026-05-01 --window-end 2026-05-06
+```
+
+Labeled-set entries gained three optional fields in iteration 3: `is_hip_doc_update` (true for HIP-repo PRs that update the HIP document), `is_useful_signal` (true for both implementations and HIP-doc-updates; false for test-fixture FPs), and `pr_merged_at` (ISO date for the window filter). Existing entries without these fields are treated as `is_useful_signal: true` and in-scope by default for back-compat.
+
 ### Recalibration triggers
 
 Re-run `--baseline` when any of:
