@@ -99,8 +99,13 @@ recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
 f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
 
 try:
+    # Try the script-relative ../../../ first (works when helper runs from
+    # the repo's skills/team-digest/lib/). Falls through to "unknown" when
+    # the helper is installed at ~/.claude/skills/team-digest/lib/ - that
+    # path's .. .. .. lands in ~/.claude/ which is not a git repo.
     sha = subprocess.check_output(
-        ["git", "-C", target_repo, "rev-parse", "HEAD"]
+        ["git", "-C", target_repo, "rev-parse", "HEAD"],
+        stderr=subprocess.DEVNULL,
     ).decode().strip()
 except Exception:
     sha = "unknown"
