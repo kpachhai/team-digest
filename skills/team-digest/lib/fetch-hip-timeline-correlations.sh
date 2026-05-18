@@ -28,11 +28,11 @@ LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 CONFIG_JSON="$(bash "$LIB_DIR/load-config.sh" team-digest)"
 
-MAX_HIPS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("hip_tracking",{}).get("strategy3",{}).get("max_correlation_hips",10))')
-BUDGET=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("hip_tracking",{}).get("strategy3",{}).get("per_org_search_budget",10))')
-NOISE_CEILING=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("hip_tracking",{}).get("strategy3",{}).get("noise_ceiling_commits_per_day",20))')
-CATEGORY_MAP=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get("hip_tracking",{}).get("strategy3",{}).get("category_to_repos",{})))')
-ORGS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(d.get("hip_tracking",{}).get("implementation_orgs",[])))')
+MAX_HIPS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("hip_tracking") or {}).get("strategy3") or {}).get("max_correlation_hips",10))')
+BUDGET=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("hip_tracking") or {}).get("strategy3") or {}).get("per_org_search_budget",10))')
+NOISE_CEILING=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("hip_tracking") or {}).get("strategy3") or {}).get("noise_ceiling_commits_per_day",20))')
+CATEGORY_MAP=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps(((d.get("hip_tracking") or {}).get("strategy3") or {}).get("category_to_repos",{})))')
+ORGS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join((d.get("hip_tracking") or {}).get("implementation_orgs") or []))')
 
 if [ -z "$ORGS" ]; then
   echo "WARN: hip_tracking.implementation_orgs is empty; Strategy 3 has no orgs to scan" >&2

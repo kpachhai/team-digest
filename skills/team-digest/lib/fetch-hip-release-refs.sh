@@ -45,9 +45,9 @@ LIB_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 CONFIG_JSON="$(bash "$LIB_DIR/load-config.sh" team-digest)"
 
-MAX_REFS_PER_RELEASE=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("hip_tracking",{}).get("strategy2",{}).get("max_refs_per_release",50))')
-MAX_BACKFILL_DAYS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("hip_tracking",{}).get("strategy2",{}).get("max_backfill_days",30))')
-MAX_PR_LOOKUPS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("hip_tracking",{}).get("strategy2",{}).get("max_pr_attribution_lookups_per_release",10))')
+MAX_REFS_PER_RELEASE=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("hip_tracking") or {}).get("strategy2") or {}).get("max_refs_per_release",50))')
+MAX_BACKFILL_DAYS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("hip_tracking") or {}).get("strategy2") or {}).get("max_backfill_days",30))')
+MAX_PR_LOOKUPS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(((d.get("hip_tracking") or {}).get("strategy2") or {}).get("max_pr_attribution_lookups_per_release",10))')
 
 if [ "$BACKFILL_DAYS" -gt "$MAX_BACKFILL_DAYS" ] && [ "$FORCE_BACKFILL" != "1" ]; then
   echo "ERROR: --backfill $BACKFILL_DAYS exceeds default cap of $MAX_BACKFILL_DAYS; pass --force-backfill to override" >&2
@@ -67,7 +67,7 @@ else
 fi
 START="${START_DATE}T00:00:00Z"
 
-ORGS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(d.get("hip_tracking",{}).get("implementation_orgs",[])))')
+ORGS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join((d.get("hip_tracking") or {}).get("implementation_orgs") or []))')
 
 if [ -z "$ORGS" ]; then
   echo "WARN: hip_tracking.implementation_orgs is empty; Strategy 2 has no orgs to scan" >&2
