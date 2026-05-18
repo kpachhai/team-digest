@@ -84,10 +84,32 @@
         "noise_ceiling_commits_per_day": 20,
         "noise_ceiling_commits_per_day_help": "Repos with more than N commits on the digest day get their Strategy 3 matches downgraded to low confidence (high-volume area, attribution ambiguous).",
         "category_to_repos": {
-          "HTS": ["hiero-ledger/hiero-consensus-node", "hiero-ledger/hiero-contracts"],
-          "HSS": ["hiero-ledger/hiero-contracts", "hiero-ledger/hiero-consensus-node"],
-          "HCS": ["hiero-ledger/hiero-consensus-node"],
-          "Mirror Node": ["hiero-ledger/hiero-mirror-node"],
+          "HTS": [
+            "hiero-ledger/hiero-consensus-node",
+            "hiero-ledger/hiero-contracts",
+            "hiero-ledger/hiero-json-rpc-relay"
+          ],
+          "HSS": [
+            "hiero-ledger/hiero-contracts",
+            "hiero-ledger/hiero-consensus-node",
+            "hiero-ledger/hiero-json-rpc-relay"
+          ],
+          "HCS": [
+            "hiero-ledger/hiero-consensus-node",
+            "hiero-ledger/hiero-block-node"
+          ],
+          "Mirror Node": [
+            "hiero-ledger/hiero-mirror-node",
+            "hiero-ledger/hiero-block-node"
+          ],
+          "Block Node": [
+            "hiero-ledger/hiero-block-node",
+            "hiero-ledger/hiero-consensus-node"
+          ],
+          "Relay": [
+            "hiero-ledger/hiero-json-rpc-relay",
+            "hiero-ledger/hiero-contracts"
+          ],
           "SDK": [
             "hiero-ledger/hiero-sdk-js",
             "hiero-ledger/hiero-sdk-java",

@@ -196,7 +196,13 @@ def classify_hip_category(hip):
     # Direct match first
     if cat in category_map_raw:
         return cat
-    # Heuristic mapping from title tokens
+    # Heuristic mapping from title tokens. Order matters - check
+    # infrastructure-specific terms (Block Node, Relay) before broader
+    # service categories so they win the tiebreaker for the right repos.
+    if any(t in title for t in ["block node", "block stream", "block streaming"]):
+        return "Block Node"
+    if any(t in title for t in ["json-rpc", "json rpc", "jsonrpc", "relay"]):
+        return "Relay"
     if any(t in title for t in ["token service", "hts", "token "]):
         return "HTS"
     if any(t in title for t in ["consensus service", "hcs", "topic "]):
