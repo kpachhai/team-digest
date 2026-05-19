@@ -29,10 +29,7 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 ## TEMPLATE
 
 ```
-<callout icon="📈" color="purple_bg">
-**Team Weekly Digest** | <WEEK_LABEL> | <WEEK_START> to <WEEK_END>
-<N_DIGESTS> daily digests processed | <N_REPOS> repos active | <N_RELEASES> releases | <N_PARTNERS> partner conversations
-</callout>
+<callout icon="📈" color="purple_bg">**Team Weekly Digest** | <WEEK_LABEL> | <WEEK_START> to <WEEK_END> | <N_DIGESTS> daily digests processed | <N_REPOS> repos active | <N_RELEASES> releases | <N_PARTNERS> partner conversations</callout>
 
 ---
 
@@ -125,9 +122,7 @@ NOTE: If no releases across the week: "No releases this week." (omit the table)
 NOTE: Only emitted if any daily in the week had a HIP Activity section.
 NOTE: Skip the entire section if no HIPs were touched at all (no filler).
 
-<callout icon="📈" color="blue">
-**HIP-<N> advanced <prev_status> -> <current_status> across the week.**
-</callout>
+<callout icon="📈" color="blue">**HIP-<N> advanced <prev_status> -> <current_status> across the week.**</callout>
 
 - **[HIP-<N>](<raw_url>) - <title>**
   - Touched on Mon, Wed, Thu, Fri
@@ -190,10 +185,7 @@ NOTE: Pages with multi-day updates get highlighted callouts. Single-day updates 
 NOTE: Only include pages that appeared in Favorites Activity in at least one daily digest this week.
 NOTE: Omit this section if no Favorites Activity appeared in any daily.
 
-<callout icon="📌" color="yellow_bg">
-**[<Page Title>](<notion-url>)** updated on <Day1> and <Day2>
-<2-sentence summary of what the cross-day activity means - what is actively changing about this page/topic>
-</callout>
+<callout icon="📌" color="yellow_bg">**[<Page Title>](<notion-url>)** updated on <Day1> and <Day2> — <1-sentence summary of what the cross-day activity signals></callout>
 
 - **[<Page Title>](<notion-url>)** - updated <Day>, <date>: <1-sentence summary>
 
@@ -213,9 +205,7 @@ NOTE: One line per day in the window. Note gaps explicitly.
 
 ---
 
-<callout icon="ℹ️" color="gray_bg">
-**Auto-generated** by Team Weekly Digest | Synthesized from <N> daily digests | Week: <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)
-</callout>
+<callout icon="ℹ️" color="gray_bg">**Auto-generated** by Team Weekly Digest | Synthesized from <N> daily digests | Week: <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)</callout>
 ```
 
 ---
@@ -229,6 +219,7 @@ NOTE: One line per day in the window. Note gaps explicitly.
 
 ### Notion API hard constraints (same as daily)
 - Callout emoji: standard Unicode only. Never `:shortcode:`.
+- Callout blocks must be single-line: `<callout icon="..." color="...">content</callout>` all on one line. The Notion MCP renderer treats each `\n` as a block boundary - multi-line callouts produce stray `</callout>` text blocks.
 - Bold+code collision: `` **`name`** `` = `` **** `` artifact. Use `**[name](url)**` or `**name**`.
 - No `\n` inside Mermaid node labels.
 - Footer callout is ALWAYS the last block.

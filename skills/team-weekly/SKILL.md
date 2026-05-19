@@ -198,9 +198,7 @@ Synthesis rules:
    ```
 3. **HIPs with at least one status transition this week** -> prominent callout regardless of touch count:
    ```markdown
-   <callout icon="📈" color="blue">
-   **HIP-<N> advanced <prev_status> -> <current_status> across the week.**
-   </callout>
+   <callout icon="📈" color="blue">**HIP-<N> advanced <prev_status> -> <current_status> across the week.**</callout>
    ```
 4. **HIPs with implementation activity spanning 2+ repos** -> "cross-repo work" callout (combines with rule 3 if both apply):
    ```markdown
@@ -365,6 +363,7 @@ The same Style Rules from `/team-digest` apply here. Specifically:
 - **Write for an outsider.** A reader of the weekly may not be the same person who reads the dailies. Apply team-digest's full Plain-English Description Rules: write for someone who has never worked in this codebase, lead each paragraph with the user-visible change (not the PR number), translate every internal class name / RPC method / acronym on first mention, and avoid creative metaphors and sprint slang. Apply the Outsider Test paragraph-by-paragraph: re-read each paragraph imagining you joined the team last week with general blockchain knowledge - if you have to translate any term, rewrite.
 - **Short paragraphs, scannable structure.** Two to three sentences per paragraph maximum. Use bullets for cross-day theme lists rather than run-on sentences. The weekly is a high-density artifact - readability discipline matters more here than in the dailies.
 - **No `\n` inside Mermaid labels.** If you render any Mermaid diagram (rare in weekly), keep all node labels on a single line.
+- **Callout blocks must be single-line.** Write `<callout icon="..." color="...">content</callout>` all on one line. Never put a newline after the opening tag; never put `</callout>` on its own line. The Notion MCP treats each `\n` as a block boundary and renders multi-line callouts as stray `</callout>` text blocks.
 - **Failure mode: partial digest, not no digest.** If one daily fetch fails, synthesize from the rest and note the gap. If one theme has no data, omit it from the output.
 
 ## Configuration

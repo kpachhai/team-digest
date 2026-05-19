@@ -26,11 +26,7 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 ## TEMPLATE
 
 ```
-<callout icon="📊" color="blue_bg">
-**Team Daily Digest** | <DATE_LABEL>
-<N_REPOS> repos active | <N_PRS> PRs updated | <N_ISSUES> issues updated | <N_RELEASES> releases
-Data window: <DATE_LABEL> 00:00 - 23:59 UTC
-</callout>
+<callout icon="📊" color="blue_bg">**Team Daily Digest** | <DATE_LABEL> | <N_REPOS> repos active | <N_PRS> PRs updated | <N_ISSUES> issues updated | <N_RELEASES> releases | Data window: <DATE_LABEL> 00:00 - 23:59 UTC</callout>
 
 ---
 
@@ -76,9 +72,7 @@ NOTE: Omit pages whose title starts with "Team Daily Digest", "Team Weekly Diges
 <!-- Tier 1 entry (status changed AND implementation activity today) -->
 ### [HIP-<N>](<raw_url>) — <title>
 
-<callout icon="📈" color="blue">
-**Status: <prev_status> → <current_status>** · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)
-</callout>
+<callout icon="📈" color="blue">**Status: <prev_status> → <current_status>** · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)</callout>
 
 <2-3 sentence narrative drawing on the abstract_excerpt and explaining the change>
 
@@ -99,9 +93,7 @@ Minor edits to the abstract today; no implementation activity in the configured 
 <!-- Tier 2b entry (proposal PR open against HIP repo, not yet on main) -->
 ### [HIP-<N>](<pr_url>) — <title> (Proposed)
 
-<callout icon="📌" color="gray">
-**Status: Proposed (PR open)** · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)
-</callout>
+<callout icon="📌" color="gray">**Status: Proposed (PR open)** · Type: <type> · Category: <category> · Author: [@<handle>](https://github.com/<handle>)</callout>
 
 Proposed in [#<pr_num>](<pr_url>) against the HIP repository; not yet merged to main. <abstract_excerpt>
 
@@ -283,13 +275,11 @@ NOTE: Group by company. If zero partner conversations found: "No partner convers
 
 ---
 
-<callout icon="ℹ️" color="gray_bg">
-**Auto-generated** by Team Daily Digest | Scanned <N> repos across <orgs> | Data window: <DATE_LABEL> 00:00 - 23:59 UTC
-</callout>
+<callout icon="ℹ️" color="gray_bg">**Auto-generated** by Team Daily Digest | Scanned <N> repos across <orgs> | Data window: <DATE_LABEL> 00:00 - 23:59 UTC</callout>
 ```
 
-NOTE: For backfill runs, add inside the footer callout:
-NOTE: "This is a backfill run; Notion keyword results reflect pages created on <DATE_LABEL> only (pages edited but not created on that date are not captured by Notion MCP search)."
+NOTE: For backfill runs, append to the footer callout line (before the closing </callout>):
+NOTE: " | Backfill run: keyword results reflect pages created on <DATE_LABEL> only."
 
 ---
 
@@ -297,6 +287,7 @@ NOTE: "This is a backfill run; Notion keyword results reflect pages created on <
 
 ### Notion API hard constraints
 - Callout emoji: standard Unicode only (📊 ℹ️ 📈 ⚠️ 📌 🤝). Never `:shortcode:` - Notion rejects them with a validation error.
+- Callout blocks must be single-line: `<callout icon="..." color="...">content</callout>` all on one line. Never put content on a new line after the opening tag; never put `</callout>` on its own line. The Notion MCP renderer treats each `\n` as a block boundary - multi-line callouts produce stray `</callout>` text blocks in the output.
 - Bold+code collision: `` **`name`** `` renders as `**** ` artifacts. Use `**[name](url)**` or `**name**` instead. Never combine bold and backtick.
 - No `\n` inside Mermaid node labels - Notion silently truncates after the newline.
 - The footer callout is ALWAYS the last block. No meta-sections after it.

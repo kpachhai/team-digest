@@ -987,7 +987,7 @@ Then STOP. Do NOT silently retry; do NOT write another safety file.
 Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to the new digest.
 
 **Content** must use Notion-flavored Markdown. Key rules:
-- Use `<callout icon="..." color="...">` for callout blocks
+- Use `<callout icon="..." color="...">content</callout>` for callout blocks — all content on a **single line**. Never put a newline after the opening tag; never put `</callout>` on its own line. The Notion MCP treats each `\n` as a block boundary and renders multi-line callouts as stray `</callout>` text blocks.
 - Use `<details><summary>...</summary>...</details>` for toggles
 - Use `<table header-row="true"><tr><td>...</td></tr></table>` for tables
 - Use `[link text](URL)` for links
