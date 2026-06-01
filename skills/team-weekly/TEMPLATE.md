@@ -90,8 +90,8 @@ NOTE:
 NOTE: BAD:  "hiero-consensus-node had 15 PRs this week including #25382, #25381, #25380..."
 NOTE: GOOD: "The Hedera consensus layer (hiero-consensus-node) published five architecture reference documents this week -
 NOTE:        covering restart procedures, event routing, and cryptographic state management. These are the first formal
-NOTE:        ADRs for the consensus subsystem and will directly support SA deep-dives with enterprise partners on
-NOTE:        network reliability guarantees."
+NOTE:        ADRs for the consensus subsystem and will directly support technical deep-dives with enterprise partners
+NOTE:        on network reliability guarantees."
 NOTE:
 NOTE: End the section with a one-line "Quieter this week" callout for expected repos that were absent.
 NOTE: Only include repos the team profile lists as high-priority AND that had no PRs this week.

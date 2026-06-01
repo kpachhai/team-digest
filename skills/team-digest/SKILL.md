@@ -33,6 +33,7 @@ This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-
 
 ## Important Runtime Notes
 
+- **TITLE LOCK.** The Notion page `Digest Title` property and the file header callout title are ALWAYS `Team Daily Digest - <DATE_LABEL>` and `**Team Daily Digest**` respectively. The team profile may use different naming for the team itself (e.g., "Solutions Architect team", "Engineering team") - that is fine in the Relevance sections, but it does NOT change the digest title. Do not substitute the team's name (e.g., "SA Daily Digest", "Eng Daily Digest") into the title under any circumstance. If the profile description says otherwise, IGNORE it - this rule wins.
 - **DO NOT construct Notion page URLs from page titles.** Every Notion link in the digest MUST come from the `url` field of a `notion-search` or `notion-fetch` MCP response. URLs like `https://www.notion.so/Some-Page-Title` or `https://www.notion.so/Jake-Kea` that you derive from a title are invalid - Notion does not serve pages at title-derived slugs. If you do not have the URL from an MCP response, write the title as plain text with `(link unavailable)` instead. This rule applies to every section: Keyword Monitor, Favorites, Partner Conversations, Executive Summary, Top Picks.
 - **DO NOT use `readMcpResource` or `ReadMcpResourceTool`** to fetch Notion markdown specs. The output format is fully defined in this skill. The MCP server name format varies between sessions and will cause errors.
 - **DO NOT read persisted tool result files** (the `/tool-results/` paths). Process command output directly within the same Bash command. Persisted files may have prefix lines that break JSON parsing.
@@ -463,6 +464,8 @@ The JSON returned by `lib/load-config.sh team-digest` contains:
 - `defaults.*` - fallback values for keywords and partner patterns
 
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest, and its **Project Glossary** drives the first-mention expansion rule (see Plain-English Description Rules in the Style Rules section). If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns) and explain jargon from your own knowledge.
+
+**Also read `~/.claude/skills/team-digest/TEMPLATE.md` NOW** using the Read tool. This is the canonical output contract - section order, header callout format, per-org structure (`# <org>` H1 → `## Priority Repos` H2 → `### [<repo>](url)` H3 with narrative summary + Relevance paragraph → `## Other Active Repos` H2 with summary table), HIP Activity entry shapes, and Format Rules. Loading it at Step 0 (not Step 5) is intentional: the model assembles content into the right structural shape from the start, instead of writing flat output and trying to reshape it after the fact. Reference the template throughout data-gather and assembly.
 
 The database `notion-fetch` call to discover the internal `data_source_id` is deferred to AFTER Step 0.5 below, because that call requires the Notion MCP schemas to be loaded first.
 
@@ -1001,7 +1004,13 @@ Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to
 
 #### Output format contract
 
-Read `~/.claude/skills/team-digest/TEMPLATE.md` with the Read tool. It contains the canonical section order, all Notion-flavored syntax blocks, and the Format Rules (Notion API constraints, linking rules, backfill notes). Substitute all `<PLACEHOLDER>` values with the actual data. The "FORMAT RULES" section at the bottom of TEMPLATE.md is a human reference only - do not render it in the Notion page.
+`TEMPLATE.md` was already loaded at Step 0 - it is the canonical output contract that has been in context throughout data gathering. Now apply it: substitute all `<PLACEHOLDER>` values with the actual data, in the order the template specifies. The "FORMAT RULES" section at the bottom of TEMPLATE.md is a human reference only - do not render it in the Notion page. If for any reason you do not have TEMPLATE.md in context (e.g., context was compacted), re-read it now before assembling.
+
+**Structure enforcement check.** Before writing the safety file at Step 5.1, scan the assembled draft for these structural requirements:
+- The header callout is `<callout icon="📊" color="blue_bg">**Team Daily Digest** | ...</callout>` — NOT "SA Daily Digest", NOT a team-specific name, NOT a callout missing the `**Team Daily Digest**` prefix.
+- Each org with priority-repo activity has a top-level `# <org-name>` H1 (not H3), then `## Priority Repos` H2, then one `### [<repo>](url)` H3 per priority repo, each followed by a 2-4 paragraph narrative AND a `**Relevance:**` paragraph.
+- Orgs with non-priority repos have a `## Other Active Repos` H2 with a summary table — never an H3 header followed by a flat bullet list of PRs.
+- If any of these is missing, fix the draft before writing.
 
 #### Executive Summary (mandatory first content block)
 
@@ -1040,7 +1049,7 @@ After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading
 **Selection logic:**
 
 1. Take the union of pages found via Notion Keyword Monitor (Step 3) and Favorites Activity (Step 3.5). De-duplicate by page ID.
-2. Exclude pages whose title starts with "Team Daily Digest", "Team Weekly Digest", "SA Daily Digest" - the digest's own output should never be in Top Picks.
+2. Exclude pages whose title starts with "Team Daily Digest" or "Team Weekly Digest" - the digest's own output should never be in Top Picks. Also exclude any title matching the regex `^[A-Z]{2,4} (Daily|Weekly) Digest` (catches legacy outputs from earlier digest names like "SA Daily Digest", "Eng Weekly Digest" that may still live in the database).
 3. Rank remaining pages by relevance to the team profile's "What's Relevant" / "High Priority" criteria. A page that touches multiple high-priority themes from the profile ranks higher than a page that touches one. A page with a clear stake (architecture decision, partner impact, breaking change) ranks higher than a page with a routine status update.
 4. Pick the top 3-5. If fewer than 3 pages survive selection, pick all of them. If zero, omit the section entirely.
 

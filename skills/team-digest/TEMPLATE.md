@@ -57,7 +57,7 @@ NOTE:       headless use in partner CI pipelines. Partners who currently can't a
 
 NOTE: 3-5 pages from Notion Keyword Monitor + Favorites Activity. Omit section if zero qualify.
 NOTE: Each entry: page title as a link, 2-3 sentences covering WHAT the page is + WHY it's worth reading NOW + one key fact.
-NOTE: Omit pages whose title starts with "Team Daily Digest", "Team Weekly Digest", "SA Daily Digest".
+NOTE: Omit pages whose title starts with "Team Daily Digest" or "Team Weekly Digest", OR matches the regex `^[A-Z]{2,4} (Daily|Weekly) Digest` (legacy short-prefix names).
 
 - **[<Page Title>](<notion-url from MCP>)** - <what the page is about>. <why it's relevant right now - which team priority it touches, what decision it represents>. <one concrete fact that helps the reader decide whether to open it>
 - **[<Page Title>](<notion-url from MCP>)** - <...>
