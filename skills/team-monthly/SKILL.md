@@ -71,7 +71,7 @@ Flow:
    - **No existing page found:** fall through to step 7 (create + chunked write).
    - **Existing page found AND its body matches the placeholder** (`Monthly digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id.
    - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the month already has a digest and the file is preserved at `$FROM_FILE`.
-7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Monthly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $MONTH_END`, `Digest Type: Monthly`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Monthly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $MONTH_END`, `Digest Type: Monthly`, `Status: Auto`). For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
 8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
 9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
 10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
@@ -243,6 +243,7 @@ Call `notion-create-pages` with:
   - `Digest Type`: `Monthly`
   - `Repos Active`: total unique repos active across the month (sum-of-uniques, not sum-of-weeklies)
   - `Keywords Matched`: union of `Keywords Matched` across the month as a JSON array
+  - `Partners Mentioned`: JSON array of distinct partner/company names from the month's Partner Momentum (multi-week + single-touch); empty array if none. **Include ONLY if the database schema (from the Step 2 database fetch) has a `Partners Mentioned` property; OMIT it entirely otherwise** (older installs without the column reject unknown properties).
   - `Status`: `Auto`
 - **Content:** the literal one-line placeholder `<callout icon="⏳" color="gray">Monthly digest content loading...</callout>` — nothing else. This call carries the metadata payload only; the body comes later.
 

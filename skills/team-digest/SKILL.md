@@ -135,7 +135,7 @@ Flow:
    - **No existing page found:** fall through to step 7 (create + chunked write).
    - **Existing page found AND its body matches the placeholder** (`Digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id.
    - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the date already has a digest and the file is preserved at `$FROM_FILE`.
-7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start`, `Digest Type: Combined`, `Status: Auto`). For `Repos Active` and `Keywords Matched`, use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start`, `Digest Type: Combined`, `Status: Auto`). For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
 8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
 9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
 10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
@@ -331,10 +331,12 @@ Call `notion-create-database` with:
 - `schema`: exactly this DDL string (including the double-quotes around column names):
 
 ```
-CREATE TABLE ("Digest Title" TITLE, "date" DATE, "Digest Type" SELECT('Combined':blue, 'Weekly':purple, 'Monthly':orange), "Repos Active" NUMBER, "Keywords Matched" MULTI_SELECT(), "Status" SELECT('Auto':green, 'Manual':yellow))
+CREATE TABLE ("Digest Title" TITLE, "date" DATE, "Digest Type" SELECT('Combined':blue, 'Weekly':purple, 'Monthly':orange), "Repos Active" NUMBER, "Keywords Matched" MULTI_SELECT(), "Partners Mentioned" MULTI_SELECT(), "Status" SELECT('Auto':green, 'Manual':yellow))
 ```
 
 **Existing databases (no re-bootstrap):** writing a page with `Digest Type = Monthly` auto-creates the select option on first write, so no manual migration is needed when `/team-monthly` first runs against an older database. If a specific Notion workspace rejects an unknown select option, add a `Monthly` option to the database's `Digest Type` property once, by hand, then re-run `/team-monthly`. (`Combined` and `Weekly` are written by `/team-digest` and `/team-weekly`; a future `Quarterly` option is added when that cadence ships.)
+
+The `Partners Mentioned` MULTI_SELECT column is new. Existing databases created before it was added will not have the column; the skills detect this (the Step 0 database fetch returns the schema) and simply omit the property — the page still writes, and partner detail still appears in the body. To populate the column on an older database, add a `Partners Mentioned` multi-select property to it by hand once; the next digest run fills it.
 
 Capture the returned database `id` as `database_id`. The response also includes a `data_source_id` in a `<data-source>` tag — ignore it for config purposes (the existing skill discovers `data_source_id` at runtime by calling `notion-fetch` on `database_id` in Step 0, so storing it in config would be redundant).
 
@@ -957,6 +959,7 @@ Call `notion-create-pages` with:
   - Digest Type: `Combined`
   - Repos Active: `<count of repos with activity>`
   - Keywords Matched: `["keyword1", "keyword2", ...]` (JSON array of keywords that had hits)
+  - Partners Mentioned: `["<Company A>", "<Company B>", ...]` (JSON array of distinct partner/company names surfaced in Partner Conversations; empty array if none). **Include this property ONLY if the database schema (from the Step 0 `notion-fetch` on the database) has a `Partners Mentioned` property; OMIT it entirely otherwise** — older installs without the column would reject an unknown property and fail the page create.
   - Status: `Auto`
 - **Content:** the literal one-line placeholder `<callout icon="⏳" color="gray">Digest content loading...</callout>` — nothing else. This call carries the metadata payload only; the body comes later.
 
