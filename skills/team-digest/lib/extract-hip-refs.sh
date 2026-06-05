@@ -20,7 +20,10 @@
 
 set -euo pipefail
 
-INDEX_FILE="$HOME/.config/team-digest/hip-numbers.txt"
+# Index path is overridable via TEAM_DIGEST_HIP_INDEX (used by tests to pin a
+# fixture index, or point at a nonexistent path to exercise degraded mode).
+# Unset -> the production default, so runtime behavior is unchanged.
+INDEX_FILE="${TEAM_DIGEST_HIP_INDEX:-$HOME/.config/team-digest/hip-numbers.txt}"
 
 # Capture stdin into a shell variable so the python3 heredoc below can read it
 # via the environment. python3 - <<'PY' consumes stdin for the script body

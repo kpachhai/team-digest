@@ -1,6 +1,6 @@
 # team-digest
 
-A modular, extensible digest system that aggregates activity from multiple sources (GitHub, Notion pages and meetings, your Notion Favorites, pages you authored, RSS/Atom blog feeds, and GitHub spec-set commits like EIPs) into structured summaries delivered to Notion. Daily digests synthesize one day; weekly digests roll up a full week. Built on Claude Code with zero infrastructure.
+A modular, extensible digest system that aggregates activity from multiple sources (GitHub, Notion pages and meetings, your Notion Favorites, pages you authored, RSS/Atom blog feeds, and GitHub spec-set commits like EIPs) into structured summaries delivered to Notion. Daily digests synthesize one day; weekly digests roll up a full week; monthly digests roll up a full calendar month into a storyline-first page. A downward **context cascade** feeds each tier a slice of the tier above so output is storyline-aware instead of cold. Built on Claude Code with zero infrastructure.
 
 Each team gets its own skill and configuration. New sources and cadences can be added without changing existing ones.
 
@@ -10,7 +10,8 @@ Each team gets its own skill and configuration. New sources and cadences can be 
 team-digest/
 ├── bin/                   # Headless terminal entry points (claude -p wrappers)
 │   ├── team-digest-run.sh   # Daily - symlink onto $PATH for cron/launchd
-│   └── team-weekly-run.sh   # Weekly rollup
+│   ├── team-weekly-run.sh   # Weekly rollup
+│   └── team-monthly-run.sh  # Monthly rollup (Opus default)
 ├── config.template.json   # Committed template with empty Notion IDs
 ├── config.json            # Your Notion IDs (gitignored, created by setup.sh)
 ├── .gitignore
@@ -23,9 +24,14 @@ team-digest/
 │   │                       # fetch-hip-* (4 helpers: updates, implementation-prs, release-refs,
 │   │                       # timeline-correlations), extract-hip-refs, refresh-hip-index,
 │   │                       # consolidate-matches, calibrate-hip-matches, strategy4-gate (16 helpers total)
-│   └── team-weekly/         # Weekly rollup of daily digests
-│       ├── SKILL.md       # Reads dailies from Notion, synthesizes cross-day themes
-│       └── lib/           # compute-week-window
+│   ├── team-weekly/         # Weekly rollup of daily digests
+│   │   ├── SKILL.md       # Reads dailies from Notion, synthesizes cross-day themes
+│   │   └── lib/           # compute-week-window
+│   └── team-monthly/        # Monthly rollup of weeklies + daily metadata (storyline-first)
+│       ├── SKILL.md       # Hybrid-spine consumer: skeleton query + weekly bodies + capped daily deep-fetch
+│       └── lib/           # compute-month-window
+├── tests/                 # Offline suite (bash tests/run-all.sh): unit tests for the 8 pure
+│                          #   helpers + a Notion-markdown linter + fixtures. See tests/README.md.
 ├── profiles/              # Team profiles describing role, priorities, glossary
 │   ├── team-digest.template.md   # Committed minimal placeholder (setup.sh copies to team-digest.md)
 │   ├── team-digest.example.md    # Committed worked example (Solutions Architect profile)
@@ -51,16 +57,25 @@ Last 5-7 daily digests         ─┐
                                 ├── weekly  ───────> Same Notion database
                                 │   (team-weekly)        (one page per week,
                                                         Digest Type=Weekly)
+
+The month's weeklies (full)    ─┐
++ every daily's metadata        ├── monthly ───────> Same Notion database
++ capped daily deep-fetch       │   (team-monthly)       (one storyline-first page
+                                                        per month, Digest Type=Monthly)
+
+Context cascade (orthogonal): each tier reads the most-recent higher-tier
+Executive Summary before it runs (daily<-weekly, weekly<-monthly).
 ```
 
 ## Skills shipped today
 
-This repo ships two skills out of the box - one for each cadence:
+This repo ships three skills out of the box - one for each cadence:
 
-- **`/team-digest`** - the daily digest (the workhorse)
+- **`/team-digest`** - the daily digest (the only one that scans external sources)
 - **`/team-weekly`** - the weekly rollup (synthesizes the past week's daily digests)
+- **`/team-monthly`** - the monthly rollup (storyline-first synthesis of the month's weeklies + daily metadata)
 
-Both write to the SAME Notion database, distinguished by the `Digest Type` property (`Combined` vs. `Weekly`).
+All three write to the SAME Notion database, distinguished by the `Digest Type` property (`Combined`, `Weekly`, `Monthly`). The weekly and monthly are consumers - they read existing Notion pages, never re-scanning sources. A downward **context cascade** has each tier load the most-recent higher-tier digest's Executive Summary before it runs, so a daily can say "this continues the migration that's run three weeks" instead of presenting each change cold.
 
 ### What `/team-digest` scans (six sources)
 
@@ -88,6 +103,22 @@ Pages found through multiple sources are deduplicated by page ID across sections
 
 Critically, `/team-weekly` does NOT re-scan GitHub, Notion, or RSS - the dailies have already done that work. The weekly is a pure synthesis layer over the daily output, which keeps token cost bounded and avoids drift between what each cadence "saw."
 
+The weekly also emits a **Threads to Watch / Carried Over** section - threads still open at week's end - which becomes the monthly's storyline spine.
+
+### What `/team-monthly` does (storyline-first month synthesis, no re-scan)
+
+`/team-monthly` rolls up a full calendar month. To stay comprehensive without re-reading everything, it uses a **hybrid spine** strategy, cheapest-first:
+
+1. **One properties query** returns the metadata (repo counts, keywords, dates) for *every* daily and weekly in the month - nearly free, no body fetches.
+2. **It fetches the 4-5 weekly bodies in full** - the synthesized spine.
+3. **It selectively deep-reads only a capped handful of daily bodies** (default 8, via `monthly.max_daily_deep_fetch`) - the high-signal days a storyline needs. The footer states `N of M dailies read in full`.
+
+The output reads top-to-bottom: a *Month in Review* narrative, then 4-7 named **Top Storylines** - each interconnecting repos + HIPs + partner asks + Notion docs + releases into one `started -> landed -> what's next` thread (the monthly's reason to exist) - then a *By the Numbers* block, an exhaustive supporting-detail catalog, and a week-by-week index. The monthly runner defaults to the **Opus** model since it runs only once a month. See [docs/team-monthly-quickstart.md](docs/team-monthly-quickstart.md).
+
+### Context cascade (every tier reads the tier above)
+
+Orthogonal to the upward synthesis flow, each tier loads the most-recent higher-tier digest's Executive Summary before it runs: a daily reads the latest weekly, a weekly reads the latest monthly. It is INPUT only (it shapes prose, never re-rendered), Exec-Summary-only, one page per level, gated on `cascade.enabled`, and a silent no-op when the higher tier has no page yet. This is the source-level fix for digests that read "raw" - the daily now opens items with storyline background instead of cold PRs.
+
 ### Under the hood
 
 Three architectural pieces are worth knowing about before reading the skill bodies. Full deep-dive in [docs/architecture.md](docs/architecture.md):
@@ -112,7 +143,7 @@ cd team-digest
 ./setup.sh
 ```
 
-The setup script verifies prerequisites, installs the `/team-digest` and `/team-weekly` skills to `~/.claude/skills/`, and checks access to the first GitHub org configured in `config.json`.
+The setup script verifies prerequisites, installs the `/team-digest`, `/team-weekly`, and `/team-monthly` skills to `~/.claude/skills/`, and checks access to the first GitHub org configured in `config.json`.
 
 **Run your first daily digest:**
 
@@ -151,6 +182,18 @@ The output goes to `/tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md`. Use t
 
 Reads the past week's daily digests already in Notion (no re-scanning) and writes a synthesized weekly summary to the same database. Prerequisite: at least 5-7 dailies for the target week must already exist in Notion. See [docs/team-weekly-quickstart.md](docs/team-weekly-quickstart.md) for the full walkthrough.
 
+**Run the monthly rollup:**
+
+```
+/team-monthly                                   # last full calendar month
+/team-monthly 2026-05                           # a specific calendar month
+/team-monthly 2026-05-14                        # the calendar month containing this date
+/team-monthly --dry-run                         # preview, no Notion write
+/team-monthly 2026-05 --dry-run                 # specific month + dry run
+```
+
+Reads the month's weeklies (in full) plus cheap metadata for every daily, deep-reads a capped handful of high-signal dailies, and writes a storyline-first monthly page. Prerequisite: the month's weeklies (and dailies) must already exist in Notion. Do a `--dry-run` against a complete past month first to see the synthesis quality. See [docs/team-monthly-quickstart.md](docs/team-monthly-quickstart.md).
+
 **Run from the terminal (cron / launchd / scripts):**
 
 ```bash
@@ -158,11 +201,13 @@ bin/team-digest-run.sh                       # yesterday's daily (writes to Noti
 bin/team-digest-run.sh 2026-04-20 --dry-run  # specific daily, local file
 bin/team-weekly-run.sh                       # last full week's rollup
 bin/team-weekly-run.sh --dry-run             # preview the rollup, no Notion write
+bin/team-monthly-run.sh                      # last full month's rollup (Opus default)
+bin/team-monthly-run.sh 2026-05 --dry-run    # specific month, local file
 ```
 
-Both wrappers invoke `claude -p` headlessly with the Notion MCP tools allow-listed. Same skill, same flags, same output - just non-interactive entry points. Symlink to `~/.local/bin/` for convenience.
+All three wrappers invoke `claude -p` headlessly with the Notion MCP tools allow-listed. Same skill, same flags, same output - just non-interactive entry points. Symlink to `~/.local/bin/` for convenience.
 
-**Automate it:** See [docs/scheduling.md](docs/scheduling.md) for the launchd plist, cron syntax, and a GitHub Actions example. Recommended cadence: `bin/team-digest-run.sh` every weekday morning, `bin/team-weekly-run.sh` Monday morning after Friday's daily lands.
+**Automate it:** See [docs/scheduling.md](docs/scheduling.md) for the launchd plist, cron syntax, and a GitHub Actions example. Recommended cadence: `bin/team-digest-run.sh` every weekday morning, `bin/team-weekly-run.sh` Monday morning after Friday's daily lands, `bin/team-monthly-run.sh` on the 1st of each month after that day's daily and the prior week's weekly land.
 
 ### Updating After Git Pull
 
@@ -345,11 +390,11 @@ Daily digests are the atomic unit. Higher-cadence digests are rollups that summa
 | Cadence   | Status  | Input                                  | Output                                                                                               |
 | --------- | ------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | Daily     | Shipped | Raw sources (GitHub, Notion, RSS)      | One Notion page per day                                                                              |
-| Weekly    | Shipped | The week's daily digests in Notion     | One Notion page synthesizing cross-day themes (top GitHub work, releases, partner momentum, content pulse, industry news roundup, favorites movement) |
-| Monthly   | Planned | Weekly digests for the month           | One page with themes, metrics (PRs merged, partners engaged), and strategic observations             |
+| Weekly    | Shipped | The week's daily digests in Notion     | One Notion page synthesizing cross-day themes (top GitHub work, releases, partner momentum, content pulse, industry news roundup, favorites movement, threads to watch) |
+| Monthly   | Shipped | The month's weeklies (full) + every daily's metadata + capped daily deep-fetch | One storyline-first Notion page: Month in Review, Top Storylines, By the Numbers, supporting-detail catalog |
 | Quarterly | Planned | Monthly digests                        | Executive-level summary with trends, comparisons to prior quarter, team highlights                   |
 
-**How rollups work:** A weekly digest skill reads the last 5 daily digest pages from the Notion database, synthesizes them into themes and highlights, and writes a weekly summary page. The daily pages become the "source of truth" that higher cadences reference - no re-scanning of raw sources needed.
+**How rollups work:** A rollup skill reads lower-cadence digest pages from the Notion database, synthesizes them, and writes a higher-cadence summary page - no re-scanning of raw sources. The weekly reads the past week's dailies. The monthly uses a **hybrid spine**: it reads the month's weeklies in full, pulls cheap metadata for every daily, and selectively deep-reads the dailies a storyline needs (mitigating the signal loss of synthesizing from synthesis). Orthogonally, a **context cascade** feeds each tier the most-recent higher-tier Executive Summary before it runs, so lower cadences stay storyline-aware. A quarterly would extend the same pattern over monthlies (its cascade hook is already reserved in the monthly skill).
 
 ### Organizational Memory
 
@@ -408,8 +453,10 @@ Zero additional SaaS costs. Everything runs on existing Claude Code and GitHub s
 
 - [docs/team-digest-quickstart.md](docs/team-digest-quickstart.md) - 10-minute setup walkthrough for the daily digest
 - [docs/team-weekly-quickstart.md](docs/team-weekly-quickstart.md) - The weekly rollup skill: prerequisites, usage, scheduling, failure modes
-- [docs/configuration.md](docs/configuration.md) - Customize keywords, partner patterns, Favorites, Pages-I-Created email, RSS feeds, HIP tracking
+- [docs/team-monthly-quickstart.md](docs/team-monthly-quickstart.md) - The monthly rollup skill: hybrid-spine reading, storyline output, the context cascade
+- [docs/architecture.md](docs/architecture.md) - End-to-end deep dive: three-tier cadence, HIP matching, calibration, the context cascade
+- [docs/configuration.md](docs/configuration.md) - Customize keywords, partner patterns, Favorites, Pages-I-Created email, RSS feeds, HIP tracking, the `monthly` + `cascade` blocks
 - [docs/hip-tracking.md](docs/hip-tracking.md) - HIP Activity source, cross-reference annotations, status-change detection, opting out
 - [docs/scheduling.md](docs/scheduling.md) - macOS launchd, Linux cron, GitHub Actions self-hosted runners
 - [docs/troubleshooting.md](docs/troubleshooting.md) - Common issues and fixes
-- [docs/roadmap.md](docs/roadmap.md) - What's parked for later (YouTube/X/Slack watching, monthly/quarterly digests, advanced HIP-to-code mapping)
+- [docs/roadmap.md](docs/roadmap.md) - What's shipped (monthly + cascade) and what's parked (YouTube/X/Slack watching, quarterly/yearly digests, advanced HIP-to-code mapping)

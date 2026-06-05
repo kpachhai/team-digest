@@ -15,8 +15,11 @@
 
 set -euo pipefail
 
-BASELINE_FILE="$HOME/.config/team-digest/hip-calibration-baseline.json"
-DECISION_FILE="$HOME/.config/team-digest/strategy4-gate-decision.json"
+# Paths are overridable via env (used by tests to point at fixtures + a temp
+# decision file, so tests never read or clobber real ~/.config state).
+# Unset -> production defaults, so runtime behavior is unchanged.
+BASELINE_FILE="${TEAM_DIGEST_CALIBRATION_BASELINE:-$HOME/.config/team-digest/hip-calibration-baseline.json}"
+DECISION_FILE="${TEAM_DIGEST_GATE_DECISION:-$HOME/.config/team-digest/strategy4-gate-decision.json}"
 
 mkdir -p "$(dirname "$DECISION_FILE")"
 

@@ -89,7 +89,7 @@ Create `~/Library/LaunchAgents/com.team-digest.team-digest.plist`:
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>/Users/YOUR_USERNAME/.local/bin/team-digest-run.sh</string>
+    <string>/Users/YOUR_USERNAME/.local/bin/team-digest-run.sh</string> <!-- pii-allow:launchd-placeholder -->
   </array>
 
   <!-- Every day at 01:00 UTC. TimeZone key (macOS 12+) pins the schedule to UTC
@@ -105,10 +105,10 @@ Create `~/Library/LaunchAgents/com.team-digest.team-digest.plist`:
   </dict>
 
   <key>StandardOutPath</key>
-  <string>/Users/YOUR_USERNAME/.local/log/team-digest-launchd.log</string>
+  <string>/Users/YOUR_USERNAME/.local/log/team-digest-launchd.log</string> <!-- pii-allow:launchd-placeholder -->
 
   <key>StandardErrorPath</key>
-  <string>/Users/YOUR_USERNAME/.local/log/team-digest-launchd.log</string>
+  <string>/Users/YOUR_USERNAME/.local/log/team-digest-launchd.log</string> <!-- pii-allow:launchd-placeholder -->
 
   <key>RunAtLoad</key>
   <false/>
@@ -154,7 +154,7 @@ tail -f ~/.local/log/team-digest.log
 Same script works under cron. Add to `crontab -e`:
 
 ```
-0 1 * * * /home/YOUR_USERNAME/.local/bin/team-digest-run.sh > /dev/null 2>&1
+0 1 * * * "$HOME/.local/bin/team-digest-run.sh" > /dev/null 2>&1
 ```
 
 The script handles its own logging via `TEAM_DIGEST_LOG` and `TEAM_DIGEST_RAW_LOG`. Cron will not fire missed runs on a sleeping machine - same caveat as launchd.
@@ -191,6 +191,58 @@ jobs:
 ```
 
 GitHub-hosted runners do not have `claude` installed, so this requires a self-hosted setup. The Claude Code CLI must be authenticated on the runner.
+
+## Scheduling the weekly and monthly rollups
+
+The same wrapper pattern covers `bin/team-weekly-run.sh` and `bin/team-monthly-run.sh`. Both are consumers - they read existing Notion pages rather than scanning sources - so schedule them AFTER the dailies (and, for the monthly, the weeklies) they depend on have landed.
+
+- **Weekly** - run Monday morning, after the prior week's dailies are in. launchd uses `StartCalendarInterval` with `Weekday = 1`. The full plist is in [`docs/team-weekly-quickstart.md`](team-weekly-quickstart.md).
+- **Monthly** - run on the 1st of each month (for the prior full calendar month), after that day's daily and the prior week's weekly have landed. The monthly runner defaults to the **Opus** model (synthesis is reasoning-heavy and runs once a month); override with `TEAM_DIGEST_MODEL`.
+
+Monthly launchd plist - save as `~/Library/LaunchAgents/com.team-digest.team-monthly.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.team-digest.team-monthly</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/YOUR_USERNAME/.local/bin/team-monthly-run.sh</string> <!-- pii-allow:launchd-placeholder -->
+  </array>
+
+  <!-- 1st of every month at 10:00 local time. Day=1 (vs the weekly's Weekday=1). -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key><integer>1</integer>
+    <key>Hour</key><integer>10</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USERNAME/.local/log/team-monthly-launchd.log</string> <!-- pii-allow:launchd-placeholder -->
+
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USERNAME/.local/log/team-monthly-launchd.log</string> <!-- pii-allow:launchd-placeholder -->
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
+```
+
+Replace `YOUR_USERNAME` with your macOS username (`whoami`), then `launchctl load ~/Library/LaunchAgents/com.team-digest.team-monthly.plist`.
+
+Linux cron for the monthly (10:00 on the 1st):
+
+```
+0 10 1 * * "$HOME/.local/bin/team-monthly-run.sh" > /dev/null 2>&1
+```
 
 ## Verifying the schedule
 

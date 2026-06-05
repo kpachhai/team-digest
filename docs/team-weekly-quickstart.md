@@ -117,5 +117,6 @@ Filter the database view by `Digest Type` to separate weekly rollups from daily 
 - [`docs/architecture.md`](architecture.md) - under-the-hood explainer including why team-weekly is a synthesis layer over the dailies, not a parallel scanner
 - [`docs/configuration.md`](configuration.md) - shared configuration with team-digest (no separate config block needed)
 - [`docs/team-digest-quickstart.md`](team-digest-quickstart.md) - set up the daily skill first; weekly depends on dailies already being in Notion
+- [`docs/team-monthly-quickstart.md`](team-monthly-quickstart.md) - the next cadence up; the monthly reads this skill's weeklies (and its Threads to Watch section) to build month-spanning storylines
 - [`docs/scheduling.md`](scheduling.md) - launchd plist and cron syntax for production scheduling
 - [`docs/troubleshooting.md`](troubleshooting.md) - common failure modes and recovery paths

@@ -144,6 +144,26 @@ Trade-offs:
 - Each day a lookback PR is touched it can re-appear in successive daily digests (no cross-day dedup yet; see `docs/roadmap.md` for the planned dedup tracker). The `(merged YYYY-MM-DD)` annotation in the rendered narrative lets readers distinguish today's signal from the backfill.
 - Larger lookback = more `gh search` results (`--limit 100` per call caps any explosion). Mech B is still bounded by `max_hips_with_implementation_expansion`.
 
+### Monthly digest (`monthly` block)
+
+Read by `/team-monthly`. The monthly is a consumer: it reads the month's weeklies in full plus cheap page-properties for every daily, then deep-reads a capped handful of dailies.
+
+| Field | Default | Purpose |
+|---|---|---|
+| `max_daily_deep_fetch` | `8` | Cap on how many daily-digest BODIES `/team-monthly` fetches in full. The whole-month skeleton (page properties) is always read cheaply via one query; only these N high-signal days get a body fetch. Raise for richer monthlies at higher token cost. |
+| `boundary` | `"calendar"` | Month boundary convention. `calendar` = first..last of the calendar month; weeklies are included by their stored Sunday date, and month-edge days are covered via dailies. (`iso-4week` is reserved.) |
+
+### Context cascade (`cascade` block)
+
+Read by all three tiers. When enabled, each tier loads the most-recent higher-tier digest's Executive Summary before it runs (daily reads the latest weekly; weekly reads the latest monthly) so output is storyline-aware instead of cold.
+
+| Field | Default | Purpose |
+|---|---|---|
+| `enabled` | `true` | Master switch. Set `false` to disable the downward context cascade everywhere. |
+| `inject` | `"executive_summary"` | What the cascade reads from the higher-tier page. `executive_summary` (default) reads ONLY that section - cheapest. (`full` is reserved and would inject the whole body at much higher token cost.) |
+
+Cost is bounded by design: at most one higher-tier page is fetched per tier, and only its Executive Summary is extracted. The weekly-reads-monthly link is a no-op until the first monthly exists.
+
 ### GitHub authentication
 
 The skill calls `gh search` / `gh api` via the helpers in `skills/team-digest/lib/`. These commands use whatever token `gh` itself resolves — in this order, highest priority first:

@@ -25,9 +25,13 @@ set -euo pipefail
 MODE="${1:?usage: calibrate-hip-matches.sh --baseline <dry-run-output> | --current-only [dry-run-output]}"
 shift || true
 
-LABELED_SET="$HOME/.config/team-digest/hip-code-mapper-labeled-set.json"
-BASELINE_FILE="$HOME/.config/team-digest/hip-calibration-baseline.json"
-CURRENT_FILE="$HOME/.config/team-digest/hip-calibration-current.json"
+# Paths are overridable via env (used by tests to read fixtures + write to a
+# temp dir, so tests never read or clobber real ~/.config calibration state).
+# Unset -> production defaults, so runtime behavior is unchanged. The baseline
+# var name matches strategy4-gate.sh's TEAM_DIGEST_CALIBRATION_BASELINE.
+LABELED_SET="${TEAM_DIGEST_LABELED_SET:-$HOME/.config/team-digest/hip-code-mapper-labeled-set.json}"
+BASELINE_FILE="${TEAM_DIGEST_CALIBRATION_BASELINE:-$HOME/.config/team-digest/hip-calibration-baseline.json}"
+CURRENT_FILE="${TEAM_DIGEST_CALIBRATION_CURRENT:-$HOME/.config/team-digest/hip-calibration-current.json}"
 
 case "$MODE" in
   --baseline)

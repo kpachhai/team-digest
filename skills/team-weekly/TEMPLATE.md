@@ -21,8 +21,9 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 9. Notion Content Pulse
 10. Industry News Roundup (omit if no items)
 11. Favorites Movement (omit if no Favorites Activity in any daily)
-12. Day-by-Day Index
-13. Footer callout (ALWAYS last)
+12. Threads to Watch / Carried Over (omit if nothing is open at week's end)
+13. Day-by-Day Index
+14. Footer callout (ALWAYS last)
 
 ---
 
@@ -191,6 +192,22 @@ NOTE: Omit this section if no Favorites Activity appeared in any daily.
 
 ---
 
+# Threads to Watch / Carried Over
+
+NOTE: The spine the monthly reads. Items still OPEN at week's end with advisory relevance:
+NOTE: open PRs worth tracking, HIPs mid-arc (not yet at terminal status), unresolved partner
+NOTE: action items, design docs in flight. Each line names the thread + its current state +
+NOTE: the single most useful link. Omit the whole section if nothing qualifies (no filler).
+NOTE: This is NOT a re-list of everything open - only threads a reader should track into next week.
+
+- **<thread name in plain English>** - <current state at week's end>; <one-clause why it matters>. [<primary link>](<url>)
+- **HIP-<N> mid-arc** - now at <status>, last moved <weekday>; implementation open in [<repo>](url). [HIP-<N>](<url>)
+- **<Partner> open ask** - <what they are waiting on>; raised <weekday>, unresolved. [<meeting note>](<url>)
+
+NOTE: If nothing is open/carried-over: omit the section entirely.
+
+---
+
 # Day-by-Day Index
 
 NOTE: One line per day in the window. Note gaps explicitly.
@@ -214,6 +231,7 @@ NOTE: One line per day in the window. Note gaps explicitly.
 
 ### Weekly vs. daily
 - Synthesize, don't copy. Cross-day signal is the point - sustained activity, recurring themes, multi-touch partners.
+- "Threads to Watch / Carried Over" is the monthly's storyline spine. Keep each line a trackable thread (open state + why + link), not a status dump. The monthly reads this section across all weeks to build its Top Storylines.
 - Don't re-summarize content already in a daily. Link to the daily for drill-down.
 - Mermaid diagrams from the dailies are referenced by name, not re-rendered.
 

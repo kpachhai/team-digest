@@ -17,7 +17,7 @@ The `/team-digest` daily skill scans the `hiero-ledger/hiero-improvement-proposa
 
 If more than 10 HIPs were touched on the digest day, the top 10 (ranked status-changed-first) get full implementation-activity expansion; the rest appear in a single `### Other HIPs touched today` overflow list without implementation lookup. The cap is configurable via `hip_tracking.max_hips_with_implementation_expansion`.
 
-The `/team-weekly` skill aggregates HIP entries from the past week's dailies into a `## HIP Movement This Week` theme. It does NOT re-scan the HIP repo - the weekly is a pure synthesis layer over the dailies.
+The `/team-weekly` skill aggregates HIP entries from the past week's dailies into a `## HIP Movement This Week` theme. The `/team-monthly` skill aggregates the weeklies' HIP movement (and cross-week status arcs) into a **HIP movement this month** block inside its By the Numbers section. Neither re-scans the HIP repo - both are pure synthesis layers over the tier below, and both gate on `TEAM_DIGEST_HIP_ENABLED`.
 
 ## How it works
 
@@ -177,11 +177,11 @@ With this set:
 - Step 2.3 in the daily pipeline is skipped entirely.
 - The `Linked HIPs:` annotation in `fetch-github-prs.sh` / `fetch-github-issues.sh` is disabled.
 - Audit check 9 in the Pre-Write Link Audit (Step 4.5) is a no-op.
-- The weekly skill's `## HIP Movement This Week` theme is omitted.
+- The weekly skill's `## HIP Movement This Week` theme and the monthly skill's HIP movement block are omitted.
 
 The rest of the digest behaves identically. Forkers who don't track Hedera/Hiero HIPs should set this flag to `false` and ignore the rest of this doc.
 
-An additional run-time gate exists via the `TEAM_DIGEST_HIP_ENABLED` environment variable. If exported as `0` in the shell that runs the digest, the HIP source and the weekly theme are skipped regardless of config. Useful for one-off backfills against historical dates where HIP scanning would be noise.
+An additional run-time gate exists via the `TEAM_DIGEST_HIP_ENABLED` environment variable. If exported as `0` in the shell that runs the digest, the HIP source and the weekly/monthly themes are skipped regardless of config. Useful for one-off backfills against historical dates where HIP scanning would be noise.
 
 ## Adding more `implementation_orgs`
 
@@ -214,4 +214,4 @@ See [`docs/troubleshooting.md`](troubleshooting.md) for: empty HIP section when 
 
 ## What's parked for later
 
-See [`docs/roadmap.md`](roadmap.md) for HIP-related items not yet shipped. Strategies 2 + 3 + confidence model + calibration are shipped; Strategy 4 is gated and its ship-vs-defer outcome is recorded in `~/.config/team-digest/strategy4-gate-decision.json` and the roadmap doc. Still parked: GitHub Discussions integration, monthly/quarterly synthesis, and the option to consume an external `data/hips.json` cache directly instead of re-fetching.
+See [`docs/roadmap.md`](roadmap.md) for HIP-related items not yet shipped. Strategies 2 + 3 + confidence model + calibration are shipped; Strategy 4 is gated and its ship-vs-defer outcome is recorded in `~/.config/team-digest/strategy4-gate-decision.json` and the roadmap doc. Still parked: GitHub Discussions integration, quarterly/yearly synthesis (the monthly cadence is shipped), and the option to consume an external `data/hips.json` cache directly instead of re-fetching.

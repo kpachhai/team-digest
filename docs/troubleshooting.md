@@ -111,13 +111,15 @@ If the `## HIP Activity` section is missing from the digest on a day you know ha
 
 ### Notion update step failed - recover with --from-file
 
-The daily and weekly skills split the Notion write into two MCP calls: `notion-create-pages` (creates the page with a placeholder body) followed by `notion-update-page` (writes the full content). This keeps each call within the Notion MCP timeout budget. If the second call fails after the first succeeds, the page exists in Notion with a placeholder body and the full content lives in the safety file at `/tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md`. Recover by re-running from the safety file:
+All three skills (daily, weekly, monthly) split the Notion write into two MCP calls: `notion-create-pages` (creates the page with a placeholder body) followed by a chunked sequence of `notion-update-page` (writes the full content). This keeps each call within the Notion MCP timeout budget. If the write fails after the page is created, the page exists in Notion with a placeholder (or partial) body and the full content lives in the safety file at `/tmp/team-digest-dry-runs/`. Recover by re-running the matching wrapper from the safety file:
 
 ```bash
-bin/team-digest-run.sh <DATE_LABEL> --from-file /tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md
+bin/team-digest-run.sh  <DATE_LABEL> --from-file /tmp/team-digest-dry-runs/team-digest-<DATE>-v<N>.md
+bin/team-weekly-run.sh  <WEEK_ARG>   --from-file /tmp/team-digest-dry-runs/team-weekly-<WEEK_LABEL>-v<N>.md
+bin/team-monthly-run.sh <MONTH_ARG>  --from-file /tmp/team-digest-dry-runs/team-monthly-<MONTH_LABEL>-v<N>.md
 ```
 
-If you want a clean retry instead, delete the placeholder page in Notion first; the re-run will create a fresh page.
+The weekly and monthly require a date/month/range arg alongside `--from-file` so the Notion page properties can be computed. If you want a clean retry instead, delete the placeholder page in Notion first; the re-run will create a fresh page. The `DIGEST-SECTION-BREAK` sentinel left by an interrupted chunked write is detected automatically and the upload restarts cleanly.
 
 ### Known-HIPs index file is stale or missing
 
@@ -191,6 +193,6 @@ The Notion configuration page is shared. If you need personal keywords, you can:
 
 ### How do I stop the automated runs?
 
-- **macOS launchd:** `launchctl unload ~/Library/LaunchAgents/com.team-digest.team-digest.plist` (and optionally delete the plist)
-- **Linux cron:** `crontab -e` and remove or comment the `team-digest-run.sh` line
+- **macOS launchd:** `launchctl unload ~/Library/LaunchAgents/com.team-digest.team-digest.plist` (and optionally delete the plist). If you also scheduled the rollups, unload `com.team-digest.team-weekly.plist` and `com.team-digest.team-monthly.plist` too.
+- **Linux cron:** `crontab -e` and remove or comment the `team-digest-run.sh` / `team-weekly-run.sh` / `team-monthly-run.sh` lines
 - **GitHub Actions:** disable or delete the workflow in `.github/workflows/`

@@ -125,7 +125,9 @@ Each team's config key matches its skill directory name. Multiple digests coexis
 
 ## See also
 
-- [`docs/architecture.md`](architecture.md) - under-the-hood explainer: daily pipeline phases, HIP matching subsystem, sidecar consolidation, calibration loop
+- [`docs/architecture.md`](architecture.md) - under-the-hood explainer: daily pipeline phases, HIP matching subsystem, sidecar consolidation, calibration loop, the context cascade
+- [`docs/team-weekly-quickstart.md`](team-weekly-quickstart.md) - roll the dailies up into a weekly synthesis
+- [`docs/team-monthly-quickstart.md`](team-monthly-quickstart.md) - roll the weeklies up into a storyline-first monthly; the cascade makes later dailies storyline-aware
 - [`docs/configuration.md`](configuration.md) - every config knob with defaults and trade-offs
 - [`docs/hip-tracking.md`](hip-tracking.md) - HIP Activity behavior, confidence model, verbose mode, opt-out
 - [`docs/scheduling.md`](scheduling.md) - launchd plist and cron syntax for production scheduling

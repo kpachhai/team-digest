@@ -22,4 +22,5 @@ stdout, no MCP calls (those only work inside Claude), no disk writes
 This skill ALSO calls `~/.claude/skills/team-digest/lib/load-config.sh`
 to read the shared `team-digest` config. We deliberately read the same
 config file rather than maintaining a separate `team-weekly` config -
-the two skills share Notion IDs, GitHub orgs, and the team profile.
+all three cadence skills (daily, weekly, monthly) share Notion IDs,
+GitHub orgs, and the team profile.

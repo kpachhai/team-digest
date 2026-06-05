@@ -46,6 +46,10 @@ NOTE: BAD:  - **`solo`** gains new features - MDC logging and silent mode added.
 NOTE:       (fails Q2: what does that enable?)
 NOTE: GOOD: - **[solo](url) becomes CI-scriptable** - a new `SOLO_SILENT_MODE` env flag disables interactive output, enabling
 NOTE:       headless use in partner CI pipelines. Partners who currently can't automate solo can do so once this merges.
+NOTE:
+NOTE: If Step 1.5 cascade context surfaced an ongoing storyline for a bullet, frame it as an
+NOTE: arc step ("week 3 of the X migration") so the reader sees trajectory. Background-first
+NOTE: rule applies: one clause of storyline context before the change when the reader needs it.
 
 - **<plain bold or [linked name](url)>** - <specific change in plain English>; <consequence or why it matters to a partner/reader>
 - **<plain bold or [linked name](url)>** - <...>

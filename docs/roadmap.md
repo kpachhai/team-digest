@@ -27,6 +27,12 @@ For a date-anchored history of when each capability landed, see the git log (`gi
 
 User-facing surface lives in [`docs/hip-tracking.md`](hip-tracking.md), [`docs/configuration.md`](configuration.md), and [`docs/troubleshooting.md`](troubleshooting.md).
 
+### Monthly digest + context cascade
+
+- **Monthly digest (`/team-monthly`)** - a third cadence above the weekly, built on the same consumer-not-scanner pattern. Hybrid-spine read strategy: one `notion-query-data-sources` for the whole-month skeleton (page properties of every daily + weekly, nearly free) + full fetch of the 4-5 weekly bodies (the spine) + a capped selective deep-fetch of high-signal daily bodies (`monthly.max_daily_deep_fetch`, default 8). Storyline-first output: a Month-in-Review narrative + 4-7 named cross-cutting threads (interconnecting repos + HIPs + partners + Notion docs + releases) + an exhaustive supporting-detail catalog. New `lib/compute-month-window.sh`, `bin/team-monthly-run.sh` (Opus default), and `Digest Type = Monthly` Notion rows. See [`docs/team-monthly-quickstart.md`](team-monthly-quickstart.md).
+- **Context cascade** - each tier loads the most-recent higher-tier digest's Executive Summary before it runs (daily reads the latest weekly; weekly reads the latest monthly) so output is storyline-aware instead of cold. Exec-Summary-only, one page per level, gated on `cascade.enabled`, no-op when the higher tier has no page yet. Fixes the "daily reads raw" problem at the source.
+- **Weekly "Threads to Watch / Carried Over"** - a new weekly section listing threads still open at week's end. It is the monthly's storyline spine and also feeds the daily cascade.
+
 ### Strategy 4 (gated)
 
 Strategy 4 (LLM identifier-generation + `gitGrep`) is gated by `lib/strategy4-gate.sh` against the calibration baseline. State machine: `DEFERRED_AWAITING_BASELINE` → `DEFER` (calibration met `recall >= 0.7 AND missed <= 5` on the `useful_signal` lens) or `TRIGGER` (otherwise). Strategy 4 ships only on `TRIGGER`. Decision recorded in `~/.config/team-digest/strategy4-gate-decision.json`. PR body content is explicitly excluded from Strategy 4 inputs as the strongest secret-leak mitigation.
@@ -152,19 +158,19 @@ Items below are scoped enough to fit one or two focused work sessions. Order is 
 - Discussions are per-repo, not per-org. The helper has to enumerate repos (or take a hardcoded list) - same shape as how `fetch-github-releases.sh` enumerates.
 - Long discussion threads need a "today's new content" filter, not a full-thread dump. Filter by `createdAt > digest_window_start`.
 
-### Monthly / quarterly / yearly synthesis
+### Quarterly / yearly synthesis
 
-**What:** Extend the `team-weekly` synthesis-from-existing-pages pattern to longer windows: a `team-monthly` that reads the past 4-5 weeklies and synthesizes month-spanning themes, and analogous `team-quarterly` and `team-yearly`.
+**What:** Extend the now-shipped monthly cadence to longer windows: a `team-quarterly` that reads ~3 months of monthlies (and the weeklies/dailies beneath them) and an analogous `team-yearly`.
 
-**Why:** Weekly captures the cadence well; monthly captures the trajectory. A monthly is where you see "HIP-X moved from Draft to Accepted over the past month with implementation work in 4 repos" - a daily reader could not piece that together, and a weekly reader sees only one slice.
+**Why:** Monthly captures the trajectory; a quarterly captures the strategic shape - which initiatives sustained over a quarter, which stalled, which were one-month flares. The cascade hook for `monthly <- quarterly` is already reserved in the monthly skill (a documented no-op), so adding the quarterly activates month-arc context for the monthly with no other change.
 
-**Approach sketch:** The weekly is the proof-of-concept. The same shape extends: change the Notion property filter from `date in [Mon, Sun]` to `date in [Month-start, Month-end]` etc., read all weeklies in the window, synthesize cross-week themes. The theme set may differ - status-arc and cross-repo HIP work matter even more in a monthly view than in a weekly.
+**Approach sketch:** The monthly is the proof-of-concept. The same hybrid-spine shape extends: `compute-month-window.sh` already takes `--from/--to`, so window resolution is mostly there (a `compute-quarter-window.sh` is the clean addition). Read the quarter's monthlies as the spine, pull cheap properties for the weeklies/dailies, deep-fetch selectively. The storyline layer matters even more at this range.
 
 **Gotchas:**
 
-- Synthesizing from synthesis. A monthly reads weeklies; each weekly is already a compression of dailies. Some signal is lost at each layer. Decide explicitly what monthly themes ask of the source data: if a monthly theme needs a fact that wasn't preserved in weeklies, the daily layer has to surface it.
-- Render performance at the monthly/quarterly cadence: a quarterly reading 13 weeklies, each with 5-7 themes, easily produces a long Notion page. Audit the page-length budget.
-- Cadence boundaries don't always align. ISO weeks cross month boundaries; ISO quarters drift from calendar quarters by a few days. Pick one convention per cadence and stick to it.
+- Synthesizing from synthesis compounds. A quarterly reads monthlies, which read weeklies, which compress dailies. Decide explicitly what quarterly themes ask of the source data and lean on the deep-fetch cap to reach past the compression when a thread needs it.
+- Render performance: a quarterly reading 3 monthlies plus selective deeper layers easily produces a long Notion page. Audit the page-length budget and reuse the chunked-write split.
+- Cadence boundaries don't always align. ISO quarters drift from calendar quarters by a few days. The monthly settled on calendar boundaries; pick one convention per cadence and stick to it.
 
 ### Token-efficiency follow-ups (contingency)
 

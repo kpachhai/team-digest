@@ -88,7 +88,7 @@ Run the helper:
 bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest
 ```
 
-Yes - this skill reads the **team-digest** config, not a separate `team-weekly` config. The two skills share Notion IDs, GitHub setup, and the team profile. This avoids config sprawl. The helper validates `notion.config_page_id` and `notion.database_id` are present and non-empty; on failure, surface the error and stop.
+Yes - this skill reads the **team-digest** config, not a separate `team-weekly` config. All three cadence skills (daily, weekly, monthly) share Notion IDs, GitHub setup, and the team profile. This avoids config sprawl. The helper validates `notion.config_page_id` and `notion.database_id` are present and non-empty; on failure, surface the error and stop.
 
 **GitHub authentication:** see the matching section in `/team-digest`'s SKILL.md — env-var-only by design (`$GH_TOKEN` → `$GITHUB_TOKEN` → `gh auth login`). The skill never reads tokens from `config.json`.
 
@@ -100,6 +100,13 @@ export TEAM_DIGEST_HIP_ENABLED="$HIP_ENABLED"
 ```
 
 Defaults to true if `hip_tracking.enabled` is absent or true; false only if explicitly set to false in config. Mirrors the daily skill's setup so HIP Movement This Week reads the same gate.
+
+Also export the context-cascade flag (consumed by Step 1.5 below). Defaults to enabled if the `cascade` block is absent:
+
+```bash
+CASCADE_ENABLED=$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('cascade',{}).get('enabled',True) else '0')")
+export TEAM_DIGEST_CASCADE_ENABLED="$CASCADE_ENABLED"
+```
 
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md`. Used for the **Relevance** synthesis below. If absent, fall back to generic relevance heuristics.
 
@@ -143,6 +150,16 @@ eval "$(bash ~/.claude/skills/team-weekly/lib/compute-week-window.sh --from "$FR
 After `eval`, `$WEEK_START`, `$WEEK_END`, `$WEEK_LABEL`, `$START`, `$END` are set. For ISO-week mode, `$WEEK_LABEL` is the ISO 8601 label (e.g., `2026-W19`); for custom range mode, it's `<from>_to_<to>` (e.g., `2026-04-25_to_2026-05-03`).
 
 If the helper exits non-zero (invalid date format, --from after --to, mixing positional with --from/--to), surface its stderr to the user and stop.
+
+### Step 1.5: Load month-arc context (cascade)
+
+**Skip this step if `TEAM_DIGEST_CASCADE_ENABLED=0`.** This gives the weekly memory of the month's arc so it can frame the week within the larger story.
+
+1. Query the data source for the **single most-recent `Monthly` page with `date:Date:start` < `$WEEK_END`** (filter `Digest Type = Monthly`, sort `date` descending, page_size 1). The `data_source_id` is the same one discovered in Step 2; if you have not fetched it yet, do so now via `notion-fetch` on `database_id`.
+2. If found, `notion-fetch` it and extract ONLY `## The Month in Review` + `## Executive Summary`. Hold as **"Month Arc"** context (INPUT only; never rendered).
+3. **No-op until the first monthly exists** - skip silently if none found.
+
+Use it to frame the week within the month ("week three of the audit push") in the weekly's Executive Summary and Threads to Watch, without re-explaining the month. **Cost control:** at most ONE `notion-fetch`; Exec-Summary + Month-in-Review only.
 
 ### Step 2: Query the Notion database for daily digests in the window
 
@@ -235,6 +252,10 @@ Aggregate the "Favorites Activity" sections across all daily digests. **Pages th
 
 A simple list at the end: one line per daily digest, `- <weekday>, <date>: [<daily title>](<daily-page-url>)`. Lets the weekly serve as a navigation hub back into the dailies.
 
+**Theme H - Threads to Watch / Carried Over** _(rendered as `## Threads to Watch / Carried Over`)_
+
+Identify threads still OPEN at the end of the week that a reader should track into next week - and that the monthly will stitch into storylines. Sources: open PRs of advisory relevance from Theme A, HIPs not yet at a terminal status from Theme B.5, unresolved partner action items from Theme C ("Open threads"), and design docs still in flight from Theme D/F. For each, write one line: the thread in plain English + its state at week's end + the single most useful link. Omit the section entirely if nothing qualifies. This section is the explicit hand-off to the monthly synthesis - keep each item a trackable thread, not a status dump.
+
 ### Step 4.5: Pre-Write Link Audit (mandatory)
 
 Before writing to Notion, scan the assembled digest content one final time. Verify:
@@ -244,6 +265,7 @@ Before writing to Notion, scan the assembled digest content one final time. Veri
 3. **No `\n` inside Mermaid labels.** Same rule as `/team-digest`. The weekly typically references diagrams from the dailies rather than rendering its own, but if it does render any (e.g., a "week at a glance" architecture flow), the rule applies.
 4. **First-mention expansions are present.** When the synthesis names a project, component, or acronym for the first time, follow it with a 3-7 word plain-English expansion, sourced from the team profile's Project Glossary if present.
 5. **Cross-day coherence.** If you mentioned a partner in Theme C and a related Notion page in Theme D, link the page from Theme C too. The weekly's value is the connections - make them clickable.
+6. **Threads to Watch links.** Every thread in "Threads to Watch / Carried Over" has its primary link present and pulled from an MCP response (no fabricated URLs).
 
 ### Step 5: Write the weekly digest
 
@@ -344,6 +366,8 @@ Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to
 - Do NOT invent closing meta-sections about run hygiene. If a daily fetch failed, note it inline in the Day-by-Day Index, not as a closing callout.
 
 **Executive Summary (mandatory).** After the header callout, before "Week at a Glance" stats, include an `## Executive Summary` section. Same rules as `/team-digest`'s Executive Summary: 5-8 bullets, each leading with a bold callout (project, theme, or topic) followed by a one-line plain-English statement of what shifted across the week and why it matters. Every bullet links to the relevant theme section below for drill-down. Cover a mix: top GitHub themes, the week's releases, partner momentum, the most consequential Notion pages, industry-news standouts. The Outsider Test applies - lead with the user-visible change, no insider jargon without translation.
+
+The weekly Executive Summary is also the surface the daily cascade injects downward (each daily loads this section as "ongoing storylines" - see `/team-digest` Step 1.5). So each bullet should name a *thread or arc*, not just a one-week event - "the X migration advanced to Y" beats "3 PRs merged in X". This keeps the dailies storyline-aware for the following week.
 
 **HIP-aware rule (inherits from daily).** HIP status transitions across the week are first-class Executive Summary bullet candidates. Cross-day status arcs ("Draft -> Last Call -> Accepted across the week") are especially valuable since a daily reader could miss the trajectory. Format:
 

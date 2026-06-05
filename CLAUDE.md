@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-team-digest is a zero-infrastructure digest system built on Claude Code skills. It aggregates GitHub activity, Notion keyword matches, and partner meeting notes into structured daily summaries written to Notion. The repo ships a generic `/team-digest` (daily) and `/team-weekly` (weekly rollup) pair. Additional team-specific digests live in your local checkout only - they are not committed to this public repo.
+team-digest is a zero-infrastructure digest system built on Claude Code skills. It aggregates GitHub activity, Notion keyword matches, and partner meeting notes into structured daily summaries written to Notion. The repo ships three cadences: `/team-digest` (daily, the only scanner), `/team-weekly` (weekly rollup), and `/team-monthly` (storyline-first monthly rollup). The weekly and monthly are consumers - they read existing Notion pages, not external sources. A downward **context cascade** feeds each tier a slice of the tier above (daily reads the latest weekly, weekly reads the latest monthly) so output is storyline-aware instead of cold. Additional team-specific digests live in your local checkout only - they are not committed to this public repo.
 
 ## Key Commands
 
@@ -19,11 +19,20 @@ team-digest is a zero-infrastructure digest system built on Claude Code skills. 
 /team-weekly                            # Weekly: synthesize last full week of dailies into
                                       #   a weekly summary, written to the same Notion DB
 /team-weekly 2026-05-07 --dry-run       # Weekly: specific week, preview locally
+/team-monthly                           # Monthly: synthesize last full calendar month of
+                                      #   weeklies + daily metadata into a storyline-first page
+/team-monthly 2026-05 --dry-run         # Monthly: specific month, preview locally
 bin/team-digest-run.sh                  # Headless terminal entry point for /team-digest
 bin/team-weekly-run.sh                  # Headless terminal entry point for /team-weekly
+bin/team-monthly-run.sh                 # Headless terminal entry point for /team-monthly (Opus default)
+
+# Offline tests (no live Notion / gh / Claude needed):
+bash tests/run-all.sh                                         # run the whole suite (9 files, 100+ assertions)
+bash tests/lint-digest-markdown.sh <file.md>                  # lint a dry-run digest page
+bash tests/lint-digest-markdown.sh --template <TEMPLATE.md>   # lint a skill TEMPLATE.md
 ```
 
-There are no build steps, tests, or linters. The codebase is shell scripts, Bash helper scripts, and Claude Code skill definitions.
+There is no build step. `tests/run-all.sh` runs the offline suite: unit tests for all 8 pure helpers (the 3 date-window resolvers, `extract-hip-refs`, `load-config`, `consolidate-matches`, `strategy4-gate`, `calibrate-hip-matches`) plus the Notion-markdown linter. The 11 network fetch helpers and the three `SKILL.md` pipelines are NOT unit-tested (they need `gh`/network or run inside Claude against Notion MCP); validate those operationally with `--dry-run`. See [`tests/README.md`](tests/README.md) for coverage details, the testability env overrides, and two known gaps the tests surfaced.
 
 ## Architecture
 
@@ -32,6 +41,8 @@ There are no build steps, tests, or linters. The codebase is shell scripts, Bash
 ```
 team-digest/
 ├── bin/team-digest-run.sh              # Headless terminal entry point (claude -p wrapper)
+├── bin/team-weekly-run.sh             # Weekly headless entry point
+├── bin/team-monthly-run.sh           # Monthly headless entry point (Opus default)
 ├── config.template.json              # Committed config template
 ├── config.json                       # Gitignored - your Notion IDs + structural settings
 ├── profiles/
@@ -43,7 +54,7 @@ team-digest/
 │   │   ├── SKILL.md                  # Skill body: orchestration + MCP calls + writing rules
 │   │   └── lib/                      # 15 shell helpers (no MCP - those only work inside Claude)
 │   │       ├── compute-window.sh     # Resolve date arg → DATE_LABEL/START/END
-│   │       ├── load-config.sh        # Read + validate config.json (used by team-weekly too)
+│   │       ├── load-config.sh        # Read + validate config.json (shared by team-weekly + team-monthly)
 │   │       ├── fetch-github-prs.sh   # gh search prs + python parsing
 │   │       ├── fetch-github-issues.sh
 │   │       ├── fetch-github-releases.sh
@@ -58,11 +69,23 @@ team-digest/
 │   │       ├── calibrate-hip-matches.sh  # Precision/recall/F1 vs labeled set
 │   │       ├── strategy4-gate.sh        # Strategy 4 gate decision (calibration-driven)
 │   │       └── README.md             # Helper inventory and conventions
-│   └── team-weekly/                    # Weekly rollup of dailies
-│       ├── SKILL.md                  # Reads dailies from Notion DB, synthesizes cross-day themes
+│   ├── team-weekly/                    # Weekly rollup of dailies
+│   │   ├── SKILL.md                  # Reads dailies from Notion DB, synthesizes cross-day themes
+│   │   └── lib/
+│   │       ├── compute-week-window.sh  # Resolve date arg → ISO week Mon-Sun timestamps
+│   │       └── README.md
+│   └── team-monthly/                   # Monthly rollup of weeklies + daily metadata (storyline-first)
+│       ├── SKILL.md                  # Hybrid-spine consumer: skeleton query + weekly bodies + capped daily deep-fetch
 │       └── lib/
-│           ├── compute-week-window.sh  # Resolve date arg → ISO week Mon-Sun timestamps
+│           ├── compute-month-window.sh  # Resolve calendar month → MONTH_START/END/LABEL/NAME
 │           └── README.md
+├── tests/                            # Offline test suite (no live Notion / gh / Claude)
+│   ├── run-all.sh                    # Runs every *.test.sh; exits non-zero on any failure
+│   ├── lib-assert.sh                 # Shared assertion helpers (sourced by tests)
+│   ├── *.test.sh                     # Unit tests for the 8 pure helpers + the linter self-test
+│   ├── lint-digest-markdown.sh       # Notion-flavored-markdown linter (use --template for TEMPLATE.md)
+│   ├── fixtures/                     # Sample monthly output + synthetic fixture month
+│   └── README.md                     # Coverage map, testability env overrides, known gaps
 └── docs/                             # User-facing documentation
 ```
 

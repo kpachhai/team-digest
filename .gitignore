@@ -1,9 +1,25 @@
 # Local config with actual Notion IDs - each user has their own
 config.json
 
+# Machine-local config overrides + secrets - never commit Notion IDs, GitHub
+# tokens, Slack bot tokens, channel lists, or any per-machine override.
+# (docs/roadmap.md's Slack section promises config.local.json is gitignored.)
+config.local.json
+*.local.json
+.env
+*.env
+
 # Personalized team profiles (gitignored; templates + worked examples committed)
 profiles/*.md
 !profiles/*.template.md
 !profiles/*.example.md
 
+# Brainstorming/planning artifacts (specs + plans) - local only
 docs/superpowers
+
+# OS + editor cruft
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

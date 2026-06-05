@@ -149,6 +149,18 @@
         "Debrief"
       ],
       "partner_patterns_help": "Phrases that mark a Notion page as a partner-conversation note. Step 4 of the daily pipeline searches for these patterns. Edit if your team uses different phrasing."
+    },
+    "monthly": {
+      "max_daily_deep_fetch": 8,
+      "max_daily_deep_fetch_help": "Cap on how many daily-digest BODIES /team-monthly fetches in full. The whole-month skeleton (page properties for every daily + weekly) is always read cheaply via one query; only these N high-signal days are deep-read. Raise for richer monthlies at higher token cost.",
+      "boundary": "calendar",
+      "boundary_help": "Month boundary convention. 'calendar' = first..last of the calendar month; weeklies are included by their stored Sunday date, and month-edge days are covered via dailies. Reserved alternative: 'iso-4week'."
+    },
+    "cascade": {
+      "enabled": true,
+      "enabled_help": "Master switch for the downward context cascade. When true, each tier loads the most-recent higher-tier digest's Executive Summary before it runs (daily<-weekly, weekly<-monthly) so output is storyline-aware instead of cold. Set false to disable everywhere.",
+      "inject": "executive_summary",
+      "inject_help": "What the cascade injects from the higher-tier page. 'executive_summary' (default) reads ONLY that section - cheapest. Reserved: 'full' would inject the whole body at much higher token cost."
     }
   }
 }

@@ -175,6 +175,13 @@ export TEAM_DIGEST_HIP_ENABLED="$HIP_ENABLED"
 
 The env var controls whether HIP-related machinery runs. Defaults to true if `hip_tracking.enabled` is absent or true; false only if explicitly set to false in config.
 
+Also export the context-cascade flag (consumed by Step 1.5 below). Defaults to enabled if the `cascade` block is absent:
+
+```bash
+CASCADE_ENABLED=$(bash ~/.claude/skills/team-digest/lib/load-config.sh team-digest | python3 -c "import json,sys; d=json.load(sys.stdin); print('1' if d.get('cascade',{}).get('enabled',True) else '0')")
+export TEAM_DIGEST_CASCADE_ENABLED="$CASCADE_ENABLED"
+```
+
 **If the helper succeeds (config file exists with non-empty Notion IDs) AND the argument is `setup`:** this is a re-run on an already-configured machine. Detect-and-verify the existing Notion pages before assuming the config is healthy:
 
 1. Load the Notion MCP tool schemas via Step 0.5 (the existing ToolSearch call). This is required to call `notion-fetch`.
@@ -324,8 +331,10 @@ Call `notion-create-database` with:
 - `schema`: exactly this DDL string (including the double-quotes around column names):
 
 ```
-CREATE TABLE ("Digest Title" TITLE, "date" DATE, "Digest Type" SELECT('Combined':blue, 'Weekly':purple), "Repos Active" NUMBER, "Keywords Matched" MULTI_SELECT(), "Status" SELECT('Auto':green, 'Manual':yellow))
+CREATE TABLE ("Digest Title" TITLE, "date" DATE, "Digest Type" SELECT('Combined':blue, 'Weekly':purple, 'Monthly':orange), "Repos Active" NUMBER, "Keywords Matched" MULTI_SELECT(), "Status" SELECT('Auto':green, 'Manual':yellow))
 ```
+
+**Existing databases (no re-bootstrap):** writing a page with `Digest Type = Monthly` auto-creates the select option on first write, so no manual migration is needed when `/team-monthly` first runs against an older database. If a specific Notion workspace rejects an unknown select option, add a `Monthly` option to the database's `Digest Type` property once, by hand, then re-run `/team-monthly`. (`Combined` and `Weekly` are written by `/team-digest` and `/team-weekly`; a future `Quarterly` option is added when that cadence ships.)
 
 Capture the returned database `id` as `database_id`. The response also includes a `data_source_id` in a `<data-source>` tag — ignore it for config purposes (the existing skill discovers `data_source_id` at runtime by calling `notion-fetch` on `database_id` in Step 0, so storing it in config would be redundant).
 
@@ -507,6 +516,22 @@ Extract:
 GitHub org and repo configuration comes from `config.json` (the `github.orgs` array), not from the Notion config page. This keeps structural config (which orgs/repos to scan) separate from frequently-changing settings (keywords, patterns, favorites).
 
 If the Notion config page is unreachable, fall back to the `defaults` section from the local config file. The Favorites list has no `defaults` fallback - if the config page is unreachable, skip Step 3.5 with a one-line note.
+
+### Step 1.5: Load storyline context (cascade)
+
+**Skip this entire step if `TEAM_DIGEST_CASCADE_ENABLED=0`.** This step gives the daily memory of the ongoing storylines so it can add background instead of presenting every change cold. It is the primary fix for "the daily reads raw."
+
+1. Fetch `data_source_id` from the database (the same `notion-fetch` on `database_id` you already do for the write in Step 5 - if you have not done it yet, do it now). Query the data source (`notion-query-data-sources`) for the **single most-recent `Weekly` page with `date:Date:start` < `$DATE_LABEL`**: filter `Digest Type = Weekly` AND `date < $DATE_LABEL`, sort `date` descending, page_size 1.
+2. Do the same for the most-recent `Monthly` page (`Digest Type = Monthly`, `date < $DATE_LABEL`, descending, page_size 1). This is a no-op until monthlies exist.
+3. For each page found, `notion-fetch` it and extract **ONLY** the `## Executive Summary` section (for a monthly, also its `## The Month in Review` lead). If a page has neither, skip it.
+4. Hold this as **"Ongoing Storylines"** context. **Cost control:** at most two `notion-fetch` calls; extract only those sections; never fetch other weeklies/monthlies; this context is INPUT only - it is NEVER rendered as a section in the daily.
+
+**How the daily uses it (input-only):**
+- Add a one-clause background when today's item belongs to a known storyline ("this continues the X migration that has run for three weeks") - see the Background-first rule in the Plain-English Description Rules.
+- Mark continuations instead of re-introducing a thread cold.
+- Do NOT re-explain what the weekly/monthly already established; assume the reader can follow the arc.
+
+If no weekly (and no monthly) exists yet, skip silently - no note, no output.
 
 ### Step 2: Scan GitHub Activity
 
@@ -1026,6 +1051,7 @@ Every digest opens with an **Executive Summary** under an `## Executive Summary`
 - Cover a mix: priority-repo headlines, releases, major Notion design docs created today, partner conversations of substance, notable Industry News items
 - Skip routine maintenance (dep bumps, README touch-ups, test refactors) - the per-section narratives already cover those
 - Apply the same Plain-English Description Rules: write for an outsider, lead with the user-visible change, no insider jargon without translation
+- When Step 1.5 (cascade) surfaced an ongoing storyline a bullet belongs to, frame the bullet as an arc step ("week 3 of the X migration: ...") so a skimmer sees trajectory, not just today's snapshot. Do not invent an arc the cascade context does not support.
 - The audience is your future self skimming the page in 30 seconds - what would you most want to surface?
 
 **Anti-examples:**
@@ -1128,6 +1154,15 @@ Good shape (change-as-subject): `When users send multiple Ethereum transactions 
 
 The change is the subject; the PR is the citation. Reverse the polarity of every paragraph and the digest reads to an outsider.
 
+#### Background-first rule (mandatory)
+
+A change is only "raw" when the reader does not know the storyline it belongs to. Before the user-visible change, add a one-clause **background** when EITHER is true:
+
+1. The item belongs to an **Ongoing Storyline** loaded in Step 1.5 (cascade). Name the arc and where this piece fits: "The relay has been hardening Pectra-fork handling all month; this piece keeps concurrent transactions in submission order. Merged in [#5371](url)."
+2. The item names a **project or component an outsider would not recognize** and the Project Glossary has (or implies) a one-line description. Lead with what it is before what changed.
+
+Keep the background to ONE clause - it sets context, it does not retell the storyline. If Step 1.5 found no storylines (no weekly yet), fall back to glossary-driven background only. The goal: a reader who did not see yesterday's digest still understands why today's change matters.
+
 #### Forbidden patterns (with concrete fixes)
 
 **1. Creative metaphors and sprint slang.** Banned phrases - if you find yourself writing one, rewrite the sentence with plain action verbs (released, fixed, added, merged, opened, closed):
@@ -1179,6 +1214,7 @@ After writing each priority-repo paragraph, read it imagining you joined the tea
 - Did I have to mentally translate any phrase?
 - Is the user-visible change clear in the first sentence?
 - Are there more than 3 unexplained internal terms in any single sentence?
+- Did I give enough background for someone who did NOT read yesterday's digest - is the storyline this change belongs to clear in one clause?
 
 If the answer is "yes" to any of those, rewrite. The Pre-Write Link Audit (Step 4.5) checks links and Mermaid syntax mechanically; this Outsider Test checks readability semantically and is your job to apply paragraph-by-paragraph as you write.
 

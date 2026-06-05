@@ -1,6 +1,6 @@
 # team-digest Architecture
 
-This doc explains how `team-digest` works end-to-end: the two skills, the daily pipeline, the HIP matching subsystem, the calibration loop, the weekly synthesis layer, and the wrapper plumbing that holds it together. Read this before working in `skills/team-digest/SKILL.md` or adding a new source.
+This doc explains how `team-digest` works end-to-end: the three cadence skills, the daily pipeline, the HIP matching subsystem, the calibration loop, the weekly and monthly synthesis layers, the context cascade, and the wrapper plumbing that holds it together. Read this before working in `skills/team-digest/SKILL.md` or adding a new source.
 
 For configuration knobs see [`docs/configuration.md`](configuration.md). For operational troubleshooting see [`docs/troubleshooting.md`](troubleshooting.md). For HIP-specific behavior see [`docs/hip-tracking.md`](hip-tracking.md).
 
@@ -18,7 +18,7 @@ For configuration knobs see [`docs/configuration.md`](configuration.md). For ope
 
 ## System Overview
 
-`team-digest` ships two skills with an asymmetric relationship: `/team-digest` is the daily producer that scans external sources and writes one Notion page per day; `/team-weekly` is the weekly consumer that reads those daily pages back and synthesizes cross-day themes into a separate Notion page.
+`team-digest` ships three cadence skills with an asymmetric relationship: `/team-digest` is the daily producer that scans external sources and writes one Notion page per day; `/team-weekly` is the weekly consumer that reads those daily pages back and synthesizes cross-day themes; `/team-monthly` is the monthly consumer that reads the month's weeklies (plus daily metadata) and synthesizes month-spanning storylines. Only the daily scans external sources; the weekly and monthly are pure synthesis layers.
 
 ```mermaid
 graph TD
@@ -62,6 +62,8 @@ graph TD
 ```
 
 **Key asymmetry:** `/team-weekly` does NOT re-scan external sources. It reads daily pages from Notion (filtered by `Digest Type = Combined` and date in the target week) and synthesizes themes from what the dailies already captured. This keeps token cost bounded and avoids drift between what each cadence "saw."
+
+**Three tiers, two flows.** A third consumer, `/team-monthly` (`Digest Type = Monthly`), sits above the weekly and reads a hybrid of the month's weeklies + cheap daily metadata (see Monthly Synthesis below). Orthogonal to the upward synthesis flow, a downward **context cascade** has each tier load a small slice of the tier above before it runs (see Context Cascade below). Synthesis flows up (daily -> weekly -> monthly); context flows down (monthly -> weekly -> daily).
 
 **File layout** mirrors the asymmetry. `skills/team-digest/` contains the full pipeline (16 lib helpers, the SKILL.md orchestration, the TEMPLATE.md output schema). `skills/team-weekly/` contains only what synthesis needs (2 lib helpers: `compute-week-window.sh` and `README.md`; the SKILL.md; and TEMPLATE.md).
 
@@ -380,24 +382,90 @@ graph TD
 
 **Why a consumer, not a parallel scanner.** Re-running the matching pipeline weekly would double-count work (same GitHub PRs would be fetched 5-7 times across a week, same Notion pages searched, same HIP repo scanned). The weekly's value is *synthesis* - finding patterns across 5-7 days that no single daily can surface. A HIP that moved Draft → Last Call → Accepted across a week tells a different story than any one daily's snapshot. Repos with sustained 3+ day activity reveal trajectories that single-day rows hide.
 
-**Asymmetry implication.** When making changes to `skills/team-digest/`, ask whether `skills/team-weekly/` needs a parallel update:
+**Asymmetry implication.** When making changes to `skills/team-digest/`, ask whether `skills/team-weekly/` AND `skills/team-monthly/` need a parallel update:
 
-| Change touches… | team-digest | team-weekly |
-|---|---|---|
-| Data sources (GitHub scan, HIP scan, RSS) | Yes | No |
-| Matching strategies (Mech A/B, S2, S3, S4) | Yes | No |
-| `category_to_repos` and HIP tiebreaker logic | Yes | No |
-| `lib/fetch-*.sh` helpers | Yes | No |
-| `lib/calibrate-hip-matches.sh`, `strategy4-gate.sh`, `consolidate-matches.sh` | Yes | No |
-| Chunked Notion write + page-creation flow | Yes | Yes |
-| `load-config.sh` reads, profile loading | Yes | Yes |
-| Output rendering rules, Mermaid, voice/tone | Yes | Yes |
-| `.local.json` config plumbing, PII discipline | Both |
-| `bin/<x>-run.sh` wrapper changes | Both have own wrapper - check both |
+| Change touches… | team-digest | team-weekly | team-monthly |
+|---|---|---|---|
+| Data sources (GitHub scan, HIP scan, RSS) | Yes | No | No |
+| Matching strategies (Mech A/B, S2, S3, S4) | Yes | No | No |
+| `category_to_repos` and HIP tiebreaker logic | Yes | No | No |
+| `lib/fetch-*.sh` helpers | Yes | No | No |
+| `lib/calibrate-hip-matches.sh`, `strategy4-gate.sh`, `consolidate-matches.sh` | Yes | No | No |
+| Chunked Notion write + page-creation flow | Yes | Yes | Yes |
+| `load-config.sh` reads, profile loading | Yes | Yes | Yes |
+| Output rendering rules, Mermaid, voice/tone | Yes | Yes | Yes |
+| Cascade context load (Step 1.5) | Yes (reads weekly) | Yes (reads monthly) | reserved (quarterly) |
+| `.local.json` config plumbing, PII discipline | All three |
+| `bin/<x>-run.sh` wrapper changes | Each has its own wrapper - check all three |
 
 **Week-window calculation.** `compute-week-window.sh` defaults to the most recently completed ISO week (Monday through Sunday). Override with a specific `YYYY-MM-DD` (treated as a Sunday end-date) or `--from YYYY-MM-DD --to YYYY-MM-DD` for arbitrary ranges. The same chunked-write logic from the daily applies to the weekly's output, including the `DIGEST-SECTION-BREAK` sentinel for `--from-file` recovery.
 
 **Empty-week behavior.** If no daily pages exist for the target week (or only 1-2 do), the weekly renders a minimal page noting the gap rather than fabricating themes from sparse data. The synthesis logic explicitly requires 3+ days of activity for the "sustained activity" themes; below that threshold, fall back to a simpler day-by-day index.
+
+---
+
+## Monthly Synthesis (`/team-monthly`)
+
+`/team-monthly` is the third cadence, a consumer above the weekly. Like the weekly it does NOT re-scan external sources; unlike the weekly it reads a *mix* of source pages to mitigate synthesis-of-synthesis loss - the **hybrid spine** strategy.
+
+```mermaid
+graph TD
+    subgraph READ [Read phase - cheapest first]
+        direction LR
+        WIN[compute-month-window.sh - calendar month]
+        SKEL[One query - properties of EVERY daily + weekly]
+        SPINE[Fetch all weekly bodies - the spine]
+        DEEP[Capped selective daily deep-fetch - default 8]
+    end
+    subgraph SYNTH [Synthesis phase - storyline-first]
+        direction LR
+        STORY[Top Storylines - interconnect repos+HIPs+partners+Notion]
+        NUM[By the Numbers - mostly from the cheap skeleton]
+        DETAIL[Supporting Detail - aggregated catalog]
+        REVIEW[The Month in Review - written last]
+    end
+    subgraph WRITE [Write phase]
+        direction LR
+        REND[Render single monthly markdown]
+        CHUNK[Chunked Notion write - same sentinel as daily/weekly]
+        NEWPAGE[Notion page - Digest Type=Monthly]
+    end
+    READ --> SYNTH
+    SYNTH --> WRITE
+    style READ fill:#0B1121,stroke:#8259EF,color:#fff
+    style SYNTH fill:#0B1121,stroke:#00E5CC,color:#fff
+    style WRITE fill:#0B1121,stroke:#F59E0B,color:#fff
+```
+
+**Why hybrid, not weeklies-only.** A monthly that reads only weeklies inherits a compression-of-a-compression. The free properties query gives the whole-month skeleton (repo counts, keyword frequency, gaps) for almost no tokens; the weekly bodies supply the synthesized spine; the capped daily deep-fetch reaches past the weekly compression for the handful of facts a storyline needs. The footer's `N of M dailies read in full` line keeps the tradeoff visible.
+
+**Storyline-first output.** The monthly's reason to exist is the **Top Storylines** section: 4-7 named threads, each weaving together sources the lower tiers kept in separate sections (a repo cluster + a HIP status arc + a partner ask + a Notion design doc + a release) into one `started -> landed -> what's next` narrative. The weekly "Threads to Watch / Carried Over" sections are the explicit spine for these threads. The catalog detail follows below; the Month-in-Review narrative is written last and leads the page.
+
+**Month boundary.** `compute-month-window.sh` resolves a calendar month (default: last full month). Weeklies are included by their stored Sunday date; days at a month edge that belong to a week ending in the next month are still covered from their dailies (metadata always, deep-fetch if high-signal). No double-assigning a boundary week to two monthlies.
+
+## Context Cascade
+
+Independent of the upward synthesis flow, a downward **context cascade** runs before each tier synthesizes, so no tier starts cold.
+
+```mermaid
+graph TD
+    subgraph FLOW [Two independent flows]
+        direction LR
+        SYN[Synthesis flow - UP - each tier reads the tier below]
+        CAS[Context flow - DOWN - each tier reads the tier above]
+    end
+    subgraph CASCADE [Downward cascade - Exec-Summary-only, one page per level]
+        direction LR
+        W2D[Latest Weekly Exec Summary feeds the Daily]
+        M2W[Latest Monthly Exec Summary feeds the Weekly]
+        Q2M[Latest Quarterly feeds the Monthly - reserved no-op]
+    end
+    FLOW --> CASCADE
+    style FLOW fill:#0B1121,stroke:#8259EF,color:#fff
+    style CASCADE fill:#1F2937,stroke:#00E5CC,color:#fff
+```
+
+Each tier's Step 1.5 loads ONLY the most-recent higher-tier page's Executive Summary (the daily also reads the latest monthly's Month-in-Review lead if present). It is INPUT - the daily uses it to add storyline background ("this continues the X migration that has run three weeks") via the Background-first rule, and never re-renders it as output. Cost is bounded: one page per level, Exec-Summary-only, gated on `cascade.enabled`, silent no-op when the higher tier has no page yet (true for `weekly <- monthly` until the first monthly exists, and always for `monthly <- quarterly` today). This is the source-level fix for "the daily reads raw."
 
 ---
 
@@ -531,9 +599,9 @@ The repo ships only the generic `team-digest` skill in committed form. Any addit
 
 ### Adding a new cadence
 
-A "cadence" is a synthesis layer above the daily (weekly today, potentially monthly / quarterly / yearly). The pattern is consumer-not-scanner: read existing pages from Notion, synthesize across the longer window, write a new page back. See the team-weekly section for the template.
+A "cadence" is a synthesis layer above the daily (weekly and monthly today, potentially quarterly / yearly). The pattern is consumer-not-scanner: read existing pages from Notion, synthesize across the longer window, write a new page back. The monthly (Monthly Synthesis section above) is the reference implementation for a longer cadence; the weekly is the simpler one.
 
-The trade-off worth thinking about explicitly: synthesizing from synthesis loses signal at each layer. A monthly reads weeklies; each weekly is already a compression of dailies. If a monthly theme needs a fact that wasn't preserved in weeklies, the daily layer has to surface it. Decide what monthly themes ask of the source data before adding the cadence.
+The trade-off worth thinking about explicitly: synthesizing from synthesis loses signal at each layer. The monthly addresses this with the **hybrid spine** - it does not read only weeklies; it also pulls cheap daily metadata and selectively deep-reads the dailies a thread needs. A quarterly should follow the same pattern (read monthlies as the spine, reach past the compression with a capped deep-fetch). Also wire the new cadence into the **context cascade**: a quarterly would feed its Executive Summary down into the monthly's Step 1.5 (the hook is already reserved there). Decide what the new cadence's themes ask of the source data before adding it.
 
 ---
 
