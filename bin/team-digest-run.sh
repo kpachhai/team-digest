@@ -92,6 +92,7 @@ run_claude() {
     --output-format stream-json \
     --verbose \
     2>&1 | tee -a "$RAW_LOG" | format_stream | tee -a "$LOG"
+  CLAUDE_EXIT=${PIPESTATUS[0]}
 }
 
 # ---- Argument parsing ------------------------------------------------------
@@ -187,6 +188,10 @@ mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 PRE_RUN_REF=$(mktemp /tmp/team-digest-prerunref.XXXXXX)
 # mktemp already touches the file with mtime = now, which is what -newer wants.
 
+# Byte offsets so the post-run gate inspects only THIS run's log output.
+LOG_OFFSET=$(wc -c < "$LOG" 2>/dev/null || echo 0)
+RAW_OFFSET=$(wc -c < "$RAW_LOG" 2>/dev/null || echo 0)
+
 run_claude "$PROMPT"
 
 # ---- Post-run consolidation ------------------------------------------------
@@ -261,3 +266,39 @@ rm -rf "$TEAM_DIGEST_MATCHES_DIR"
 if [ -n "$ACTIVE_MATCHES_DIR" ] && [ "$ACTIVE_MATCHES_DIR" != "$TEAM_DIGEST_MATCHES_DIR" ]; then
   rm -rf "$ACTIVE_MATCHES_DIR"
 fi
+
+# ---- Post-run verification gate ---------------------------------------------
+# Deterministic pass/fail for schedulers (launchd/cron). The tee pipeline in
+# run_claude swallows claude's exit code, so without this block the wrapper
+# exits 0 even when the run failed. Checks, cheapest first: claude exit code,
+# the harness's own result event, error-shaped strings, output artifact.
+NEW_LOG="$(tail -c "+$((LOG_OFFSET + 1))" "$LOG" 2>/dev/null || true)"
+
+if [ "${CLAUDE_EXIT:-1}" -ne 0 ]; then
+  echo "[gate] FAIL: claude exited with code ${CLAUDE_EXIT:-unknown}" | tee -a "$LOG"
+  exit 1
+fi
+# The [done] line only exists when jq rendered the result event.
+if command -v jq >/dev/null 2>&1; then
+  if ! printf '%s' "$NEW_LOG" | grep -q "\[done\] success"; then
+    echo "[gate] FAIL: no successful result event in run output" | tee -a "$LOG"
+    exit 1
+  fi
+fi
+GATE_ERRORS="$(printf '%s' "$NEW_LOG" | grep -iE 'API Error|rate_limit_error|overloaded_error|MCP server [^ ]+ (failed|disconnected)|No such tool available|invalid_api_key|credit balance is too low' | head -3 || true)"
+if [ -n "$GATE_ERRORS" ]; then
+  echo "[gate] FAIL: error signal in run output:" | tee -a "$LOG"
+  printf '%s\n' "$GATE_ERRORS" | tee -a "$LOG"
+  exit 1
+fi
+if [ -n "$DRY_RUN" ]; then
+  if [ -z "$LATEST_SAFETY" ]; then
+    echo "[gate] FAIL: dry-run produced no safety file under $DRY_DIR" | tee -a "$LOG"
+    exit 1
+  fi
+elif ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -q 'notion\.so/'; then
+  echo "[gate] FAIL: no Notion page URL in run output - the digest write may not have happened" | tee -a "$LOG"
+  exit 1
+fi
+echo "[gate] PASS" | tee -a "$LOG"
+exit 0
