@@ -207,6 +207,8 @@ bin/team-monthly-run.sh 2026-05 --dry-run    # specific month, local file
 
 All three wrappers invoke `claude -p` headlessly with the Notion MCP tools allow-listed. Same skill, same flags, same output - just non-interactive entry points. Symlink to `~/.local/bin/` for convenience.
 
+Model defaults per tier: daily and weekly default to `claude-sonnet-4-6`; monthly defaults to Opus (deepest synthesis, runs once a month). Override any of them with `TEAM_DIGEST_MODEL=...`.
+
 **Automate it:** See [docs/scheduling.md](docs/scheduling.md) for the launchd plist, cron syntax, and a GitHub Actions example. Recommended cadence: `bin/team-digest-run.sh` every weekday morning, `bin/team-weekly-run.sh` Monday morning after Friday's daily lands, `bin/team-monthly-run.sh` on the 1st of each month after that day's daily and the prior week's weekly land.
 
 ### Updating After Git Pull
