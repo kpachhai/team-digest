@@ -13,7 +13,7 @@ implementation. The skill is the orchestrator; helpers are the data layer.
 
 | Helper | Purpose | Inputs | Output |
 |---|---|---|---|
-| `compute-window.sh` | Resolve a date arg (or default to yesterday-UTC) into `DATE_LABEL`, `START`, `END` ISO timestamps. | optional `YYYY-MM-DD` arg | `KEY=VALUE` lines suitable for `eval`. |
+| `compute-window.sh` | Resolve a single day or a range (default: yesterday-UTC) into `WINDOW_START`, `WINDOW_END`, `WINDOW_LABEL`, `IS_RANGE`, `START`, `END`, and a `DATE_LABEL` alias. | `YYYY-MM-DD` \| `A..B` \| `--from F --to T` \| `--days N` | `KEY=VALUE` lines suitable for `eval`. |
 | `load-config.sh` | Read and validate the team-digest config for one digest (e.g. `team-digest`). Confirms required Notion IDs are present. | `<digest-name>` | The digest's config object as JSON. |
 | `fetch-github-prs.sh` | Fetch PRs updated in the window for one org. | `<org> <start-iso>` | Plain-text summary grouped by repo, with PR numbers, authors, URLs, descriptions. |
 | `fetch-github-issues.sh` | Fetch issues updated in the window for one org. | `<org> <start-iso>` | Plain-text summary, same shape as PRs. |

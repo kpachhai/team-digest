@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-team-digest is a zero-infrastructure digest system built on Claude Code skills. It aggregates GitHub activity, Notion keyword matches, and partner meeting notes into structured daily summaries written to Notion. The repo ships three cadences: `/team-digest` (daily, the only scanner), `/team-weekly` (weekly rollup), and `/team-monthly` (storyline-first monthly rollup). The weekly and monthly are consumers - they read existing Notion pages, not external sources. A downward **context cascade** feeds each tier a slice of the tier above (daily reads the latest weekly, weekly reads the latest monthly) so output is storyline-aware instead of cold. Additional team-specific digests live in your local checkout only - they are not committed to this public repo.
+team-digest is a zero-infrastructure digest system built on Claude Code skills. It aggregates GitHub activity, Notion keyword matches, and partner meeting notes into structured daily summaries written to Notion. The repo ships three cadences: `/team-digest` (the only scanner - a single day by default, or any explicit multi-day range), `/team-weekly` (weekly rollup), and `/team-monthly` (storyline-first monthly rollup). The weekly and monthly are consumers - they read existing Notion pages by date-range overlap, not external sources. The scan window is always an explicit argument (single date, `A..B`, `--from/--to`, or `--days N`); there is no hidden backfill. A downward **context cascade** feeds each tier a slice of the tier above (daily reads the latest weekly, weekly reads the latest monthly) so output is storyline-aware instead of cold. Additional team-specific digests live in your local checkout only - they are not committed to this public repo.
 
 ## Key Commands
 
@@ -15,6 +15,9 @@ team-digest is a zero-infrastructure digest system built on Claude Code skills. 
 ./update.sh                           # After git pull: re-syncs SKILL.md, lib/, config, profiles
 /team-digest                            # Daily: yesterday's digest, written to Notion
 /team-digest 2026-04-20                 # Daily: specific date
+/team-digest 2026-06-08..2026-06-14     # Range: scan a multi-day window (all sources), one page
+/team-digest --from 2026-06-08 --to 2026-06-14   # Range: same, weekly-style flags
+/team-digest --days 3                   # Range: last 3 days, ending yesterday
 /team-digest --dry-run                  # Daily: write markdown locally, skip Notion
 /team-weekly                            # Weekly: synthesize last full week of dailies into
                                       #   a weekly summary, written to the same Notion DB
@@ -32,7 +35,7 @@ bash tests/lint-digest-markdown.sh <file.md>                  # lint a dry-run d
 bash tests/lint-digest-markdown.sh --template <TEMPLATE.md>   # lint a skill TEMPLATE.md
 ```
 
-There is no build step. `tests/run-all.sh` runs the offline suite: unit tests for all 8 pure helpers (the 3 date-window resolvers, `extract-hip-refs`, `load-config`, `consolidate-matches`, `strategy4-gate`, `calibrate-hip-matches`) plus the Notion-markdown linter. The 11 network fetch helpers and the three `SKILL.md` pipelines are NOT unit-tested (they need `gh`/network or run inside Claude against Notion MCP); validate those operationally with `--dry-run`. See [`tests/README.md`](tests/README.md) for coverage details, the testability env overrides, and two known gaps the tests surfaced.
+There is no build step. `tests/run-all.sh` runs the offline suite: unit tests for all 8 pure helpers (the 3 date-window resolvers, `extract-hip-refs`, `load-config`, `consolidate-matches`, `strategy4-gate`, `calibrate-hip-matches`) plus the Notion-markdown linter. The 11 network fetch helpers and the three `SKILL.md` pipelines are NOT unit-tested (they need `gh`/network or run inside Claude against Notion MCP); validate those operationally with `--dry-run`. See [`tests/README.md`](tests/README.md) for coverage details, the testability env overrides, and the known gap the tests surfaced.
 
 ## Architecture
 
@@ -53,7 +56,7 @@ team-digest/
 │   ├── team-digest/                    # Daily digest
 │   │   ├── SKILL.md                  # Skill body: orchestration + MCP calls + writing rules
 │   │   └── lib/                      # 15 shell helpers (no MCP - those only work inside Claude)
-│   │       ├── compute-window.sh     # Resolve date arg → DATE_LABEL/START/END
+│   │       ├── compute-window.sh     # Resolve day or range → WINDOW_START/END/LABEL, IS_RANGE, START/END
 │   │       ├── load-config.sh        # Read + validate config.json (shared by team-weekly + team-monthly)
 │   │       ├── fetch-github-prs.sh   # gh search prs + python parsing
 │   │       ├── fetch-github-issues.sh

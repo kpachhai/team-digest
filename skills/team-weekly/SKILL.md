@@ -71,7 +71,7 @@ Flow:
    - **No existing page found:** fall through to step 7 (create + chunked write).
    - **Existing page found AND its body matches the placeholder** (`Weekly digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id. This is the placeholder/partial-recovery path.
    - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the week already has a digest and the file is preserved at `$FROM_FILE`.
-7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Weekly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $WEEK_END`, `Digest Type: Weekly`, `Status: Auto`). For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Weekly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $WEEK_START`, `date:Date:end: $WEEK_END`, `date:Date:is_datetime: 0`, `Digest Type: Weekly`, `Status: Auto`). Weekly pages always carry a `start..end` range so `/team-monthly` finds them by overlap. For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
 8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
 9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
 10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
@@ -156,7 +156,7 @@ If the helper exits non-zero (invalid date format, --from after --to, mixing pos
 **Skip this step if `TEAM_DIGEST_CASCADE_ENABLED=0`.** This gives the weekly memory of the month's arc so it can frame the week within the larger story.
 
 1. Query the data source for the **single most-recent `Monthly` page with `date:Date:start` < `$WEEK_END`** (filter `Digest Type = Monthly`, sort `date` descending, page_size 1). The `data_source_id` is the same one discovered in Step 2; if you have not fetched it yet, do so now via `notion-fetch` on `database_id`.
-2. If found, `notion-fetch` it and extract ONLY `## The Month in Review` + `## Executive Summary`. Hold as **"Month Arc"** context (INPUT only; never rendered).
+2. If found, `notion-fetch` it and extract ONLY the `The Month in Review` and `Executive Summary` sections (their headings are `## 📖 The Month in Review` and `## 🔑 Executive Summary` — match on the heading words, ignoring any leading emoji). Hold as **"Month Arc"** context (INPUT only; never rendered).
 3. **No-op until the first monthly exists** - skip silently if none found.
 
 Use it to frame the week within the month ("week three of the audit push") in the weekly's Executive Summary and Threads to Watch, without re-explaining the month. **Cost control:** at most ONE `notion-fetch`; Exec-Summary + Month-in-Review only.
@@ -165,20 +165,23 @@ Use it to frame the week within the month ("week three of the audit push") in th
 
 Use the `notion-query-data-sources` MCP tool against the `data_source_id` of the Team Daily Digest database. The `data_source_id` is derived at runtime by fetching the database with `notion-fetch` (same pattern as team-digest Step 0).
 
-**Filter the query by:**
+**Filter the query by (overlap, not exact date):**
 
-- `date:Date:start` between `$WEEK_START` and `$WEEK_END` inclusive
-- `Digest Type` is `Combined` (the value `/team-digest` writes for daily digests)
+- `Digest Type` is `Combined` (the value `/team-digest` writes for both single-day and range scans)
+- `date:Date:start <= $WEEK_END`
 
-**Sort by `date:Date:start` ascending** so results come back in chronological order (Monday first).
+**Sort by `date:Date:start` ascending** so results come back in chronological order (earliest first).
+
+**Then keep only pages that overlap the week, IN CONTEXT:** a page overlaps when `coalesce(date:Date:end, date:Date:start) >= $WEEK_START`. A single-day digest has a null `date:Date:end`, so its start is used; a range scan (e.g., a 7-day Combined page) has an explicit end. Notion range filters over a nullable end are awkward, and the per-week result set is tiny, so this in-context overlap filter is both cheaper and clearer than a compound Notion filter.
 
 **Result handling:**
 
-- Each result has properties: `Digest Title`, `date:Date:start`, `Digest Type`, `Repos Active`, `Keywords Matched`, `Status`, `url`. These are CHEAP - use them as the primary signal for the "Week at a Glance" stats.
-- Limit to 7 expected pages (one per weekday). If fewer found, that's the data - some days had no run. Note the gap in the digest body (e.g., "No daily digest for 2026-05-06 - run was missed or skipped.").
-- If MORE than 7 found (multiple runs per day), use the LATEST one per `date:Date:start`. Older same-day pages are likely re-runs and contain stale data.
+- Each result has properties: `Digest Title`, `date:Date:start`, `date:Date:end`, `Digest Type`, `Repos Active`, `Keywords Matched`, `Status`, `url`. These are CHEAP - use them as the primary signal for the "Week at a Glance" stats.
+- The week may be covered by any mix of pages: up to 7 single-day dailies, OR one 7-day range scan, OR a blend (e.g., a 3-day range page + four dailies). A single range Combined page legitimately covers the whole week on its own.
+- **Dedup:** if two pages cover the SAME span, keep the one with the latest `createdTime` (the re-run; older same-span pages are stale). If pages cover DIFFERENT but overlapping spans, keep BOTH and reconcile in synthesis - note the overlap rather than dropping signal.
+- If a day in the week is covered by no page at all, note the gap in the digest body (e.g., "No coverage for 2026-05-06 - run was missed or skipped.").
 
-If the query returns zero results, abort with a clear message: `No daily digests found for week ${WEEK_LABEL} (${WEEK_START} to ${WEEK_END}). Generate the dailies first via /team-digest <date>.`
+If the query returns zero overlapping pages, abort with a clear message: `No digests found overlapping week ${WEEK_LABEL} (${WEEK_START}..${WEEK_END}). Generate coverage first via /team-digest <date> or /team-digest <start>..<end>.`
 
 ### Step 3: Fetch each daily digest's content
 
@@ -297,8 +300,10 @@ Call `notion-create-pages` with:
 - **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 2>" }`
 - **Properties:**
   - `Digest Title`: `Team Weekly Digest - <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)`
-  - `date:Date:start`: `<WEEK_END>` (Sunday - so weekly entries sort just after the last daily of that week)
-  - `Digest Type`: `Weekly`
+  - `date:Date:start`: `<WEEK_START>`
+  - `date:Date:end`: `<WEEK_END>`
+  - `date:Date:is_datetime`: `0`
+  - `Digest Type`: `Weekly` (the page carries the full week as a `start..end` range so `/team-monthly` finds it by overlap)
   - `Repos Active`: total unique repos active across all 7 dailies (sum-of-uniques, not sum-of-dailies)
   - `Keywords Matched`: union of `Keywords Matched` across the week as a JSON array
   - `Partners Mentioned`: JSON array of distinct partner/company names from the week's Partner Momentum (Theme C); empty array if none. **Include ONLY if the database schema (from the Step 2 database fetch) has a `Partners Mentioned` property; OMIT it entirely otherwise** (older installs without the column reject unknown properties).
@@ -366,7 +371,7 @@ Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to
 - The auto-generated footer is the LAST block. Do NOT replace it with a "Known limitations" / "Caveats" / meta-section about the run; section-level inline notes belong inside their section, not at the end.
 - Do NOT invent closing meta-sections about run hygiene. If a daily fetch failed, note it inline in the Day-by-Day Index, not as a closing callout.
 
-**Executive Summary (mandatory).** After the header callout, before "Week at a Glance" stats, include an `## Executive Summary` section. Same rules as `/team-digest`'s Executive Summary: 5-8 bullets, each leading with a bold callout (project, theme, or topic) followed by a one-line plain-English statement of what shifted across the week and why it matters. Every bullet links to the relevant theme section below for drill-down. Cover a mix: top GitHub themes, the week's releases, partner momentum, the most consequential Notion pages, industry-news standouts. The Outsider Test applies - lead with the user-visible change, no insider jargon without translation.
+**Executive Summary (mandatory).** After the header callout and the "Week at a Glance" stats, include an `## 🔑 Executive Summary` section (keep the words "Executive Summary" - the daily cascade and the monthly extract it by them). Same rules as `/team-digest`'s Executive Summary: 5-8 bullets, each leading with a bold callout (project, theme, or topic) followed by a one-line plain-English statement of what shifted across the week and why it matters. Every bullet links to the relevant theme section below for drill-down. Cover a mix: top GitHub themes, the week's releases, partner momentum, the most consequential Notion pages, industry-news standouts. The Outsider Test applies - lead with the user-visible change, no insider jargon without translation.
 
 The weekly Executive Summary is also the surface the daily cascade injects downward (each daily loads this section as "ongoing storylines" - see `/team-digest` Step 1.5). So each bullet should name a *thread or arc*, not just a one-week event - "the X migration advanced to Y" beats "3 PRs merged in X". This keeps the dailies storyline-aware for the following week.
 
@@ -378,7 +383,7 @@ The weekly Executive Summary is also the surface the daily cascade injects downw
 
 Skip if no HIP had a status transition this week.
 
-**Top Picks: Notion Pages Worth Reading (when applicable).** The weekly inherits the daily's Top Picks idea. After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading This Week` section IF AND ONLY IF the week produced at least one Notion page worth highlighting. Selection: aggregate the Top Picks from each daily digest plus the strongest items from the week's Notion Content Pulse, dedupe by page ID, rank by team-profile relevance + cross-day momentum (a page that came up multiple days ranks higher), pick top 3-5. Format: same as the daily's Top Picks.
+**Top Picks: Notion Pages Worth Reading (when applicable).** The weekly inherits the daily's Top Picks idea. After the Executive Summary, include a `## ⭐ Top Picks: Notion Pages Worth Reading This Week` section IF AND ONLY IF the week produced at least one Notion page worth highlighting. Selection: aggregate the Top Picks from each daily digest plus the strongest items from the week's Notion Content Pulse, dedupe by page ID, rank by team-profile relevance + cross-day momentum (a page that came up multiple days ranks higher), pick top 3-5. Format: same as the daily's Top Picks.
 
 **Output format contract:** `TEMPLATE.md` was already loaded at Step 0 - it is the canonical output contract that has been in context throughout the synthesis. Now apply it: substitute all `<PLACEHOLDER>` values with actual data, in the order the template specifies. The "FORMAT RULES" section at the bottom is a human reference only - do not render it in the Notion page. If TEMPLATE.md is not in context (e.g., context was compacted), re-read it now before assembling.
 

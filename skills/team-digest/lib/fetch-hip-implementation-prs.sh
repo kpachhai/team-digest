@@ -27,9 +27,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-# SINCE can be overridden to widen the per-HIP search window beyond the
-# digest day (used with the github.pr_lookback_days config knob).
-# Default = digest day start.
+# The search window is [SINCE, UNTIL]. UNTIL is the end of TARGET_DATE (pass the
+# window END as the positional). SINCE defaults to TARGET_DATE start but is
+# overridden via --since-iso to the window START, so one call covers a whole range.
 SINCE="${SINCE_OVERRIDE:-${TARGET_DATE}T00:00:00Z}"
 UNTIL="${TARGET_DATE}T23:59:59Z"
 

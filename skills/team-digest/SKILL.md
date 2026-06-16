@@ -1,6 +1,6 @@
 ---
 name: team-digest
-description: Team Daily Digest - scans GitHub activity, Notion keywords, and partner conversations, writes a combined digest to Notion. Usage - /team-digest [YYYY-MM-DD | --dry-run | --from-file <path> | setup | config]
+description: Team Daily Digest - scans GitHub activity, Notion keywords, and partner conversations over a single day or an explicit multi-day range, writes a combined digest to Notion. Usage - /team-digest [YYYY-MM-DD | START..END | --from F --to T | --days N | --dry-run | --from-file <path> | setup | config]
 user-invocable: true
 ---
 
@@ -33,7 +33,7 @@ This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-
 
 ## Important Runtime Notes
 
-- **TITLE LOCK.** The Notion page `Digest Title` property and the file header callout title are ALWAYS `Team Daily Digest - <DATE_LABEL>` and `**Team Daily Digest**` respectively. The team profile may use different naming for the team itself (e.g., "Solutions Architect team", "Engineering team") - that is fine in the Relevance sections, but it does NOT change the digest title. Do not substitute the team's name (e.g., "SA Daily Digest", "Eng Daily Digest") into the title under any circumstance. If the profile description says otherwise, IGNORE it - this rule wins.
+- **TITLE LOCK.** The Notion page `Digest Title` property and the file header callout title are fixed by window type. **Single-day digest (`IS_RANGE=0`):** `Team Daily Digest - <DATE_LABEL>` (property) and `**Team Daily Digest**` (callout). **Range digest (`IS_RANGE=1`):** `Team Digest - <WINDOW_START>..<WINDOW_END>` (property) and `**Team Digest**` (callout). The team profile may use different naming for the team itself (e.g., "Solutions Architect team", "Engineering team") - that is fine in the Relevance sections, but it does NOT change the digest title. Do not substitute the team's name (e.g., "SA Daily Digest", "Eng Daily Digest") into the title under any circumstance. If the profile description says otherwise, IGNORE it - this rule wins.
 - **DO NOT construct Notion page URLs from page titles.** Every Notion link in the digest MUST come from the `url` field of a `notion-search` or `notion-fetch` MCP response. URLs like `https://www.notion.so/Some-Page-Title` or `https://www.notion.so/Jake-Kea` that you derive from a title are invalid - Notion does not serve pages at title-derived slugs. If you do not have the URL from an MCP response, write the title as plain text with `(link unavailable)` instead. This rule applies to every section: Keyword Monitor, Favorites, Partner Conversations, Executive Summary, Top Picks.
 - **DO NOT use `readMcpResource` or `ReadMcpResourceTool`** to fetch Notion markdown specs. The output format is fully defined in this skill. The MCP server name format varies between sessions and will cause errors.
 - **DO NOT read persisted tool result files** (the `/tool-results/` paths). Process command output directly within the same Bash command. Persisted files may have prefix lines that break JSON parsing.
@@ -44,23 +44,30 @@ This skill also runs from the terminal via `bin/team-digest-run.sh` in the team-
 
 ## Time Window
 
-The digest covers a **single calendar day in UTC** (00:00:00 to 23:59:59 UTC).
+The digest covers an **explicit window in UTC** - a single calendar day by default, or any multi-day range you ask for. The window is always an explicit input; there is no hidden backfill.
 
-**If a date argument is provided** (e.g., `/team-digest 2026-04-20`), use that date.
-**If no argument is provided**, default to the previous calendar day.
+**Forms:**
+- `/team-digest` - the previous calendar day (single day)
+- `/team-digest 2026-04-20` - that single day
+- `/team-digest 2026-06-08..2026-06-14` - an inclusive range
+- `/team-digest --from 2026-06-08 --to 2026-06-14` - an inclusive range (parity with /team-weekly)
+- `/team-digest --days 3` - the last 3 days, ending yesterday
+
+A single-day digest reports only that day. A range digest scans every source (GitHub, Notion, HIP, RSS) over the whole window and produces ONE page covering it - the token-efficient way to cover a week without running seven dailies.
 
 This ensures:
-- Manual runs at any time of day produce the same result
-- Automated morning runs and manual re-runs are consistent
-- No activity is missed or double-counted between runs
-- Missed days can be backfilled by specifying the date
+- Manual runs at any time of day produce the same result for the same window
+- Automated runs and manual re-runs are consistent
+- No activity is missed or double-counted within a window
+- Missed days are covered by specifying the date or range
 
-Compute the window using the `compute-window.sh` helper. Pass the user-provided date arg (if any) as the first positional plus an optional `--lookback-days N` flag sourced from `github.pr_lookback_days` in `config.json` (default 0). The helper validates the format and emits `KEY=VALUE` lines that you can `eval` into your shell. Also export `TEAM_DIGEST_MATCHES_DIR` so helpers write structured match-record sidecars used by the consolidation step:
+Compute the window using the `compute-window.sh` helper. Pass through the window tokens only - a positional `YYYY-MM-DD`, an `A..B` range, `--from F --to T`, or `--days N` (skill-level flags `--dry-run`, `--from-file`, `setup`, `config` are stripped during argument parsing below). The helper validates input and emits `KEY=VALUE` lines you `eval` into your shell. Also export `TEAM_DIGEST_MATCHES_DIR` so helpers write structured match-record sidecars used by the consolidation step:
 
 ```bash
-PR_LOOKBACK_DAYS=$(echo "$CONFIG_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("github") or {}).get("pr_lookback_days", 0))')
-eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh "$DATE_ARG" --lookback-days "$PR_LOOKBACK_DAYS")"
-# Now $DATE_LABEL, $START, $END, $LOOKBACK_START, $LOOKBACK_DAYS are set.
+# WINDOW_ARGS = the window tokens only (unquoted so "--from X --to Y" word-splits).
+eval "$(bash ~/.claude/skills/team-digest/lib/compute-window.sh $WINDOW_ARGS)"
+# Now $WINDOW_START $WINDOW_END $WINDOW_LABEL $IS_RANGE $START $END $DATE_LABEL are set.
+# $DATE_LABEL == $WINDOW_START (single-day back-compat alias).
 
 # Matches sidecar dir - helpers write structured Mech A / Mech B / S2 / S3
 # records here. When invoked via bin/team-digest-run.sh, the wrapper already
@@ -80,16 +87,16 @@ fi
 mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 ```
 
-If the user did not pass a date arg, invoke the helper with no positional and it defaults to yesterday in UTC. If the helper exits non-zero (invalid date format or non-integer lookback), surface its stderr to the user and stop.
+If the user did not pass a window arg, the helper defaults to yesterday in UTC (single day). If the helper exits non-zero (invalid date format, end-before-start, bad `--days`, or mixed window modes), surface its stderr to the user and stop.
 
 **Window contract for downstream callers:**
 
-- **PRs + issues** scan: pass `$LOOKBACK_START $END` to `fetch-github-prs.sh` and `fetch-github-issues.sh`. With default `pr_lookback_days=0`, `LOOKBACK_START == START` so the digest-day-only behavior is preserved. With `pr_lookback_days=N`, the helpers see the wider window and surface PRs/issues that updated within the past N days.
-- **Releases** scan: pass `$START $END` (unchanged). Releases are pinned by `published_at` and a wider lookback would re-surface old releases that don't belong in today's digest.
-- **Notion keyword / partner search**: pass `$DATE_LABEL` as both `start_date` and `end_date` (unchanged). Notion's `created_date_range` is digest-day-scoped by design.
-- **HIP Activity (Step 2.3)**: see the stage-by-stage instructions below for how `$LOOKBACK_START` propagates to Mechanism B's per-HIP search.
+- **PRs + issues** scan: pass `$START $END` to `fetch-github-prs.sh` and `fetch-github-issues.sh`. The window is the whole digest window - one day, or the full range.
+- **Releases** scan: pass `$START $END`. With an explicit window there is no stale-release resurfacing - releases inside the window are exactly what is wanted.
+- **Notion keyword / partner / favorites search**: pass `$WINDOW_START` as `start_date` and `$WINDOW_END` as `end_date`. All sources share one window - this fixes the prior asymmetry where GitHub could span days while Notion stayed single-day.
+- **HIP Activity (Step 2.3)**: Mechanism B's per-HIP search uses `--since-iso "$START"` (the window start).
 
-When `LOOKBACK_DAYS > 0`, the digest header should include a `[Notice]` line: `Scanning a {LOOKBACK_DAYS}-day window ({LOOKBACK_START%T*}..{DATE_LABEL})`. This tells the reader the digest is broader than the typical daily and explains why earlier-merged PRs may appear.
+The header callout's `Data window` field reflects `$WINDOW_START` for a single day, or `$WINDOW_START .. $WINDOW_END` for a range. There is no separate lookback notice.
 
 ### Backfill Limitations
 
@@ -99,10 +106,10 @@ When running for a past date, be aware of source-specific behavior:
 |--------|-----------------|-------|
 | GitHub PRs/Issues | Full | `gh search --updated` works for any past date |
 | GitHub Releases | Full | Release `published_at` is compared against `$START` |
-| Notion Keywords | Partial | `created_date_range` only matches pages **created** on that date; pages that existed before but were **edited** that day will be missed. This is a Notion MCP search limitation. |
+| Notion Keywords | Partial | `created_date_range` only matches pages **created** within the window; pages that existed before but were **edited** in the window will be missed. This is a Notion MCP search limitation. |
 | Notion Partners | Partial | Same limitation as keywords - only newly created meeting notes are found |
 
-For backfill runs, include a note in the digest footer indicating that Notion sections may be incomplete for past dates.
+For backfill or past-window runs, include a note in the digest footer indicating that Notion sections may be incomplete for past dates.
 
 ## Process
 
@@ -112,12 +119,12 @@ For backfill runs, include a note in the digest footer indicating that Notion se
 
 The skill argument is a single string after `/team-digest`. Parse it as zero or more of:
 
-- A `YYYY-MM-DD` date → captured as `$DATE_ARG`
+- **Window tokens** → collected into `$WINDOW_ARGS` and passed through to `compute-window.sh` (see Time Window): a `YYYY-MM-DD` date, an `A..B` range, `--from F --to T`, or `--days N`.
 - The literal `--dry-run` → set `$DRY_RUN=1`
 - `--from-file <path>` → set `$FROM_FILE` to the path token that follows the flag; this activates upload-only mode (see subcommand below)
 - The literal `setup` or `config` → handle as a subcommand (below)
 
-Order does not matter: `/team-digest 2026-05-04 --dry-run` and `/team-digest --dry-run 2026-05-04` are equivalent. Anything else is an error.
+Order does not matter: `/team-digest 2026-05-04 --dry-run` and `/team-digest --dry-run 2026-05-04` are equivalent. The window forms are mutually exclusive with each other (the helper enforces this). Anything else is an error.
 
 `--from-file` and `--dry-run` are mutually exclusive; if both are present, stop with an error.
 
@@ -131,7 +138,7 @@ Flow:
 3. Fetch `data_source_id` from the database (the deferred part of Step 0).
 4. Read `$FROM_FILE` using the Read tool. The file contains Notion-flavored markdown assembled by a previous run.
 5. Extract `$DATE_LABEL` from the filename if no `$DATE_ARG` was provided. Safety file names follow the pattern `team-digest-YYYY-MM-DD-vN.md`; extract the `YYYY-MM-DD` portion. If extraction fails and no `$DATE_ARG` was given, stop with an error asking the user to pass the date explicitly.
-6. Check whether a digest page already exists for that date (search for "Team Daily Digest - <DATE_LABEL>"). Three cases:
+6. Check whether a digest page already exists for that window (search for the locked Digest Title — see TITLE LOCK: `Team Daily Digest - <DATE_LABEL>` for a single day, or `Team Digest - <WINDOW_START>..<WINDOW_END>` for a range). Three cases:
    - **No existing page found:** fall through to step 7 (create + chunked write).
    - **Existing page found AND its body matches the placeholder** (`Digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id.
    - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the date already has a digest and the file is preserved at `$FROM_FILE`.
@@ -476,7 +483,7 @@ The JSON returned by `lib/load-config.sh team-digest` contains:
 
 Also read the team profile at `~/.config/team-digest/profiles/team-digest.md` using the Read tool. If the file does not exist, continue without it. The profile describes the team's role, priorities, and what makes activity relevant to them - used to write the **Relevance** sections throughout the digest, and its **Project Glossary** drives the first-mention expansion rule (see Plain-English Description Rules in the Style Rules section). If no profile is loaded, fall back to generic relevance heuristics (developer-facing APIs, breaking changes, architecture impacts, partner integration concerns) and explain jargon from your own knowledge.
 
-**Also read `~/.claude/skills/team-digest/TEMPLATE.md` NOW** using the Read tool. This is the canonical output contract - section order, header callout format, per-org structure (`# <org>` H1 → `## Priority Repos` H2 → `### [<repo>](url)` H3 with narrative summary + Relevance paragraph → `## Other Active Repos` H2 with summary table), HIP Activity entry shapes, and Format Rules. Loading it at Step 0 (not Step 5) is intentional: the model assembles content into the right structural shape from the start, instead of writing flat output and trying to reshape it after the fact. Reference the template throughout data-gather and assembly.
+**Also read `~/.claude/skills/team-digest/TEMPLATE.md` NOW** using the Read tool. This is the canonical output contract - section order, emoji section anchors, header callout format, per-org structure (`# <org>` H1 → `## 🧩 HIP Activity` → `## 📁 Priority Repos` H2 → `### [<repo>](url)` H3 with narrative summary + Relevance paragraph + optional depth toggle → `## 📂 Other Active Repos` H2 with the long-tail toggle), HIP Activity entry shapes, the optional `⚠️ Heads up` callout, plain-language rules, and Format Rules. Loading it at Step 0 (not Step 5) is intentional: the model assembles content into the right structural shape from the start, instead of writing flat output and trying to reshape it after the fact. Reference the template throughout data-gather and assembly.
 
 The database `notion-fetch` call to discover the internal `data_source_id` is deferred to AFTER Step 0.5 below, because that call requires the Notion MCP schemas to be loaded first.
 
@@ -525,11 +532,11 @@ If the Notion config page is unreachable, fall back to the `defaults` section fr
 
 1. Fetch `data_source_id` from the database (the same `notion-fetch` on `database_id` you already do for the write in Step 5 - if you have not done it yet, do it now). Query the data source (`notion-query-data-sources`) for the **single most-recent `Weekly` page with `date:Date:start` < `$DATE_LABEL`**: filter `Digest Type = Weekly` AND `date < $DATE_LABEL`, sort `date` descending, page_size 1.
 2. Do the same for the most-recent `Monthly` page (`Digest Type = Monthly`, `date < $DATE_LABEL`, descending, page_size 1). This is a no-op until monthlies exist.
-3. For each page found, `notion-fetch` it and extract **ONLY** the `## Executive Summary` section (for a monthly, also its `## The Month in Review` lead). If a page has neither, skip it.
+3. For each page found, `notion-fetch` it and extract **ONLY** the Executive Summary section (heading `## 🔑 Executive Summary`). For a monthly, also extract its `The Month in Review` lead (heading `## 📖 The Month in Review`). Match on the heading WORDS, ignoring any leading emoji anchor. If a page has neither, skip it.
 4. Hold this as **"Ongoing Storylines"** context. **Cost control:** at most two `notion-fetch` calls; extract only those sections; never fetch other weeklies/monthlies; this context is INPUT only - it is NEVER rendered as a section in the daily.
 
 **How the daily uses it (input-only):**
-- Add a one-clause background when today's item belongs to a known storyline ("this continues the X migration that has run for three weeks") - see the Background-first rule in the Plain-English Description Rules.
+- Add a one-clause background when an item belongs to a known storyline ("part of the ongoing X migration") - see the Background-first rule in the Plain-English Description Rules. The background NAMES the thread; it does not assert a timespan the scan window does not cover (no "this week" on a single-day digest).
 - Mark continuations instead of re-introducing a thread cold.
 - Do NOT re-explain what the weekly/monthly already established; assume the reader can follow the arc.
 
@@ -551,14 +558,14 @@ Scan **each org** from `config.github.orgs` for activity during the target date 
 **For each org, invoke these three helpers in parallel:**
 
 ```bash
-bash ~/.claude/skills/team-digest/lib/fetch-github-prs.sh      <org> "$LOOKBACK_START" "$END"
-bash ~/.claude/skills/team-digest/lib/fetch-github-issues.sh   <org> "$LOOKBACK_START" "$END"
+bash ~/.claude/skills/team-digest/lib/fetch-github-prs.sh      <org> "$START" "$END"
+bash ~/.claude/skills/team-digest/lib/fetch-github-issues.sh   <org> "$START" "$END"
 bash ~/.claude/skills/team-digest/lib/fetch-github-releases.sh <org> "$START" "$END"
 ```
 
-The PR/issue helpers use `$LOOKBACK_START` (which equals `$START` when `pr_lookback_days=0`, otherwise extends backward by N days). The releases helper stays on the narrow `$START..$END` window — wider lookback would re-surface old releases that don't belong in today's digest.
+All three helpers scan the same `$START..$END` window — one day for a single-day digest, the full span for a range digest. There is no separate lookback window.
 
-When `$LOOKBACK_DAYS > 0`, every PR/issue returned by the helpers may have either been merged inside the digest day OR earlier in the lookback window. The renderer should annotate earlier-merged items in the priority-repo narrative with a `(merged <YYYY-MM-DD>)` suffix so readers can distinguish today's signal from the backfill. The "merged today" check is `merged_at[:10] == $DATE_LABEL`.
+For a **range** digest (`IS_RANGE=1`), add an inline `(YYYY-MM-DD)` date to an item only when the date materially aids the reader (e.g., to order a multi-day arc); default to no per-item date to keep output lean. For a **single-day** digest, never add per-item dates — everything happened that day.
 
 Each helper writes a plain-text summary to stdout. PR and issue helpers group by repo with `## <repo> (<N>)` headers, then per-item lines with `[STATE] #<number> <title>`, author handle, URL, and a 200-char description excerpt. The releases helper emits one line per release: `<repo>: <tag> - <name> (<YYYY-MM-DD>) <html_url>`.
 
@@ -600,6 +607,8 @@ If scanning an org fails, note the failure and continue with the next org.
 
 This step produces the HIP Activity section that appears under each org header in `hip_tracking.implementation_orgs` (default: `hiero-ledger`). It runs after the main GitHub scan so the cross-link stage below can cross-link with PR data already in context.
 
+**Range mode (`IS_RANGE=1`):** the day-pinned helpers below — Stage 1 (`fetch-hip-updates.sh`), Stage 3 (`fetch-hip-release-refs.sh`), Stage 4 (`fetch-hip-timeline-correlations.sh`) — each scan a single UTC day. For a range digest, invoke each once per day across `$WINDOW_START..$WINDOW_END` (emit the per-day calls in parallel batches). Every day's sidecars accumulate in `$TEAM_DIGEST_MATCHES_DIR`; the consolidation step dedups by `(hip_id, repo, pr_number)`, so cross-day duplicates collapse automatically. Stage 2 (`fetch-hip-implementation-prs.sh`) is already windowed via `--since-iso "$START"` — call it once, not per day. For a single-day digest (`IS_RANGE=0`), call every stage once with `$DATE_LABEL` exactly as written below.
+
 **Stage 1 — fetch HIP updates:**
 
 ```bash
@@ -615,10 +624,10 @@ Rank the HIP entries: status-changed first, then by HIP number ascending. Take t
 For each, dispatch in parallel (emit all Bash tool calls in one message):
 
 ```bash
-bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$DATE_LABEL" "<comma-joined implementation_orgs>" --since-iso "$LOOKBACK_START"
+bash ~/.claude/skills/team-digest/lib/fetch-hip-implementation-prs.sh <hip> "$WINDOW_END" "<comma-joined implementation_orgs>" --since-iso "$START"
 ```
 
-The `--since-iso` arg honors the `pr_lookback_days` config knob: with default 0, `$LOOKBACK_START == $START` and the helper sees the digest-day-only window (today's behavior). With `pr_lookback_days > 0`, the per-HIP `gh search` extends backward by N days and surfaces earlier-merged HIP-implementation PRs.
+The positional `$WINDOW_END` sets the search's upper bound and `--since-iso "$START"` sets the lower bound, so the per-HIP `gh search` covers the whole digest window in one call — `[$WINDOW_START, $WINDOW_END]` (a single day when `IS_RANGE=0`).
 
 Capture each as JSON.
 
@@ -711,6 +720,8 @@ bash ~/.claude/skills/team-digest/lib/fetch-gh-commits.sh "<owner>/<repo>" "$DAT
 
 Each helper returns a JSON array of items dated to `$DATE_LABEL`. Empty arrays (`[]`) are valid - that source had no items that day. Helper failures (network issue, malformed XML, gh rate limit) result in `[]` plus a stderr WARN line; do not abort the digest.
 
+**Range mode (`IS_RANGE=1`):** `fetch-rss.sh` and `fetch-gh-commits.sh` are day-pinned. For a range digest, invoke each feed once per day across `$WINDOW_START..$WINDOW_END` (parallel batches) and merge the results, de-duplicating items by `link`/`sha`. For a single-day digest, call each once with `$DATE_LABEL` as written.
+
 **For each non-empty result, write narrative output:**
 
 - Group by the entry's `category` (e.g., all items sharing the same category label appear together).
@@ -728,7 +739,7 @@ Each helper returns a JSON array of items dated to `$DATE_LABEL`. Empty arrays (
 
 For each keyword group from configuration, search the Notion workspace:
 - Use the `notion-search` MCP tool with `query_type: "internal"`
-- Filter to pages created on the previous calendar day using `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }`
+- Filter to pages created within the window using `created_date_range: { start_date: "<WINDOW_START>", end_date: "<WINDOW_END>" }` (a single day when `IS_RANGE=0`, the full span otherwise)
 - Set `page_size: 10` and `max_highlight_length: 150`
 
 Run keyword searches in parallel batches (2-3 keywords per search query to reduce API calls).
@@ -762,11 +773,13 @@ This step covers the user's curated list of "Favorites" pages - documents they c
 
 **If no Favorites list was extracted from the config page:** skip this step entirely. Do not include a Favorites section in the output.
 
+**"Edited in the window" predicate:** throughout this step, a page qualifies when the date portion of its `last_edited_time` (UTC) falls within `[$WINDOW_START, $WINDOW_END]` inclusive — a single day when `IS_RANGE=0`, the full span for a range digest.
+
 **Phase A - Fetch each favorite (parallel):**
 
 1. Call `notion-fetch` with the URL or ID. The MCP tool accepts both forms; no need to parse the 32-char hex from the URL manually.
 2. From the response, read `last_edited_time` (an ISO-8601 UTC timestamp on the page object) AND the page's canonical `url` field. Add the `{page_id, title, url}` tuple to the Notion Link Registry immediately.
-3. Compare the date portion of `last_edited_time` (in UTC) against `$DATE_LABEL`. If they match, the favorite itself was edited during the digest window - mark it as a "qualifying parent."
+3. Apply the "edited in the window" predicate to `last_edited_time`. If it qualifies, the favorite itself was edited during the digest window - mark it as a "qualifying parent."
 4. If the page was archived (response includes `archived: true`), skip it silently along with any descent.
 5. If `notion-fetch` returns an error (page not found, page deleted, user lacks permission), log a one-line failure note like `(Favorite <ID>: not accessible - check the URL or your access)` and continue.
 6. **Collect child page references** from the response content. The Notion MCP enhanced-Markdown response renders child pages as `<page url="..." title="..."/>` tags or as Notion `@mention`-style page links inside the page body. Extract every Notion page URL or ID found inside the favorite's content. These are the candidates for descent.
@@ -775,21 +788,21 @@ Emit all favorite `notion-fetch` calls in one message so they run concurrently.
 
 **Phase B - Descend one level (conditional, parallel, capped):**
 
-**This phase only runs when at least one favorite was marked as a qualifying parent in Phase A** (i.e., its `last_edited_time` date matched `$DATE_LABEL`). If Phase A found zero qualifying parents, skip Phase B entirely and proceed to Phase C with an empty child list. This prevents fetching dozens of child pages from large index favorites on days when nothing is actively being edited.
+**This phase only runs when at least one favorite was marked as a qualifying parent in Phase A** (i.e., its `last_edited_time` fell within the window). If Phase A found zero qualifying parents, skip Phase B entirely and proceed to Phase C with an empty child list. This prevents fetching dozens of child pages from large index favorites on days when nothing is actively being edited.
 
 For each **qualifying parent favorite** (and only those), take its collected child page references and call `notion-fetch` on each in parallel. Apply these limits:
 
 - **Cap at 5 children per favorite.** If a qualifying parent has more than 5 unique child page references, fetch the first 5 and add a one-line note `(<favorite title>: 5-child cap reached, N pages skipped)` to the Favorites section.
 - **Single hop only.** Do NOT recurse into the children's children. Loops or deep trees would explode the cost.
 - **Deduplicate across favorites.** If two different favorites both link to the same child page, fetch it once.
-- **Apply the same `last_edited_time == $DATE_LABEL` filter** to each child. Children not edited that day are silently dropped.
+- **Apply the same "edited in the window" predicate** to each child. Children not edited in the window are silently dropped.
 - **Skip archived children silently.** Skip permission-error children with a one-line note in the digest.
 
 **Phase C - Cross-section dedup:**
 
 Track page IDs across all Notion sections. If a page already appeared in the Keyword Monitor (Step 3), still mention it briefly in the Favorites section with a link-back rather than re-summarizing - the user explicitly cares about favorites, so silent dedup hides signal. If a page is BOTH a favorite (or its child) AND a keyword match, prefer the Favorites section and add a `(also matched keywords: ...)` note.
 
-**For each qualifying page (favorite or child, edited on `$DATE_LABEL`):**
+**For each qualifying page (favorite or child, edited in the window):**
 
 - Use the page's canonical URL from the MCP response as the link target.
 - Write a 2-4 sentence narrative summary of what changed or what the page contains.
@@ -799,13 +812,13 @@ Track page IDs across all Notion sections. If a page already appeared in the Key
 
 **Section-empty fallback:**
 
-If every favorite (and every descended child) was either inaccessible, archived, or not edited on `$DATE_LABEL`, include the Favorites section with a single line: `No favorited pages or their child pages had updates on <DATE_LABEL>.` This distinguishes a successful no-hit scan from a configuration mistake.
+If every favorite (and every descended child) was either inaccessible, archived, or not edited in the window, include the Favorites section with a single line: `No favorited pages or their child pages had updates in <WINDOW_LABEL>.` This distinguishes a successful no-hit scan from a configuration mistake.
 
 **Access model:** the Notion-hosted MCP (the OAuth-based connector Anthropic ships) inherits workspace-wide access from the user's OAuth grant - no per-page sharing required. If a `notion-fetch` returns a "not accessible" error, the cause is almost always one of: (a) the page was deleted or moved out of the user's workspace, (b) the user themselves lacks permission to that page (e.g., a private page in another team's space), or (c) the URL is malformed. Treat permission errors as a real signal worth surfacing in the digest, not as expected setup friction.
 
 ### Step 4: Scan Partner Conversations
 
-For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range: { start_date: "<DATE_LABEL>", end_date: "<DATE_LABEL>" }` to strictly bound results to that UTC day. Set `max_highlight_length: 150` for token-efficiency parity with Step 3 — the highlight is only used to decide whether the meeting page is worth synthesizing in full via `notion-fetch`; long highlights waste tokens without changing the routing decision.
+For each partner pattern from configuration, search the Notion workspace using the `notion-search` MCP tool with `created_date_range: { start_date: "<WINDOW_START>", end_date: "<WINDOW_END>" }` to strictly bound results to the digest window. Set `max_highlight_length: 150` for token-efficiency parity with Step 3 — the highlight is only used to decide whether the meeting page is worth synthesizing in full via `notion-fetch`; long highlights waste tokens without changing the routing decision.
 
 **Deduplication:** Skip pages already covered in the keyword monitor section. Track by page ID.
 
@@ -844,7 +857,7 @@ These three audits are the difference between a digest that reads like a log dum
 
 #### Quality check A: Diagram audit
 
-For EACH priority repo section, scan the PRs and issues that appeared on `$DATE_LABEL` and check whether any of these triggers fired:
+For EACH priority repo section, scan the PRs and issues that appeared in the window (`$WINDOW_START..$WINDOW_END`; a single day when `IS_RANGE=0`) and check whether any of these triggers fired:
 
 | Trigger | Example PR/issue descriptions that match |
 |---|---|
@@ -954,8 +967,9 @@ Call `notion-create-pages` with:
 
 - **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 0>" }`
 - **Properties:**
-  - Digest Title: `Team Daily Digest - <DATE_LABEL>`
-  - date:Date:start: `<DATE_LABEL>`
+  - Digest Title: `Team Daily Digest - <DATE_LABEL>` when `IS_RANGE=0`; `Team Digest - <WINDOW_START>..<WINDOW_END>` when `IS_RANGE=1` (see TITLE LOCK).
+  - date:Date:start: `<WINDOW_START>`
+  - date:Date:end: **OMIT entirely when `IS_RANGE=0`** (Notion requires a NULL end for a single date - never set it equal to the start); set to `<WINDOW_END>` when `IS_RANGE=1`. This is what lets `/team-weekly` find a range scan by overlap.
   - Digest Type: `Combined`
   - Repos Active: `<count of repos with activity>`
   - Keywords Matched: `["keyword1", "keyword2", ...]` (JSON array of keywords that had hits)
@@ -1035,14 +1049,15 @@ Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to
 `TEMPLATE.md` was already loaded at Step 0 - it is the canonical output contract that has been in context throughout data gathering. Now apply it: substitute all `<PLACEHOLDER>` values with the actual data, in the order the template specifies. The "FORMAT RULES" section at the bottom of TEMPLATE.md is a human reference only - do not render it in the Notion page. If for any reason you do not have TEMPLATE.md in context (e.g., context was compacted), re-read it now before assembling.
 
 **Structure enforcement check.** Before writing the safety file at Step 5.1, scan the assembled draft for these structural requirements:
-- The header callout is `<callout icon="📊" color="blue_bg">**Team Daily Digest** | ...</callout>` — NOT "SA Daily Digest", NOT a team-specific name, NOT a callout missing the `**Team Daily Digest**` prefix.
-- Each org with priority-repo activity has a top-level `# <org-name>` H1 (not H3), then `## Priority Repos` H2, then one `### [<repo>](url)` H3 per priority repo, each followed by a 2-4 paragraph narrative AND a `**Relevance:**` paragraph.
-- Orgs with non-priority repos have a `## Other Active Repos` H2 with a summary table — never an H3 header followed by a flat bullet list of PRs.
+- The header callout is `<callout icon="📊" color="blue_bg">**Team Daily Digest** | ...</callout>` for a single-day digest, or `<callout icon="📊" color="blue_bg">**Team Digest** | ...</callout>` for a range digest (`IS_RANGE=1`) — NOT "SA Daily Digest", NOT a team-specific name, NOT a callout missing the locked prefix. The `Data window` field shows `<WINDOW_START>` (single day) or `<WINDOW_START> .. <WINDOW_END>` (range).
+- Each org with priority-repo activity has a top-level `# <org-name>` H1 (not H3), then `## 📁 Priority Repos` H2, then one `### [<repo>](url)` H3 per priority repo, each followed by a 2-4 paragraph narrative AND a `**Relevance:**` paragraph (and an optional `<details>` depth toggle).
+- Orgs with non-priority repos have a `## 📂 Other Active Repos` H2 whose long-tail repo list sits inside a `<details>` toggle — never a flat dump of every PR in the main flow. Keep this as a `## ` H2 so the chunked write gives it its own chunk.
+- Section anchors carry their fixed emoji (🔑 ⭐ 🧩 📁 📂 🚀 📰 🔎 📌 🤝); the `## 🔑 Executive Summary` heading keeps the words "Executive Summary" (the cascade matches on them).
 - If any of these is missing, fix the draft before writing.
 
 #### Executive Summary (mandatory first content block)
 
-Every digest opens with an **Executive Summary** under an `## Executive Summary` heading, immediately after the header callout. Purpose: a reader who only skims this section should leave with the day's headlines.
+Every digest opens with an **Executive Summary** under an `## 🔑 Executive Summary` heading (keep the words "Executive Summary" - the cascade extracts the section by them), immediately after the header callout. Purpose: a reader who only skims this section should leave knowing what's worth knowing - the day's headlines in plain words.
 
 **Format:**
 
@@ -1054,7 +1069,7 @@ Every digest opens with an **Executive Summary** under an `## Executive Summary`
 - Cover a mix: priority-repo headlines, releases, major Notion design docs created today, partner conversations of substance, notable Industry News items
 - Skip routine maintenance (dep bumps, README touch-ups, test refactors) - the per-section narratives already cover those
 - Apply the same Plain-English Description Rules: write for an outsider, lead with the user-visible change, no insider jargon without translation
-- When Step 1.5 (cascade) surfaced an ongoing storyline a bullet belongs to, frame the bullet as an arc step ("week 3 of the X migration: ...") so a skimmer sees trajectory, not just today's snapshot. Do not invent an arc the cascade context does not support.
+- Match framing to the scan window. For a **single-day** digest (`IS_RANGE=0`), keep every bullet day-scoped — describe what changed that day. The cascade may add at most ONE short background clause for continuity ("part of the ongoing X work"), but never reframe a single day's change as a multi-week arc and never write "this week". For a **range** digest (`IS_RANGE=1`), period-scoped framing ("over this period", "this week") is correct because the window actually spans it. Do not invent an arc the cascade context does not support.
 - The audience is your future self skimming the page in 30 seconds - what would you most want to surface?
 
 **Anti-examples:**
@@ -1073,12 +1088,12 @@ Every digest opens with an **Executive Summary** under an `## Executive Summary`
 
 #### Top Picks: Notion Pages Worth Reading
 
-After the Executive Summary, include a `## Top Picks: Notion Pages Worth Reading` section IF AND ONLY IF the day produced at least one Notion page worth highlighting.
+After the Executive Summary (and the optional `⚠️ Heads up` callout, if the day warrants one), include a `## ⭐ Top Picks: Notion Pages Worth Reading` section IF AND ONLY IF the day produced at least one Notion page worth highlighting.
 
 **Selection logic:**
 
 1. Take the union of pages found via Notion Keyword Monitor (Step 3) and Favorites Activity (Step 3.5). De-duplicate by page ID.
-2. Exclude pages whose title starts with "Team Daily Digest" or "Team Weekly Digest" - the digest's own output should never be in Top Picks. Also exclude any title matching the regex `^[A-Z]{2,4} (Daily|Weekly) Digest` (catches legacy outputs from earlier digest names like "SA Daily Digest", "Eng Weekly Digest" that may still live in the database).
+2. Exclude pages whose title starts with "Team Daily Digest", "Team Weekly Digest", "Team Monthly Digest", or "Team Digest - " (the range-scan form) - the digest's own output should never be in Top Picks. Also exclude any title matching the regex `^[A-Z]{2,4} (Daily|Weekly|Monthly) Digest` (catches legacy outputs from earlier digest names like "SA Daily Digest", "Eng Weekly Digest" that may still live in the database).
 3. Rank remaining pages by relevance to the team profile's "What's Relevant" / "High Priority" criteria. A page that touches multiple high-priority themes from the profile ranks higher than a page that touches one. A page with a clear stake (architecture decision, partner impact, breaking change) ranks higher than a page with a routine status update.
 4. Pick the top 3-5. If fewer than 3 pages survive selection, pick all of them. If zero, omit the section entirely.
 
@@ -1161,7 +1176,7 @@ The change is the subject; the PR is the citation. Reverse the polarity of every
 
 A change is only "raw" when the reader does not know the storyline it belongs to. Before the user-visible change, add a one-clause **background** when EITHER is true:
 
-1. The item belongs to an **Ongoing Storyline** loaded in Step 1.5 (cascade). Name the arc and where this piece fits: "The relay has been hardening Pectra-fork handling all month; this piece keeps concurrent transactions in submission order. Merged in [#5371](url)."
+1. The item belongs to an **Ongoing Storyline** loaded in Step 1.5 (cascade). Add ONE background clause naming the thread, scoped to the actual window. Single-day digest: "part of the ongoing fee-SPI cleanup; today this piece keeps concurrent transactions in submission order. Merged in [#5371](url)." Range digest, where the window genuinely spans the time: "the relay hardened Pectra-fork handling over this week; this piece keeps concurrent transactions in submission order. Merged in [#5371](url)." Never assert a timespan ("all month", "for three weeks") the scan window does not cover.
 2. The item names a **project or component an outsider would not recognize** and the Project Glossary has (or implies) a one-line description. Lead with what it is before what changed.
 
 Keep the background to ONE clause - it sets context, it does not retell the storyline. If Step 1.5 found no storylines (no weekly yet), fall back to glossary-driven background only. The goal: a reader who did not see yesterday's digest still understands why today's change matters.
@@ -1217,7 +1232,7 @@ After writing each priority-repo paragraph, read it imagining you joined the tea
 - Did I have to mentally translate any phrase?
 - Is the user-visible change clear in the first sentence?
 - Are there more than 3 unexplained internal terms in any single sentence?
-- Did I give enough background for someone who did NOT read yesterday's digest - is the storyline this change belongs to clear in one clause?
+- Did I give enough background for someone who did NOT read yesterday's digest - is the storyline this change belongs to clear in one clause, AND is the framing scoped to the actual window (no "this week" on a single-day digest)?
 
 If the answer is "yes" to any of those, rewrite. The Pre-Write Link Audit (Step 4.5) checks links and Mermaid syntax mechanically; this Outsider Test checks readability semantically and is your job to apply paragraph-by-paragraph as you write.
 

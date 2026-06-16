@@ -43,8 +43,13 @@ Either path saves your config to `~/.config/team-digest/config.json` and pre-fil
 |---------|-------------|
 | `/team-digest` | Digest for the previous calendar day |
 | `/team-digest 2026-04-20` | Digest for a specific date (backfill) |
+| `/team-digest 2026-06-08..2026-06-14` | One digest covering a multi-day range (scans all sources over the window) |
+| `/team-digest --from 2026-06-08 --to 2026-06-14` | Same range, weekly-style flags |
+| `/team-digest --days 3` | Last 3 days, ending yesterday |
 | `/team-digest setup` | Create or update your Notion IDs |
 | `/team-digest config` | Show your current configuration |
+
+> **Tip:** a range scan is the token-efficient way to cover a week without running the daily seven times - one run, one synthesized page. Then `/team-weekly <same range>` rolls it (and anything else overlapping the week) into a Weekly page.
 
 ## Personalize with a Team Profile (Optional)
 

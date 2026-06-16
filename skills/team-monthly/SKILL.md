@@ -71,7 +71,7 @@ Flow:
    - **No existing page found:** fall through to step 7 (create + chunked write).
    - **Existing page found AND its body matches the placeholder** (`Monthly digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id.
    - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the month already has a digest and the file is preserved at `$FROM_FILE`.
-7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Monthly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $MONTH_END`, `Digest Type: Monthly`, `Status: Auto`). For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Monthly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $MONTH_START`, `date:Date:end: $MONTH_END`, `date:Date:is_datetime: 0`, `Digest Type: Monthly`, `Status: Auto`). For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
 8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
 9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
 10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
@@ -154,11 +154,12 @@ If the helper exits non-zero (invalid month/date format, --from after --to, mixi
 
 Fetch `data_source_id` from the database with `notion-fetch` on `database_id` (extract the `data-source-url` / `collection://...` from the response - same pattern as the weekly). Then make ONE `notion-query-data-sources` call against that data source:
 
-- **Filter:** `date:Date:start` between `$MONTH_START` and `$MONTH_END` inclusive. **Do NOT filter by `Digest Type`** - we want every daily AND every weekly in the month in one query.
+- **Filter (overlap, not exact date):** `date:Date:start <= $MONTH_END`. **Do NOT filter by `Digest Type`** - we want every daily/range scan AND every weekly that overlaps the month in one query.
 - **Sort:** `date:Date:start` ascending.
 - **Paginate.** A 31-day month can exceed one page. If the response has `has_more: true`, repeat the query with the returned `start_cursor` until `has_more` is false. Accumulate all results.
+- **Then keep only pages overlapping the month, IN CONTEXT:** a page overlaps when `coalesce(date:Date:end, date:Date:start) >= $MONTH_START`. Weeklies (and range Combined pages) now carry `start..end`, so a week straddling the month boundary is still caught; single-day dailies have a null end and use their start.
 
-Partition the accumulated results by the `Digest Type` property:
+Partition the surviving results by the `Digest Type` property:
 
 - `Weekly` rows → the **spine** (fetch bodies in Step 3a).
 - `Combined` rows → the **daily skeleton**. Keep their properties (`date`, `Repos Active`, `Keywords Matched`, `url`) - they feed "By the Numbers" and the deep-fetch ranking. Do NOT fetch their bodies yet.
@@ -239,8 +240,10 @@ Call `notion-create-pages` with:
 - **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 2>" }`
 - **Properties:**
   - `Digest Title`: `Team Monthly Digest - <MONTH_NAME>`
-  - `date:Date:start`: `<MONTH_END>` (so monthly entries sort just after the last daily/weekly of that month)
-  - `Digest Type`: `Monthly`
+  - `date:Date:start`: `<MONTH_START>`
+  - `date:Date:end`: `<MONTH_END>`
+  - `date:Date:is_datetime`: `0`
+  - `Digest Type`: `Monthly` (the page carries the full month as a `start..end` range so a future Quarterly cadence finds it by overlap)
   - `Repos Active`: total unique repos active across the month (sum-of-uniques, not sum-of-weeklies)
   - `Keywords Matched`: union of `Keywords Matched` across the month as a JSON array
   - `Partners Mentioned`: JSON array of distinct partner/company names from the month's Partner Momentum (multi-week + single-touch); empty array if none. **Include ONLY if the database schema (from the Step 2 database fetch) has a `Partners Mentioned` property; OMIT it entirely otherwise** (older installs without the column reject unknown properties).
@@ -263,7 +266,7 @@ The full monthly content (typically 30-60 KB - larger than the weekly because it
 **Sentinel:** the string `DIGEST-SECTION-BREAK` — appended as a standalone paragraph after each chunk, replaced by the next chunk in the next call, and removed in the final call. This sentinel matches the value the daily and weekly use; a single page is only ever bound to one digest at a time, so reusing the sentinel name is safe and keeps recovery logic identical.
 
 **How to split:**
-- Identify all `## ` heading boundaries in the assembled content (e.g. `## The Month in Review`, `## Top Storylines`, `## By the Numbers`, `## Supporting Detail`, `## Week-by-Week Index`).
+- Identify all `## ` heading boundaries in the assembled content (e.g. `## 📖 The Month in Review`, `## 🧵 Top Storylines`, `## 📊 By the Numbers`, `## 📚 Supporting Detail`, `## 🗓️ Week-by-Week Index`). The splitter keys on the `## ` prefix; the emoji anchor after it is part of the heading text.
 - Section 0 = everything before the first `## ` (header callout + `---` separator).
 - Each `## Heading\n...content...` up to the next `## ` boundary is one section.
 - Merge two consecutive sections into one chunk if their combined length is under 3,000 characters.
@@ -309,7 +312,7 @@ Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to
 - The auto-generated footer is the LAST block. Do NOT replace it with a "Known limitations" / "Caveats" meta-section; section-level inline notes belong inside their section.
 - Do NOT invent closing meta-sections about run hygiene. If a weekly fetch failed, note it inline in the Week-by-Week Index, not as a closing callout.
 
-**Structure enforcement check.** Before writing the safety file, scan the assembled draft: the header callout MUST be `<callout icon="🗓️" color="purple_bg">**Team Monthly Digest** | ...</callout>` (not "SA Monthly Digest", not a team-specific name, not a callout missing the `**Team Monthly Digest**` prefix). The five top-level sections (`## The Month in Review`, `## Top Storylines`, `## By the Numbers`, `## Supporting Detail`, `## Week-by-Week Index`) must all be present, in that order, with the footer callout last. If wrong, fix the draft before writing.
+**Structure enforcement check.** Before writing the safety file, scan the assembled draft: the header callout MUST be `<callout icon="🗓️" color="purple_bg">**Team Monthly Digest** | ...</callout>` (not "SA Monthly Digest", not a team-specific name, not a callout missing the `**Team Monthly Digest**` prefix). The five top-level sections (`## 📖 The Month in Review`, `## 🧵 Top Storylines`, `## 📊 By the Numbers`, `## 📚 Supporting Detail`, `## 🗓️ Week-by-Week Index` — each carries its emoji anchor) must all be present, in that order, with the footer callout last. If wrong, fix the draft before writing.
 
 **Output format contract:** `TEMPLATE.md` was already loaded at Step 0 - it is the canonical output contract. Substitute all `<PLACEHOLDER>` values with actual data, in the order the template specifies. The "FORMAT RULES" section at the bottom is a human reference only - do not render it in the Notion page. If TEMPLATE.md is not in context (e.g., context was compacted), re-read it now before assembling.
 

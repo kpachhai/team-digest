@@ -63,7 +63,7 @@ Run on the 1st of each month (for the prior full month), after that day's daily 
 
 ## The cascade makes everything else better
 
-Once monthlies start landing, the **context cascade** kicks in automatically: each weekly loads the most-recent monthly's Executive Summary before it runs, and each daily loads the most-recent weekly's. That is what lets a daily say "this continues the migration that has run for three weeks" instead of presenting each PR cold. No configuration needed (toggle with `cascade.enabled` in config). The weekly-from-monthly link is a no-op until your first monthly exists, then it switches on by itself.
+Once monthlies start landing, the **context cascade** kicks in automatically: each weekly loads the most-recent monthly's lead before it runs, and each daily loads the most-recent weekly's Executive Summary. That background lets a daily add one clause of storyline context ("part of the ongoing migration") instead of presenting each change cold - while keeping the daily's content scoped to its own window. No configuration needed (toggle with `cascade.enabled` in config). The weekly-from-monthly link is a no-op until your first monthly exists, then it switches on by itself.
 
 ## Output
 

@@ -21,7 +21,7 @@ For a date-anchored history of when each capability landed, see the git log (`gi
 - Date-range window filtering: `calibrate-hip-matches.sh --baseline` accepts optional `--window-start YYYY-MM-DD --window-end YYYY-MM-DD` args. When set, labeled positives are filtered to those whose `pr_merged_at` (or `attributed_to_releases` date) falls in the window — necessary when a single-day dry-run is measured against a labeled set spanning multiple years.
 - Release-attribution credit: labeled-set entries can carry an `attributed_to_releases: [<date>, ...]` field. The calibration helper's `in_window()` returns true if `pr_merged_at` OR any `attributed_to_releases` date falls in the window. Required for Strategy 2 fidelity — S2 attributes HIPs to PRs included in releases published in the window, even if the PR itself merged earlier.
 - Labeled-set schema: entries carry `is_hip_doc_update`, `is_useful_signal`, `pr_merged_at`, and optional `attributed_to_releases`. Entries without these fields are treated as `is_useful_signal: true` and in-scope by default (back-compat).
-- PR-update window lookback: `compute-window.sh` accepts optional `--lookback-days N` and emits `LOOKBACK_START` + `LOOKBACK_DAYS`. SKILL.md reads the `github.pr_lookback_days` config key (default `0` — preserves daily-cron behavior) and passes `$LOOKBACK_START` to `fetch-github-prs.sh`, `fetch-github-issues.sh`, and Mechanism B's `fetch-hip-implementation-prs.sh` (via `--since-iso ISO`). Releases stay on the narrow window. When the lookback is > 0, the digest header gets a `[Notice]` and each PR gets a `(merged YYYY-MM-DD)` suffix.
+- Explicit scan window (superseded the `pr_lookback_days` lookback knob): `compute-window.sh` resolves a single day or a range (`A..B`, `--from/--to`, `--days N`) and emits `WINDOW_START`, `WINDOW_END`, `WINDOW_LABEL`, `IS_RANGE`, `START`, `END`, `DATE_LABEL`. A range scan widens all sources together (GitHub PRs/issues/releases, Notion keyword/partner/favorites, HIP stages, RSS) and writes one Combined page carrying a `date:start..date:end` range. The always-on lookback (which silently turned every daily into a week-spanning scan) was removed; multi-day coverage is now an explicit per-run argument.
 - Deterministic matches.json consolidation: every match-producing helper writes structured JSON sidecars to `$TEAM_DIGEST_MATCHES_DIR`. After Claude exits, `bin/team-digest-run.sh` runs `consolidate-matches.sh` to merge them with MAX-confidence dedup on `(hip_id, repo, pr_number)`. Moves the canonical merge out of Claude's in-context state into deterministic shell — Claude proved lossy under high PR volume. The wrapper uses winner-by-volume directory discovery to handle env-var-propagation failure and mid-run Write-tool recoveries.
 - Token-efficiency safeguards (body cap, skip-fetch, child cap, highlight length) and chunked Notion write (split `notion-create-pages` + `notion-update-page`) to stay within the Notion MCP timeout budget. Same chunked-write pattern applies to `/team-weekly`.
 
@@ -39,7 +39,7 @@ Strategy 4 (LLM identifier-generation + `gitGrep`) is gated by `lib/strategy4-ga
 
 ## Calibration snapshot
 
-Real metrics against a 2026-05-06 dry-run with a 7-day lookback window:
+Real metrics against a 2026-05-06 dry-run over a 7-day range window:
 
 | Lens | Window | Precision | Recall | F1 | TP/FP/FN |
 |---|---|---|---|---|---|
@@ -65,24 +65,6 @@ Gate stays in TRIGGER (recall 0.52 < 0.7 threshold). But the diagnostic is hones
 ## Parked items
 
 Items below are scoped enough to fit one or two focused work sessions. Order is rough priority; reorder per upcoming need.
-
-### Cross-day dedup for lookback-window PRs
-
-**What:** when `pr_lookback_days > 0`, a PR that merged earlier in the week appears in each successive daily digest until it falls out of the window. Add a cross-day "previously surfaced" tracker so the same PR is rendered fully on day 1 and noted as `(previously surfaced YYYY-MM-DD)` on subsequent days.
-
-**Why:** main UX issue with the lookback feature. Without dedup, the same PR clutters multiple consecutive daily pages.
-
-**Approach sketch:**
-
-1. Persist a `~/.config/team-digest/seen-prs.json` cache mapping `(repo, pr_number)` → first-surfaced-date.
-2. At cross-link time, mark any PR whose `(repo, pr_number)` is in the cache and whose first-surfaced-date < today. Render with the `(previously surfaced YYYY-MM-DD)` annotation.
-3. After successful Notion write, update the cache with today's date for any new PRs.
-4. Cache prune: drop entries older than `max_backfill_days × 2`.
-
-**Gotchas:**
-
-- Multiple machines syncing the cache: probably out-of-scope; each machine has its own cache.
-- The cache is part of the runtime state, not the labeled set or config. Document it.
 
 ### YouTube channel watching
 

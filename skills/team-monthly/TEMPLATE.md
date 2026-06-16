@@ -6,16 +6,18 @@ Edit this file to change how monthly digests look. The skill reads it in Step 5 
 
 Inline annotations (lines starting with `NOTE:`) are instructions to the model - do not render them.
 
+**Reading experience (apply throughout):** this page is read top-to-bottom by someone who may have read none of the dailies or weeklies. Lead with the story in plain words; keep jargon, IDs, and exhaustive lists out of the main flow (link out, or use a `<details>` toggle for reference lists). Use the emoji section anchors below so sections are easy to find when scrolling.
+
 ---
 
 ## SECTION ORDER
 
 1. Header callout
-2. The Month in Review (narrative)
-3. Top Storylines (the interconnection layer - 4-7 named threads)
-4. By the Numbers (releases, repos-active trend, HIP arcs, keyword frequency)
-5. Supporting Detail (aggregated weekly-style sections; omit any with no data)
-6. Week-by-Week Index
+2. 📖 The Month in Review (narrative)
+3. 🧵 Top Storylines (the interconnection layer - 4-7 named threads)
+4. 📊 By the Numbers (releases, repos-active trend, HIP arcs, keyword frequency)
+5. 📚 Supporting Detail (aggregated weekly-style sections; omit any with no data)
+6. 🗓️ Week-by-Week Index
 7. Footer callout (ALWAYS last)
 
 ---
@@ -27,8 +29,9 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 
 ---
 
-## The Month in Review
+## 📖 The Month in Review
 
+NOTE: Keep the heading words "The Month in Review" - higher tiers extract this section's lead by name.
 NOTE: 3-5 paragraphs. Write this LAST, from the storylines + weekly spine. This is the
 NOTE: single most important section: someone who reads ONLY this should understand what the
 NOTE: month was about. Lead with the arc, not a list. Outsider-readable (full Plain-English
@@ -47,7 +50,7 @@ NOTE:       external security audit..."
 
 ---
 
-## Top Storylines
+## 🧵 Top Storylines
 
 NOTE: 4-7 named threads. THIS IS THE POINT OF THE MONTHLY. A storyline is NOT "repo X was
 NOTE: active" - it is "the effort to do Y, which pulled together repos A+B, HIP-N, a partner
@@ -71,14 +74,14 @@ NOTE: Repeat ### for each of the 4-7 storylines, most consequential first.
 
 ---
 
-## By the Numbers
+## 📊 By the Numbers
 
 NOTE: Mostly skeleton-derived (cheap) - built from the page-properties query, not body fetches.
 
 **Releases this month**
 
 <table header-row="true">
-<tr><td>Repo</td><td>Version</td><td>Date</td><td>Notes</td></tr>
+<tr><td>Repo</td><td>Version</td><td>Date</td><td>What changed (plain English)</td></tr>
 <tr><td>[<repo>](<repo-url>)</td><td>[<tag>](<release-url>)</td><td><YYYY-MM-DD></td><td><1-sentence: what changed for users></td></tr>
 </table>
 
@@ -86,7 +89,7 @@ NOTE: Every release mentioned in any weekly's Releases section, deduped, grouped
 
 **Activity trend**
 
-- <N> dailies present (<first date> to <last date>)<note any gaps: "missing 2026-05-12, 2026-05-19">
+- <N> digests present (<first date> to <last date>)<note any gaps: "missing 2026-05-12, 2026-05-19">
 - Busiest stretch: <week label> (<N> repos active / <N> releases)
 - Repos active across the month: <N unique>
 
@@ -103,16 +106,16 @@ NOTE: Omit if TEAM_DIGEST_HIP_ENABLED=0 or no HIP activity in any weekly. Cross-
 
 ---
 
-## Supporting Detail
+## 📚 Supporting Detail
 
 NOTE: The exhaustive catalog so nothing is lost. Aggregate the weekly-style sections across the
 NOTE: month. Omit any subsection with no data (no filler). Synthesize - do not paste weekly text.
 
-### Top GitHub Themes
+### 📁 Top GitHub Themes
 
-<2-4 paragraphs: repos with sustained month-long activity, linked. Lead with the user-visible theme.>
+<2-4 paragraphs: repos with sustained month-long activity, linked. Lead with the user-visible theme in plain words.>
 
-### Partner Momentum
+### 🤝 Partner Momentum
 
 NOTE: Aggregate partner threads across the month. Companies appearing across multiple weeks get a
 NOTE: "what moved this month" paragraph; single-touch companies get a one-line list. Omit if none.
@@ -123,14 +126,14 @@ NOTE: "what moved this month" paragraph; single-touch companies get a one-line l
 
 (Single touch: <Company A> (<week>), <Company B> (<week>).)
 
-### Notion Content Pulse
+### 🔎 Notion Content Pulse
 
 NOTE: The month's most consequential Notion pages (design docs, decisions), deduped, ranked by
 NOTE: team-profile relevance + cross-week momentum. Each: linked title + what it is + why it matters this month.
 
 - **[<Page Title>](<notion-url>)** - <what it is>; <why it mattered this month>
 
-### Industry News Roundup
+### 📰 Industry News Roundup
 
 NOTE: Aggregate from the weeklies' Industry News, dedup by URL, group by category. Omit empty categories.
 
@@ -138,7 +141,7 @@ NOTE: Aggregate from the weeklies' Industry News, dedup by URL, group by categor
 
 - [<title>](<link>) - <plain-English what happened>; relevant because <why it matters>
 
-### Favorites Movement
+### 📌 Favorites Movement
 
 NOTE: Pages from the weeklies' Favorites Movement that saw multi-week activity. Omit if none.
 
@@ -146,11 +149,15 @@ NOTE: Pages from the weeklies' Favorites Movement that saw multi-week activity. 
 
 ---
 
-## Week-by-Week Index
+## 🗓️ Week-by-Week Index
 
-NOTE: One line per weekly in the month, linked. Navigation hub back into the weeklies (and via them, the dailies). Note any missing weeks.
+NOTE: Navigation hub back into the weeklies (and via them, the dailies). Collapse it in a toggle so it stays out of the main flow. One line per weekly in the month, linked; note any missing weeks.
+
+<details><summary>Open the week-by-week index (<N> weeklies)</summary>
 
 - <WEEK_LABEL> (<start> to <end>): [<weekly title>](<weekly-page-url>)
+
+</details>
 
 ---
 
@@ -166,9 +173,13 @@ NOTE: One line per weekly in the month, linked. Navigation hub back into the wee
 - Synthesize from the weekly spine; deep-fetch dailies only for facts the weeklies compressed away (capped).
 - The footer's "N_DEEP of N_DAILIES read in full" line is mandatory honesty about the synthesis-of-synthesis tradeoff.
 
+### Plain language (this is the top-of-stack overview)
+- Lead with what the month MEANT, not the mechanism. Translate internal names, acronyms, and IDs, or leave them out and let links carry the detail. A reader should understand the page without opening a single link.
+
 ### Notion API hard constraints (same as daily/weekly)
-- Callout emoji: standard Unicode only. Never `:shortcode:`.
+- Callout emoji: standard Unicode only (🗓️ 📖 🧵 📊 📚 📁 🤝 🔎 📰 📌 ℹ️). Never `:shortcode:`.
 - Callout blocks single-line: `<callout ...>content</callout>` on one line. Each newline is a block boundary.
+- Toggles: `<details><summary>label</summary>` ... `</details>` for reference lists; never put a `## ` heading inside a toggle (the chunked write splits on `## `).
 - Bold+code collision: bolded inline-code renders as `****` artifacts. Use `**[name](url)**` or `**name**`.
 - No `\n` inside Mermaid node labels. Footer callout is ALWAYS last. No run-hygiene meta-sections.
 

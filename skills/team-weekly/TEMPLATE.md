@@ -6,23 +6,25 @@ Edit this file to change how weekly digests look. The skill reads it in Step 5 a
 
 Inline annotations (lines starting with `NOTE:`) are instructions to the model - do not render them.
 
+**Reading experience (apply throughout):** this page is read top-to-bottom by someone catching up on the week, not debugging. Lead every item with what it MEANS in plain words; keep jargon, internal IDs, and exhaustive lists out of the main flow (link to the daily, or tuck depth into a `<details>` toggle). Use the emoji section anchors below so sections are easy to find when scrolling.
+
 ---
 
 ## SECTION ORDER
 
 1. Header callout
-2. Week at a Glance (stats bullets)
-3. Executive Summary
-4. Top Picks: Notion Pages Worth Reading This Week (omit if zero qualify)
-5. Top GitHub Themes
-6. Releases This Week
-7. HIP Movement This Week (omit if no daily in the window had HIP Activity)
-8. Partner Momentum (omit if no partner conversations across the week)
-9. Notion Content Pulse
-10. Industry News Roundup (omit if no items)
-11. Favorites Movement (omit if no Favorites Activity in any daily)
-12. Threads to Watch / Carried Over (omit if nothing is open at week's end)
-13. Day-by-Day Index
+2. 📊 Week at a Glance (stats bullets)
+3. 🔑 Executive Summary
+4. ⭐ Top Picks: Notion Pages Worth Reading This Week (omit if zero qualify)
+5. 📁 Top GitHub Themes
+6. 🚀 Releases This Week
+7. 🧩 HIP Movement This Week (omit if no daily in the window had HIP Activity)
+8. 🤝 Partner Momentum (omit if no partner conversations across the week)
+9. 🔎 Notion Content Pulse
+10. 📰 Industry News Roundup (omit if no items)
+11. 📌 Favorites Movement (omit if no Favorites Activity in any daily)
+12. 🧵 Threads to Watch / Carried Over (omit if nothing is open at week's end)
+13. 🗓️ Day-by-Day Index
 14. Footer callout (ALWAYS last)
 
 ---
@@ -30,13 +32,13 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 ## TEMPLATE
 
 ```
-<callout icon="📈" color="purple_bg">**Team Weekly Digest** | <WEEK_LABEL> | <WEEK_START> to <WEEK_END> | <N_DIGESTS> daily digests processed | <N_REPOS> repos active | <N_RELEASES> releases | <N_PARTNERS> partner conversations</callout>
+<callout icon="📈" color="purple_bg">**Team Weekly Digest** | <WEEK_LABEL> | <WEEK_START> to <WEEK_END> | <N_DIGESTS> digests processed | <N_REPOS> repos active | <N_RELEASES> releases | <N_PARTNERS> partner conversations</callout>
 
 ---
 
-# Week at a Glance
+# 📊 Week at a Glance
 
-- <N> daily digests processed (<first weekday> to <last weekday>)
+- <N> digests processed (<first weekday> to <last weekday>)
 - <N> priority repos with sustained activity (3+ days of PRs or issues)
 - <N> releases shipped across the week
 - <N> partners with conversations recorded
@@ -44,24 +46,24 @@ Inline annotations (lines starting with `NOTE:`) are instructions to the model -
 
 ---
 
-## Executive Summary
+## 🔑 Executive Summary
 
+NOTE: Keep the heading text "Executive Summary" - the cascade and the monthly extract this section by that name.
 NOTE: 5-8 bullets covering the WEEK's signal - not a repeat of individual daily headlines.
 NOTE: Each bullet must name a cross-week THEME or SHIFT, not a single day's event.
-NOTE: Same two-question gate as the daily: Q1 - specific? Q2 - consequence/why it matters?
+NOTE: Same two-question gate as the daily: Q1 - specific? Q2 - consequence/why it matters, in plain words?
 NOTE: Same bold+code rule: use **[repo-name](url)** or **plain bold**, never **`code`**.
 NOTE:
 NOTE: BAD:  - **`asset-tokenization-studio`** security audit - Audit fixes continued throughout the week.
 NOTE:       (fails Q1: which findings? fails Q2: so what for partners?)
 NOTE: GOOD: - **[asset-tokenization-studio](url) closed its external security audit sprint** - 12 findings merged this week,
-NOTE:       including a critical admin-role lockout bug (FIND-111) and a nonce-sequencing vulnerability (FIND-073).
+NOTE:       including a critical admin-role lockout bug and a nonce-sequencing vulnerability.
 NOTE:       Partners using ATS as a tokenization baseline should hold mainnet deployments until the audit is complete.
 NOTE:
 NOTE: BAD:  - **Guardian** had lots of activity - AI Toolkit scaffold merged, various PRs merged.
 NOTE:       (fails Q1 and Q2)
 NOTE: GOOD: - **[Guardian](url) adds an AI automation layer** - the Guardian AI Toolkit scaffold merged, introducing
-NOTE:       Docker Compose infrastructure and repo structure for AI-driven policy creation. First step toward
-NOTE:       reducing the manual policy authoring burden for sustainability use cases.
+NOTE:       infrastructure for AI-driven policy creation. First step toward reducing the manual policy authoring burden.
 
 - **<plain bold or [linked name](url)>** - <specific cross-week theme>; <consequence for partners or the team>
 - **<plain bold or [linked name](url)>** - <...>
@@ -69,7 +71,7 @@ NOTE:       reducing the manual policy authoring burden for sustainability use c
 
 ---
 
-## Top Picks: Notion Pages Worth Reading This Week
+## ⭐ Top Picks: Notion Pages Worth Reading This Week
 
 NOTE: 3-5 pages. Aggregate Top Picks from all dailies + Notion Content Pulse. Dedupe by page ID.
 NOTE: Rank by team-profile relevance + cross-day momentum (page appearing on multiple days ranks higher).
@@ -81,11 +83,11 @@ NOTE: Each entry: 2-3 sentences - WHAT + WHY WORTH READING THIS WEEK + one concr
 
 ---
 
-# Top GitHub Themes
+# 📁 Top GitHub Themes
 
 NOTE: 2-3 paragraphs synthesizing the repos with SUSTAINED activity (3+ days of PRs or issues).
 NOTE: A repo with 1 PR on Monday is noise; a repo with PRs every day is signal.
-NOTE: Lead each paragraph with the user-visible theme, not the repo name or PR numbers.
+NOTE: Lead each paragraph with the user-visible theme in plain words, not the repo name or PR numbers.
 NOTE: Reference the most significant individual PRs; link every one.
 NOTE:
 NOTE: BAD:  "hiero-consensus-node had 15 PRs this week including #25382, #25381, #25380..."
@@ -107,10 +109,10 @@ NOTE: Only include repos the team profile lists as high-priority AND that had no
 
 ---
 
-# Releases This Week
+# 🚀 Releases This Week
 
 <table header-row="true">
-<tr><td>Repo</td><td>Version</td><td>Date</td><td>Notes</td></tr>
+<tr><td>Repo</td><td>Version</td><td>Date</td><td>What changed (plain English)</td></tr>
 <tr><td>[<repo>](<repo-url>)</td><td>[<tag>](<release-url>)</td><td><YYYY-MM-DD></td><td><1-sentence: what changed for users of this release></td></tr>
 </table>
 
@@ -118,7 +120,7 @@ NOTE: If no releases across the week: "No releases this week." (omit the table)
 
 ---
 
-# HIP Movement This Week
+# 🧩 HIP Movement This Week
 
 NOTE: Only emitted if any daily in the week had a HIP Activity section.
 NOTE: Skip the entire section if no HIPs were touched at all (no filler).
@@ -136,7 +138,7 @@ _HIP-<M> implementation landed in `hiero-consensus-node` (Tue), `hiero-sdk-java`
 
 ---
 
-# Partner Momentum
+# 🤝 Partner Momentum
 
 NOTE: Companies appearing in 2+ daily digests get a 1-2 sentence "what's moving" summary.
 NOTE: Companies appearing once get a single-line entry in the "Single touch" list.
@@ -154,7 +156,7 @@ NOTE: Omit this section if no partner conversations appeared across the week.
 
 ---
 
-# Notion Content Pulse
+# 🔎 Notion Content Pulse
 
 NOTE: Top 3-5 keywords by frequency (number of days they appeared).
 NOTE: Omit keywords that appeared only once - already covered in that daily.
@@ -167,7 +169,7 @@ NOTE: If all keywords appeared only once: "No repeated keyword themes this week 
 
 ---
 
-# Industry News Roundup
+# 📰 Industry News Roundup
 
 NOTE: Aggregate from all daily digests. Deduplicate by URL (same post can appear in multiple dailies due to feed lag).
 NOTE: Same two-part format as the daily: [title](link) - <plain-English what happened>; relevant because <why it matters>
@@ -180,7 +182,7 @@ NOTE: Group by category. Omit category subsections with zero items. Omit entire 
 
 ---
 
-# Favorites Movement
+# 📌 Favorites Movement
 
 NOTE: Pages with multi-day updates get highlighted callouts. Single-day updates get bullets.
 NOTE: Only include pages that appeared in Favorites Activity in at least one daily digest this week.
@@ -192,7 +194,7 @@ NOTE: Omit this section if no Favorites Activity appeared in any daily.
 
 ---
 
-# Threads to Watch / Carried Over
+# 🧵 Threads to Watch / Carried Over
 
 NOTE: The spine the monthly reads. Items still OPEN at week's end with advisory relevance:
 NOTE: open PRs worth tracking, HIPs mid-arc (not yet at terminal status), unresolved partner
@@ -208,21 +210,25 @@ NOTE: If nothing is open/carried-over: omit the section entirely.
 
 ---
 
-# Day-by-Day Index
+# 🗓️ Day-by-Day Index
 
-NOTE: One line per day in the window. Note gaps explicitly.
+NOTE: A reference list - collapse it in a toggle so it stays out of the main flow. One line per day in the window; note gaps explicitly. For range-scan coverage, a single multi-day page may cover several rows - link it on each day it covers, or list it once as "<start>..<end>".
 
-- Monday, <date>: [<daily digest title>](<daily-page-url>)
-- Tuesday, <date>: [<daily digest title>](<daily-page-url>)
-- Wednesday, <date>: [<daily digest title>](<daily-page-url>)
-- Thursday, <date>: [<daily digest title>](<daily-page-url>)
-- Friday, <date>: [<daily digest title>](<daily-page-url>)
-- Saturday, <date>: [<daily digest title>](<daily-page-url>) *(or: "no digest run")*
-- Sunday, <date>: [<daily digest title>](<daily-page-url>) *(or: "no digest run")*
+<details><summary>Open the day-by-day index (<N> entries)</summary>
+
+- Monday, <date>: [<digest title>](<page-url>)
+- Tuesday, <date>: [<digest title>](<page-url>)
+- Wednesday, <date>: [<digest title>](<page-url>)
+- Thursday, <date>: [<digest title>](<page-url>)
+- Friday, <date>: [<digest title>](<page-url>)
+- Saturday, <date>: [<digest title>](<page-url>) *(or: "no digest run")*
+- Sunday, <date>: [<digest title>](<page-url>) *(or: "no digest run")*
+
+</details>
 
 ---
 
-<callout icon="ℹ️" color="gray_bg">**Auto-generated** by Team Weekly Digest | Synthesized from <N> daily digests | Week: <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)</callout>
+<callout icon="ℹ️" color="gray_bg">**Auto-generated** by Team Weekly Digest | Synthesized from <N> digests | Week: <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)</callout>
 ```
 
 ---
@@ -231,13 +237,19 @@ NOTE: One line per day in the window. Note gaps explicitly.
 
 ### Weekly vs. daily
 - Synthesize, don't copy. Cross-day signal is the point - sustained activity, recurring themes, multi-touch partners.
+- The weekly reads whatever Combined pages overlap the week - single-day dailies, multi-day range scans, or a mix. Synthesize across them; do not assume exactly seven daily pages.
 - "Threads to Watch / Carried Over" is the monthly's storyline spine. Keep each line a trackable thread (open state + why + link), not a status dump. The monthly reads this section across all weeks to build its Top Storylines.
 - Don't re-summarize content already in a daily. Link to the daily for drill-down.
 - Mermaid diagrams from the dailies are referenced by name, not re-rendered.
 
+### Plain language (this is an overview page)
+- Lead every item with what it MEANS, not the mechanism. Translate internal names, acronyms, and ticket IDs on first mention, or leave them out and let the link carry the detail.
+- A reader should understand each section without opening a link.
+
 ### Notion API hard constraints (same as daily)
-- Callout emoji: standard Unicode only. Never `:shortcode:`.
+- Callout emoji: standard Unicode only (📈 📊 🔑 ⭐ 📁 🚀 🧩 🤝 🔎 📰 📌 🧵 🗓️ ℹ️ 📌). Never `:shortcode:`.
 - Callout blocks must be single-line: `<callout icon="..." color="...">content</callout>` all on one line. The Notion MCP renderer treats each `\n` as a block boundary - multi-line callouts produce stray `</callout>` text blocks.
+- Toggles: `<details><summary>label</summary>` ... `</details>`. Use for depth (the day-by-day index, long lists), never the headline narrative. A toggle must not contain a `## ` heading (the chunked write splits on `## ` and would break the toggle).
 - Bold+code collision: `` **`name`** `` = `` **** `` artifact. Use `**[name](url)**` or `**name**`.
 - No `\n` inside Mermaid node labels.
 - Footer callout is ALWAYS the last block.

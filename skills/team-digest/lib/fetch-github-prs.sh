@@ -82,9 +82,9 @@ for repo in sorted(repos):
         state = pr.get('state', '?').upper()
         title = pr['title']
         # closedAt is set when the PR is merged or closed; updatedAt is always
-        # populated. For our purposes (distinguish "active today" from "active
-        # earlier in lookback window") closedAt is the better date when set,
-        # falling through to updatedAt for still-open PRs.
+        # populated. For our purposes (placing each PR on a day within the scan
+        # window) closedAt is the better date when set, falling through to
+        # updatedAt for still-open PRs.
         closed_at = pr.get('closedAt') or ''
         updated_at = pr.get('updatedAt') or ''
         activity_date = (closed_at or updated_at)[:10]

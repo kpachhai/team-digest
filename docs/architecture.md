@@ -150,7 +150,7 @@ graph TD
 
 **Parallelism within steps.** Where multiple GitHub orgs are configured, Step 2 dispatches `fetch-github-prs.sh` / `fetch-github-issues.sh` / `fetch-github-releases.sh` in parallel via batched Bash tool calls. The HIP per-HIP implementation search in Step 2.3 also dispatches in parallel (one call per HIP).
 
-**Window contract.** `compute-window.sh` resolves the date argument (or yesterday-UTC default) into `DATE_LABEL`, `START`, `END`, plus optional `LOOKBACK_START` + `LOOKBACK_DAYS` when the `github.pr_lookback_days` config knob is non-zero. Downstream callers pass `$LOOKBACK_START $END` to PR/issue helpers (wider window for lookback) but `$START $END` to releases (narrow - a wider window would re-surface old releases). The skill body emits a `[Notice]` line in the digest header when `LOOKBACK_DAYS > 0` so readers know the scan window is broader than a typical daily.
+**Window contract.** `compute-window.sh` resolves the argument (a single `YYYY-MM-DD`, an `A..B` range, `--from/--to`, `--days N`, or the yesterday-UTC default) into `WINDOW_START`, `WINDOW_END`, `WINDOW_LABEL`, `IS_RANGE`, `START`, `END`, and a `DATE_LABEL` alias (= `WINDOW_START`, for single-day back-compat). All source helpers scan the same `$START..$END` window - one day for a single-day digest, the full span for a range. A single-day Combined page is written with `date:start` only; a range page also sets `date:end`, which is what lets `/team-weekly` and `/team-monthly` find it by date-range overlap. There is no hidden backfill - multi-day coverage is always an explicit argument.
 
 **Output rendering.** Step 5 assembles a single Notion-flavored markdown document with section headers, callouts, tables, and chunked-write sentinels. Step 5.3 splits the document on `## ` H2 boundaries into ~4KB chunks and writes them via the chunked Notion procedure (create page with placeholder, then update with each chunk) - this avoids the stream-timeout failure mode that hit single-call `notion-create-pages` writes when the body grew large.
 
@@ -607,7 +607,7 @@ The trade-off worth thinking about explicitly: synthesizing from synthesis loses
 
 ## See also
 
-- [`docs/configuration.md`](configuration.md) - configuration knobs, GitHub authentication, `pr_lookback_days` semantics
+- [`docs/configuration.md`](configuration.md) - configuration knobs, GitHub authentication, scan-window CLI
 - [`docs/hip-tracking.md`](hip-tracking.md) - HIP Activity behavior, confidence model, verbose mode, opting out
 - [`docs/scheduling.md`](scheduling.md) - cron and launchd setup for production scheduling
 - [`docs/troubleshooting.md`](troubleshooting.md) - empty section recovery, rate limits, Strategy 4 budget exhaustion, `--from-file` recovery

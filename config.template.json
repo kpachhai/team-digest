@@ -35,9 +35,7 @@
           "scan_all": true
         }
       ],
-      "orgs_help": "Add additional orgs you want to track here (e.g. your employer's GitHub org, an extra ecosystem partner's org). Each org gets its own entry with priority_repos + scan_all. Per-org GH_TOKEN scope: read:public_repo for fully-public orgs; repo scope only if you track a private repo.",
-      "pr_lookback_days": 0,
-      "pr_lookback_days_help": "Widen the PR/issue + Mechanism B update-filter to include items updated in the past N days. Default 0 = digest-day-only (matches today's daily-cron behavior). Set to 7 for weekly-catchup runs or to surface PRs that merged earlier in the week. Releases stay narrow (published_at on digest day only) regardless of this setting. When > 0, the digest header includes a [Notice] line announcing the wider window."
+      "orgs_help": "Add additional orgs you want to track here (e.g. your employer's GitHub org, an extra ecosystem partner's org). Each org gets its own entry with priority_repos + scan_all. Per-org GH_TOKEN scope: read:public_repo for fully-public orgs; repo scope only if you track a private repo."
     },
     "rss_feeds": [
       {

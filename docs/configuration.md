@@ -116,33 +116,21 @@ Strategies 2 and 3 do NOT widen `GH_TOKEN` scope. All four strategies (A, B, 2, 
 
 The `implementation_orgs` array (and `priority_repos` within `github.orgs`) is config-managed, not auto-discovered. When the hiero-ledger org renames, archives, or adds a repo, update your `~/.config/team-digest/config.json` to reflect the change. Strategies 2 and 3 enumerate repos via `gh api orgs/<org>/repos` at runtime (so additions are picked up automatically inside a known org), but the org list itself is fixed by config.
 
-### GitHub PR-update window (`github.pr_lookback_days`)
+### Scan window (CLI, not config)
 
-By default the digest scans PRs and issues that were `updated` on the digest day only (`gh search prs --updated=YYYY-MM-DD..YYYY-MM-DD`). Set `github.pr_lookback_days: N` to widen the window backward by N days.
+The scan window is an **explicit per-run argument**, not a config knob. A plain `/team-digest` scans a single day; pass a range to scan multiple days across **all** sources at once:
 
-```json
-"github": {
-  "orgs": [ ... ],
-  "pr_lookback_days": 0
-}
+```
+/team-digest                          # yesterday (single day)
+/team-digest 2026-06-09               # that single day
+/team-digest 2026-06-08..2026-06-14   # inclusive range, all sources
+/team-digest --from 2026-06-08 --to 2026-06-14   # same, weekly-style flags
+/team-digest --days 3                 # last 3 days, ending yesterday
 ```
 
-When and why to set it:
+A range scan widens GitHub PRs/issues/releases, Notion keyword + partner + favorites search, HIP stages, and RSS together (one coherent window), and writes a single page tagged with its `date:start..date:end` range. This is the token-efficient way to cover a week without running seven dailies - one run, one synthesis, one page. The retired `pr_lookback_days` knob (an always-on backfill that silently turned every daily into a week-spanning scan) has been removed in favor of these explicit windows.
 
-- **Daily cron (default, `0`):** preserves today's behavior. Each daily digest is a single-day snapshot.
-- **Weekly-catchup run (`7`):** if your team only runs the digest weekly, set `pr_lookback_days: 7` so a single run surfaces PRs that merged anywhere in the past week. The digest header will include a `[Notice]` line announcing the wider window.
-- **Backfilling missed days:** if you missed a few days and want to catch up with one run, set `pr_lookback_days: N` matching the gap.
-- **Calibration:** the calibration helper's `--window-start/--window-end` args should match the lookback window for meaningful precision/recall numbers.
-
-What it affects vs. doesn't:
-
-- **Affected (widens):** `fetch-github-prs.sh`, `fetch-github-issues.sh`, and Mechanism B's per-HIP `gh search` (`fetch-hip-implementation-prs.sh`) all see the wider window.
-- **Unchanged:** `fetch-github-releases.sh` stays on `published_at` = digest day only (a wider window would re-surface old releases). Notion keyword + partner search stays on `created_date_range` = digest day only (Notion's API limitation). Strategy 2 already has its own `--backfill N` flag with its own cap. Strategy 3 uses its own fixed past-7d window.
-
-Trade-offs:
-
-- Each day a lookback PR is touched it can re-appear in successive daily digests (no cross-day dedup yet; see `docs/roadmap.md` for the planned dedup tracker). The `(merged YYYY-MM-DD)` annotation in the rendered narrative lets readers distinguish today's signal from the backfill.
-- Larger lookback = more `gh search` results (`--limit 100` per call caps any explosion). Mech B is still bounded by `max_hips_with_implementation_expansion`.
+For calibration over a range, set the helper's `--window-start/--window-end` to match the scanned window.
 
 ### Monthly digest (`monthly` block)
 

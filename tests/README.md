@@ -18,7 +18,7 @@ the Notion-markdown linter:
 
 | Test file | Helper under test | What it checks |
 |---|---|---|
-| `compute-window.test.sh` | `team-digest/lib/compute-window.sh` | daily window + `--lookback-days` math, default-yesterday, error exits |
+| `compute-window.test.sh` | `team-digest/lib/compute-window.sh` | single-day + range (`A..B`, `--from/--to`, `--days N`) resolution, `IS_RANGE` flag, default-yesterday, calendar + format validation, error exits |
 | `compute-week-window.test.sh` | `team-weekly/lib/compute-week-window.sh` | ISO week (Mon..Sun) resolution, custom range, Monday/7-day invariants, errors |
 | `compute-month-window.test.sh` | `team-monthly/lib/compute-month-window.sh` | calendar month, leap Feb, date-in-month, custom range, errors |
 | `extract-hip-refs.test.sh` | `team-digest/lib/extract-hip-refs.sh` | HIP regex forms, dedup, placeholder blocklist, known-HIPs index filter |
@@ -60,12 +60,7 @@ behavior is unchanged):
 
 ## Known gaps the tests surfaced (not yet fixed - intentional)
 
-1. **`compute-window.sh` validates date FORMAT only**, not calendar validity.
-   `2026-13-99` is accepted (regex-valid) and echoed verbatim, whereas
-   `compute-week-window.sh` / `compute-month-window.sh` reject it via python
-   `strptime`. The daily test pins this current behavior; hardening it to reject
-   impossible dates would be a small, consistent improvement.
-2. **`strategy4-gate.sh` boundary at `missed == 5`.** The code is
+1. **`strategy4-gate.sh` boundary at `missed == 5`.** The code is
    `trigger = (recall < 0.7) OR (missed >= 5)`, so `missed == 5` -> TRIGGER. Some
    human docs phrase the DEFER region as "missed <= 5", which disagrees at exactly
    5. The gate's own docstring and the test follow the code (the source of truth);
