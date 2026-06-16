@@ -7,13 +7,16 @@
 # /team-digest instead.
 #
 # Usage:
-#   team-digest-run.sh                                     # digest for yesterday (UTC)
-#   team-digest-run.sh 2026-05-04                          # digest for a specific date
-#   team-digest-run.sh --dry-run                           # write safety file, skip Notion
-#   team-digest-run.sh 2026-05-04 --dry-run                # both
-#   team-digest-run.sh --from-file /tmp/.../file.md        # upload saved safety file to Notion
-#   team-digest-run.sh 2026-05-15 --from-file /tmp/...     # same, with explicit date
-#   team-digest-run.sh --help                              # this message
+#   team-digest-run.sh                                       # digest for yesterday
+#   team-digest-run.sh 2026-05-04                            # digest for a specific date
+#   team-digest-run.sh 2026-05-04..2026-06-01                # range: all sources, one page
+#   team-digest-run.sh --from 2026-05-04 --to 2026-06-01    # range: same, long-form flags
+#   team-digest-run.sh --days 5                              # range: last N days ending yesterday
+#   team-digest-run.sh --dry-run                             # write safety file, skip Notion
+#   team-digest-run.sh 2026-05-04 --dry-run                  # both
+#   team-digest-run.sh --from-file /tmp/.../file.md          # upload saved safety file to Notion
+#   team-digest-run.sh 2026-05-15 --from-file /tmp/...       # same, with explicit date
+#   team-digest-run.sh --help                                # this message
 #
 # The --from-file flag is the token-efficient recovery path: when a previous run
 # assembled the digest but the Notion write timed out, use --from-file to upload
@@ -106,58 +109,110 @@ run_claude() {
 #   team-digest-run.sh 2026-05-15 --from-file /path/to/file.md
 
 DATE_ARG=""
+RANGE_ARG=""
+FROM=""
+TO=""
+DAYS=""
 DRY_RUN=""
 FROM_FILE=""
-SKIP_NEXT=""
 
 for arg in "$@"; do
-  if [ -n "$SKIP_NEXT" ]; then
-    SKIP_NEXT=""
-    continue
-  fi
   case "$arg" in
     --dry-run)
       DRY_RUN="--dry-run"
       ;;
     --from-file)
-      # Next positional is the file path - handled via shift trick below
-      # We use a flag so the next iteration captures it
       FROM_FILE="__PENDING__"
       ;;
+    --from)
+      FROM="__PENDING__"
+      ;;
+    --to)
+      TO="__PENDING__"
+      ;;
+    --days)
+      DAYS="__PENDING__"
+      ;;
     -h|--help)
-      sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
       if [ "$FROM_FILE" = "__PENDING__" ]; then
         FROM_FILE="$arg"
+      elif [ "$FROM" = "__PENDING__" ]; then
+        if ! echo "$arg" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+          echo "ERROR: --from requires a YYYY-MM-DD value (got '$arg')." | tee -a "$LOG"
+          exit 1
+        fi
+        FROM="$arg"
+      elif [ "$TO" = "__PENDING__" ]; then
+        if ! echo "$arg" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+          echo "ERROR: --to requires a YYYY-MM-DD value (got '$arg')." | tee -a "$LOG"
+          exit 1
+        fi
+        TO="$arg"
+      elif [ "$DAYS" = "__PENDING__" ]; then
+        if ! echo "$arg" | grep -qE '^[0-9]+$'; then
+          echo "ERROR: --days requires a positive integer (got '$arg')." | tee -a "$LOG"
+          exit 1
+        fi
+        DAYS="$arg"
+      elif echo "$arg" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}\.\.[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+        RANGE_ARG="$arg"
       elif echo "$arg" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
         DATE_ARG="$arg"
       else
-        echo "ERROR: unrecognized argument '$arg'. Use YYYY-MM-DD, --dry-run, or --from-file <path>." | tee -a "$LOG"
+        echo "ERROR: unrecognized argument '$arg'. Use YYYY-MM-DD, START..END, --from/--to, --days N, --dry-run, or --from-file <path>." | tee -a "$LOG"
         exit 1
       fi
       ;;
   esac
 done
 
-# Validate --from-file
+# Check for flags missing their required values
 if [ "$FROM_FILE" = "__PENDING__" ]; then
-  echo "ERROR: --from-file requires a file path argument." | tee -a "$LOG"
-  exit 1
+  echo "ERROR: --from-file requires a file path argument." | tee -a "$LOG"; exit 1
 fi
-if [ -n "$FROM_FILE" ] && [ ! -f "$FROM_FILE" ]; then
-  echo "ERROR: --from-file path does not exist: $FROM_FILE" | tee -a "$LOG"
-  exit 1
+if [ "$FROM" = "__PENDING__" ]; then
+  echo "ERROR: --from requires a YYYY-MM-DD value." | tee -a "$LOG"; exit 1
+fi
+if [ "$TO" = "__PENDING__" ]; then
+  echo "ERROR: --to requires a YYYY-MM-DD value." | tee -a "$LOG"; exit 1
+fi
+if [ "$DAYS" = "__PENDING__" ]; then
+  echo "ERROR: --days requires a positive integer." | tee -a "$LOG"; exit 1
+fi
+
+# Cross-flag validation
+if [ -n "$FROM" ] && [ -z "$TO" ]; then
+  echo "ERROR: --from requires --to." | tee -a "$LOG"; exit 1
+fi
+if [ -z "$FROM" ] && [ -n "$TO" ]; then
+  echo "ERROR: --to requires --from." | tee -a "$LOG"; exit 1
+fi
+if [ -n "$RANGE_ARG" ] && { [ -n "$FROM" ] || [ -n "$TO" ] || [ -n "$DATE_ARG" ] || [ -n "$DAYS" ]; }; then
+  echo "ERROR: cannot mix START..END with --from/--to, --days, or a positional date." | tee -a "$LOG"; exit 1
+fi
+if { [ -n "$FROM" ] || [ -n "$TO" ]; } && { [ -n "$DATE_ARG" ] || [ -n "$DAYS" ]; }; then
+  echo "ERROR: cannot mix --from/--to with a positional date or --days." | tee -a "$LOG"; exit 1
+fi
+if [ -n "$DAYS" ] && [ -n "$DATE_ARG" ]; then
+  echo "ERROR: cannot mix --days with a positional date." | tee -a "$LOG"; exit 1
 fi
 if [ -n "$FROM_FILE" ] && [ -n "$DRY_RUN" ]; then
-  echo "ERROR: --from-file and --dry-run are mutually exclusive." | tee -a "$LOG"
-  exit 1
+  echo "ERROR: --from-file and --dry-run are mutually exclusive." | tee -a "$LOG"; exit 1
+fi
+if [ -n "$FROM_FILE" ] && [ ! -f "$FROM_FILE" ]; then
+  echo "ERROR: --from-file path does not exist: $FROM_FILE" | tee -a "$LOG"; exit 1
 fi
 
 # ---- Build the prompt ------------------------------------------------------
 PROMPT="/team-digest"
+[ -n "$RANGE_ARG" ] && PROMPT="$PROMPT $RANGE_ARG"
 [ -n "$DATE_ARG" ] && PROMPT="$PROMPT $DATE_ARG"
+[ -n "$FROM" ] && [ -n "$TO" ] && PROMPT="$PROMPT --from $FROM --to $TO"
+[ -n "$DAYS" ] && PROMPT="$PROMPT --days $DAYS"
 [ -n "$DRY_RUN" ] && PROMPT="$PROMPT $DRY_RUN"
 [ -n "$FROM_FILE" ] && PROMPT="$PROMPT --from-file $FROM_FILE"
 
