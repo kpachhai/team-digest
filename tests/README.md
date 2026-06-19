@@ -13,14 +13,15 @@ required by the helpers).
 
 ## What is covered
 
-The **8 pure helpers** (deterministic, file/stdin/arg in -> stdout/file out) plus
+The **9 pure helpers** (deterministic, file/stdin/arg in -> stdout/file out) plus
 the Notion-markdown linter:
 
 | Test file | Helper under test | What it checks |
 |---|---|---|
 | `compute-window.test.sh` | `team-digest/lib/compute-window.sh` | single-day + range (`A..B`, `--from/--to`, `--days N`) resolution, `IS_RANGE` flag, default-yesterday, calendar + format validation, error exits |
 | `compute-week-window.test.sh` | `team-weekly/lib/compute-week-window.sh` | ISO week (Mon..Sun) resolution, custom range, Monday/7-day invariants, errors |
-| `compute-month-window.test.sh` | `team-monthly/lib/compute-month-window.sh` | calendar month, leap Feb, date-in-month, custom range, errors |
+| `compute-month-window.test.sh` | `team-monthly/lib/compute-month-window.sh` | calendar month, leap Feb, date-in-month, custom range, weekly-span (first Mon..last Sun) + `HAS_FULL_WEEK`, errors |
+| `coverage-gap.test.sh` | `team-digest/lib/coverage-gap.sh` | window vs covered ranges: range pages covering multi-day spans, single-day dailies, gaps, overlap/out-of-window clamping, bad-input exit 2 |
 | `extract-hip-refs.test.sh` | `team-digest/lib/extract-hip-refs.sh` | HIP regex forms, dedup, placeholder blocklist, known-HIPs index filter |
 | `load-config.test.sh` | `team-digest/lib/load-config.sh` | valid config, missing file/key/IDs, malformed JSON (exit codes 1-4) |
 | `consolidate-matches.test.sh` | `team-digest/lib/consolidate-matches.sh` | `(hip_id,repo,pr_number)` dedup, MAX-confidence merge, Mech B dict lift, sorting |

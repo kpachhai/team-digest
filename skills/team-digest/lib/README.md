@@ -14,6 +14,7 @@ implementation. The skill is the orchestrator; helpers are the data layer.
 | Helper | Purpose | Inputs | Output |
 |---|---|---|---|
 | `compute-window.sh` | Resolve a single day or a range (default: yesterday-UTC) into `WINDOW_START`, `WINDOW_END`, `WINDOW_LABEL`, `IS_RANGE`, `START`, `END`, and a `DATE_LABEL` alias. | `YYYY-MM-DD` \| `A..B` \| `--from F --to T` \| `--days N` | `KEY=VALUE` lines suitable for `eval`. |
+| `coverage-gap.sh` | Given a date window and a set of covered ranges (stdin, one `START [END]` per line), report which days in the window are uncovered. Powers the weekly/monthly coverage gate; range-aware, so 2 pages can cover a 7-day week. | `--window-start YYYY-MM-DD --window-end YYYY-MM-DD` + ranges on stdin | `KEY=VALUE` lines (`WINDOW_DAYS`, `COVERED_DAYS`, `MISSING_COUNT`, `MISSING_DATES`). Exit 2 on bad input. |
 | `load-config.sh` | Read and validate the team-digest config for one digest (e.g. `team-digest`). Confirms required Notion IDs are present. | `<digest-name>` | The digest's config object as JSON. |
 | `fetch-github-prs.sh` | Fetch PRs updated in the window for one org. | `<org> <start-iso>` | Plain-text summary grouped by repo, with PR numbers, authors, URLs, descriptions. |
 | `fetch-github-issues.sh` | Fetch issues updated in the window for one org. | `<org> <start-iso>` | Plain-text summary, same shape as PRs. |

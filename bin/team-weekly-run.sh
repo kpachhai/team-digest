@@ -199,6 +199,13 @@ run_claude "$PROMPT"
 # the harness's own result event, error-shaped strings, output artifact.
 NEW_LOG="$(tail -c "+$((LOG_OFFSET + 1))" "$LOG" 2>/dev/null || true)"
 
+# Intentional coverage skip: the skill's Step 2.5 gate aborted before writing
+# because the week was not fully covered. This is a clean no-op, not a failure.
+if printf '%s' "$NEW_LOG" | grep -q '\[coverage\] INCOMPLETE'; then
+  echo "[gate] SKIP: coverage incomplete - no digest written this run" | tee -a "$LOG"
+  exit 0
+fi
+
 if [ "${CLAUDE_EXIT:-1}" -ne 0 ]; then
   echo "[gate] FAIL: claude exited with code ${CLAUDE_EXIT:-unknown}" | tee -a "$LOG"
   exit 1

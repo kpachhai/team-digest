@@ -14,6 +14,13 @@
 #   MONTH_NAME=May 2026            # human label for prose/title (custom range: "<from> to <to>")
 #   START=2026-05-01T00:00:00Z
 #   END=2026-05-31T23:59:59Z
+#   WEEKLY_SPAN_START=2026-05-04   # first Monday on/after MONTH_START
+#   WEEKLY_SPAN_END=2026-05-31     # last Sunday on/before MONTH_END
+#   HAS_FULL_WEEK=1                # 1 if a full Mon-Sun week fits inside the window, else 0
+#
+# WEEKLY_SPAN_* bound the in-month full weeks the monthly coverage gate expects a
+# Weekly digest for; boundary days outside the span are covered by dailies. When
+# HAS_FULL_WEEK=0 the span keys are emitted empty (no full week in the window).
 #
 # Both dailies and weeklies are later queried with date in [MONTH_START, MONTH_END].
 # Errors to stderr; exits 1 on bad input.
@@ -76,6 +83,15 @@ else:
     label = f"{last_prev.year:04d}-{last_prev.month:02d}"
     name = f"{calendar.month_name[last_prev.month]} {last_prev.year}"
 
+# Weekly span: first Monday on/after start, last Sunday on/before end. These
+# bound the full Mon-Sun weeks contained in the window; the monthly coverage
+# gate requires a Weekly digest for this span and leaves the boundary days
+# (before the first Monday / after the last Sunday) to daily coverage.
+days_to_monday = (7 - start.weekday()) % 7  # Mon=0
+first_monday = start + timedelta(days=days_to_monday)
+last_sunday = end - timedelta(days=(end.weekday() + 1) % 7)  # Sun=6 -> 0 back
+has_full_week = first_monday <= last_sunday
+
 print(f"MONTH_START={start.isoformat()}")
 print(f"MONTH_END={end.isoformat()}")
 print(f"MONTH_LABEL={label}")
@@ -83,4 +99,7 @@ print(f"MONTH_LABEL={label}")
 print(f"MONTH_NAME='{name}'")
 print(f"START={start.isoformat()}T00:00:00Z")
 print(f"END={end.isoformat()}T23:59:59Z")
+print(f"WEEKLY_SPAN_START={first_monday.isoformat() if has_full_week else ''}")
+print(f"WEEKLY_SPAN_END={last_sunday.isoformat() if has_full_week else ''}")
+print(f"HAS_FULL_WEEK={'1' if has_full_week else '0'}")
 PY

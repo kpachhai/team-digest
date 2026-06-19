@@ -30,12 +30,12 @@ bin/team-weekly-run.sh                  # Headless terminal entry point for /tea
 bin/team-monthly-run.sh                 # Headless terminal entry point for /team-monthly (Opus default)
 
 # Offline tests (no live Notion / gh / Claude needed):
-bash tests/run-all.sh                                         # run the whole suite (9 files, 100+ assertions)
+bash tests/run-all.sh                                         # run the whole suite (10 files, 148 assertions)
 bash tests/lint-digest-markdown.sh <file.md>                  # lint a dry-run digest page
 bash tests/lint-digest-markdown.sh --template <TEMPLATE.md>   # lint a skill TEMPLATE.md
 ```
 
-There is no build step. `tests/run-all.sh` runs the offline suite: unit tests for all 8 pure helpers (the 3 date-window resolvers, `extract-hip-refs`, `load-config`, `consolidate-matches`, `strategy4-gate`, `calibrate-hip-matches`) plus the Notion-markdown linter. The 11 network fetch helpers and the three `SKILL.md` pipelines are NOT unit-tested (they need `gh`/network or run inside Claude against Notion MCP); validate those operationally with `--dry-run`. See [`tests/README.md`](tests/README.md) for coverage details, the testability env overrides, and the known gap the tests surfaced.
+There is no build step. `tests/run-all.sh` runs the offline suite: unit tests for all 9 pure helpers (the 3 date-window resolvers, `extract-hip-refs`, `load-config`, `consolidate-matches`, `strategy4-gate`, `calibrate-hip-matches`, `coverage-gap`) plus the Notion-markdown linter. The 11 network fetch helpers and the three `SKILL.md` pipelines are NOT unit-tested (they need `gh`/network or run inside Claude against Notion MCP); validate those operationally with `--dry-run`. See [`tests/README.md`](tests/README.md) for coverage details, the testability env overrides, and the known gap the tests surfaced.
 
 ## Architecture
 
@@ -55,8 +55,9 @@ team-digest/
 ├── skills/
 │   ├── team-digest/                    # Daily digest
 │   │   ├── SKILL.md                  # Skill body: orchestration + MCP calls + writing rules
-│   │   └── lib/                      # 15 shell helpers (no MCP - those only work inside Claude)
+│   │   └── lib/                      # 16 shell helpers (no MCP - those only work inside Claude)
 │   │       ├── compute-window.sh     # Resolve day or range → WINDOW_START/END/LABEL, IS_RANGE, START/END
+│   │       ├── coverage-gap.sh       # Window + covered ranges → uncovered days (weekly/monthly coverage gate)
 │   │       ├── load-config.sh        # Read + validate config.json (shared by team-weekly + team-monthly)
 │   │       ├── fetch-github-prs.sh   # gh search prs + python parsing
 │   │       ├── fetch-github-issues.sh
@@ -85,7 +86,7 @@ team-digest/
 ├── tests/                            # Offline test suite (no live Notion / gh / Claude)
 │   ├── run-all.sh                    # Runs every *.test.sh; exits non-zero on any failure
 │   ├── lib-assert.sh                 # Shared assertion helpers (sourced by tests)
-│   ├── *.test.sh                     # Unit tests for the 8 pure helpers + the linter self-test
+│   ├── *.test.sh                     # Unit tests for the 9 pure helpers + the linter self-test
 │   ├── lint-digest-markdown.sh       # Notion-flavored-markdown linter (use --template for TEMPLATE.md)
 │   ├── fixtures/                     # Sample monthly output + synthetic fixture month
 │   └── README.md                     # Coverage map, testability env overrides, known gaps

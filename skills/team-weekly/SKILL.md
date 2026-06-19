@@ -183,6 +183,33 @@ Use the `notion-query-data-sources` MCP tool against the `data_source_id` of the
 
 If the query returns zero overlapping pages, abort with a clear message: `No digests found overlapping week ${WEEK_LABEL} (${WEEK_START}..${WEEK_END}). Generate coverage first via /team-digest <date> or /team-digest <start>..<end>.`
 
+### Step 2.5: Coverage-completeness gate (mandatory)
+
+The weekly must not be built on an incomplete week. Verify that **every** day in `[$WEEK_START..$WEEK_END]` is covered by some daily page - whether that is 7 single-day dailies, one 7-day range page, or any mix. A range page covers all its days, so 2 pages can satisfy a 7-day week.
+
+Run the shared helper, feeding it one `start [end]` line per kept page from Step 2 (use `date:Date:start`, and `date:Date:end` when the page has one; omit the end for single-day dailies):
+
+```bash
+printf '%s\n' \
+  "2026-06-08 2026-06-11" \
+  "2026-06-12 2026-06-14" \
+  | bash ~/.claude/skills/team-digest/lib/coverage-gap.sh \
+      --window-start "$WEEK_START" --window-end "$WEEK_END"
+```
+
+`eval` the KEY=VALUE output. If `MISSING_COUNT` is `0`, proceed to Step 3.
+
+If `MISSING_COUNT > 0`, the week has gaps (`$MISSING_DATES`):
+
+- **If `$DRY_RUN` is set, OR `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env:** proceed with a partial weekly. Note each missing day in the digest body (per Step 2's gap rule) so the gap is visible, not hidden.
+- **Otherwise (a normal scheduled/real run): ABORT before any synthesis or write.** Print exactly this sentinel line so the headless wrapper logs a clean skip rather than a failure:
+
+  ```
+  [coverage] INCOMPLETE - week ${WEEK_LABEL} (${WEEK_START}..${WEEK_END}) missing: ${MISSING_DATES}. Skipping weekly synthesis - no page written.
+  ```
+
+  Then add one guidance line: `Generate the missing day(s) via /team-digest <date> (or a range) and re-run, or set TEAM_DIGEST_ALLOW_PARTIAL=1 to force a partial weekly.` STOP the run here - do NOT fetch bodies, synthesize, write a safety file, or call Notion. Exit cleanly (this is an intentional skip, not an error).
+
 ### Step 3: Fetch each daily digest's content
 
 For each unique daily page from Step 2, call `notion-fetch` with the page URL. **Parallelize.** Emit all calls in a single message so they run concurrently.
@@ -423,4 +450,4 @@ bin/team-weekly-run.sh --dry-run                # write to /tmp/team-digest-dry-
 bin/team-weekly-run.sh 2026-05-07 --dry-run     # both
 ```
 
-For automation: schedule `bin/team-weekly-run.sh` on a Monday morning launchd/cron tick, AFTER the previous Friday's `/team-digest` has had a chance to run. The skill expects all 5 weekday dailies to be in Notion already; if they're not, it produces a partial weekly with gap notes.
+For automation: schedule `bin/team-weekly-run.sh` on a Monday morning launchd/cron tick, AFTER the week's `/team-digest` runs have had a chance to complete. The Step 2.5 coverage gate is authoritative: if any day in the week is not covered by a daily/range page in Notion, the run aborts cleanly (logged as `[gate] SKIP`) without writing a partial weekly. Coverage is measured from page date-ranges, so a single range page covering the week satisfies the gate. To force a partial weekly when some days are genuinely missing, set `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env.

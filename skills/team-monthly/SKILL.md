@@ -171,6 +171,37 @@ If zero results: abort with `No daily/weekly digests found for ${MONTH_NAME} (${
 
 The skeleton alone gives you: dailies present + gaps, the repos-active trend, the keyword union + frequency, and which weeks have weeklies. This is nearly free (no body fetches) and is the backbone of the "By the Numbers" section.
 
+### Step 2.5: Coverage-completeness gate (mandatory)
+
+The monthly must not be built on a month whose weeklies are incomplete. Run two authoritative coverage checks against the kept pages from Step 2 (range-aware: a single multi-week Weekly page covers all its weeks; a range Combined page covers all its days). Both use the shared helper:
+
+**Check A - weekly spine covers every full in-month week.** Only when `HAS_FULL_WEEK=1` (from Step 1). Feed one `start [end]` line per **Weekly** row (weeklies always carry `date:Date:start` + `date:Date:end`), windowed to the weekly span:
+
+```bash
+printf '%s\n' "2026-06-01 2026-06-07" "2026-06-08 2026-06-14" "2026-06-15 2026-06-21" "2026-06-22 2026-06-28" \
+  | bash ~/.claude/skills/team-digest/lib/coverage-gap.sh \
+      --window-start "$WEEKLY_SPAN_START" --window-end "$WEEKLY_SPAN_END"
+```
+
+**Check B - month is fully covered by weeklies or dailies.** Feed one `start [end]` line per kept page of **either** type (Weekly AND Combined), windowed to the full month. This catches boundary days (before the first Monday / after the last Sunday) that weeklies do not cover but dailies should:
+
+```bash
+printf '%s\n' "2026-06-01 2026-06-28" "2026-06-29" "2026-06-30" \
+  | bash ~/.claude/skills/team-digest/lib/coverage-gap.sh \
+      --window-start "$MONTH_START" --window-end "$MONTH_END"
+```
+
+`eval` each helper's output. The month passes only if **both** checks report `MISSING_COUNT=0` (Check A is vacuously satisfied when `HAS_FULL_WEEK=0`). If either reports gaps:
+
+- **If `$DRY_RUN` is set, OR `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env:** proceed with a partial monthly. Note the missing weeks/days in the Week-by-Week Index so the gap is visible.
+- **Otherwise (a normal scheduled/real run): ABORT before fetching any bodies or writing.** Print exactly this sentinel line so the headless wrapper logs a clean skip rather than a failure (use Check A's missing dates for a week gap, Check B's for a day gap; combine if both):
+
+  ```
+  [coverage] INCOMPLETE - month ${MONTH_NAME} missing coverage: <missing dates>. Skipping monthly synthesis - no page written.
+  ```
+
+  Then add one guidance line: `Generate the missing weekly/daily windows via /team-weekly and /team-digest and re-run, or set TEAM_DIGEST_ALLOW_PARTIAL=1 to force a partial monthly.` STOP the run here - do NOT run Step 3 fetches, synthesize, write a safety file, or call Notion. Exit cleanly (this is an intentional skip, not an error).
+
 ### Step 3: Fetch the spine, then selectively deep-read dailies
 
 **Step 3a - Weekly bodies (the spine).** For each `Weekly` row from Step 2, call `notion-fetch` on its `url`. **Parallelize** - emit all calls in one message. These bodies (their Executive Summaries, Top GitHub Themes, HIP Movement, Partner Momentum, and **Threads to Watch / Carried Over** sections) are the raw material for the storylines.
@@ -350,4 +381,4 @@ bin/team-monthly-run.sh --dry-run                # write to /tmp/team-digest-dry
 bin/team-monthly-run.sh 2026-05 --dry-run        # both
 ```
 
-For automation: schedule `bin/team-monthly-run.sh` on the 1st of each month, AFTER that day's `/team-digest` and the prior week's `/team-weekly` have had a chance to run. The skill expects the month's weeklies to be in Notion already; if some are missing, it produces a partial monthly with gap notes in the Week-by-Week Index.
+For automation: schedule `bin/team-monthly-run.sh` on the 1st of each month, AFTER that day's `/team-digest` and the prior week's `/team-weekly` have had a chance to run. The Step 2.5 coverage gate is authoritative: it requires a Weekly digest for every full in-month week (boundary days at the month edges are covered by dailies), and aborts cleanly (logged as `[gate] SKIP`) without writing a partial monthly if anything is missing. Coverage is measured from page date-ranges, so a single multi-week page satisfies its span. To force a partial monthly when some weeks are genuinely missing, set `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env.
