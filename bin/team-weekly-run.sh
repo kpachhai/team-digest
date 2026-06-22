@@ -70,7 +70,7 @@ format_stream() {
           else empty end
         ) | .[]
       elif .type == "result" then
-        "[done] " + (.subtype // "?") + " duration=" + ((.duration_ms // 0) | tostring) + "ms cost=$" + ((.total_cost_usd // 0) | tostring)
+        "[done] " + (if .is_error then "error" else (.subtype // "?") end) + " duration=" + ((.duration_ms // 0) | tostring) + "ms cost=$" + ((.total_cost_usd // 0) | tostring)
       else empty end
     '
   else
@@ -80,13 +80,19 @@ format_stream() {
 
 run_claude() {
   local prompt="$1"
+  # set +e so a jq parse failure (e.g. a non-JSON hook lifecycle message on
+  # stderr) does not exit the script before the post-run gate can run.
+  # stderr is routed directly to the log to keep the JSON stream clean; API
+  # errors appear in the stream as synthetic assistant messages anyway.
+  set +e
   claude -p "$prompt" \
     --model "$MODEL" \
     --allowedTools "$ALLOWED_TOOLS" \
     --output-format stream-json \
     --verbose \
-    2>&1 | tee -a "$RAW_LOG" | format_stream | tee -a "$LOG"
+    2>> "$LOG" | tee -a "$RAW_LOG" | format_stream | tee -a "$LOG"
   CLAUDE_EXIT=${PIPESTATUS[0]}
+  set -e
 }
 
 # ---- Argument parsing ------------------------------------------------------
