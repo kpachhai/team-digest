@@ -93,11 +93,10 @@ NOTE: Omit pages whose title starts with "Team Daily Digest", "Team Weekly Diges
 
 <2-3 sentence plain-English narrative: what this HIP changes and why it matters - no internal jargon>
 
-<details><summary>Implementation activity (<N>)</summary>
-
-- [<repo> #<num>](<url>) — <plain-English what the PR does>, by [@<author>](https://github.com/<author>) (<state>) `(<source-label> · <confidence>)`
-- <N> commits in [<repo>](repo-url) referencing HIP-<N>: [<sha>](<commit-url>) "<subject>" by [@<author>](https://github.com/<author>) `(<source-label> · <confidence>)`
-
+<details>
+<summary>Implementation activity (<N>)</summary>
+	- [<repo> #<num>](<url>) — <plain-English what the PR does>, by [@<author>](https://github.com/<author>) (<state>) `(<source-label> · <confidence>)`
+	- <N> commits in [<repo>](repo-url) referencing HIP-<N>: [<sha>](<commit-url>) "<subject>" by [@<author>](https://github.com/<author>) `(<source-label> · <confidence>)`
 </details>
 
 NOTE: `<source-label>` and `<confidence>` come from the MatchRecord (`per_source[<primary>]`). High-confidence matches render in this section by default; medium and low matches surface in the `### Lower-Confidence Matches` subsection at the end of HIP Activity when `TEAM_DIGEST_HIP_VERBOSE=1` is set. `<source-label>` maps: `mech_a` → regex, `mech_b` → per-HIP search, `s2_in_tag`/`s2_in_body` → release note, `s3` → timeline, `s4` → semantic. Use the source label of the primary (highest-confidence) match from `sources[]`.
@@ -118,11 +117,10 @@ Minor edits to the abstract today; no implementation activity in the configured 
 Proposed in [#<pr_num>](<pr_url>) against the HIP repository; not yet merged to main. <abstract_excerpt>
 
 <!-- Tier 3 overflow (>10 HIPs touched) -->
-<details><summary>Other HIPs touched (<N>)</summary>
-
-- [HIP-<N>](<url>) — <title> (<status>, no status change)
-- ...
-
+<details>
+<summary>Other HIPs touched (<N>)</summary>
+	- [HIP-<N>](<url>) — <title> (<status>, no status change)
+	- ...
 </details>
 
 _(10-HIP implementation-expansion cap reached; HIPs above this line did not get implementation-activity lookup.)_
@@ -130,16 +128,14 @@ _(10-HIP implementation-expansion cap reached; HIPs above this line did not get 
 <!-- Verbose-only subsection (rendered when TEAM_DIGEST_HIP_VERBOSE=1). -->
 <!-- Contains medium- and low-confidence matches from Strategies 2, 3, and 4. -->
 <!-- Verbose-mode contract; see docs/hip-tracking.md "Verbose mode". -->
-<details><summary>Lower-Confidence Matches (verbose)</summary>
-
-_Surfaced because `TEAM_DIGEST_HIP_VERBOSE=1`. Signal-quality varies; cross-check before citing._
-
-- **[HIP-<N>](<hip_url>)**: [PR #<num>](<pr_url>) by [@<author>](https://github.com/<author>) `(<source-label> · <confidence>)`
-  - Source: <source-label>
-  - Keywords: <comma-separated matched_keywords, if Strategy 3>
-  - Category tiebreak: <category, if Strategy 3 used the category map>
-  - Reason: <per_source[primary_source].reason>
-
+<details>
+<summary>Lower-Confidence Matches (verbose)</summary>
+	_Surfaced because `TEAM_DIGEST_HIP_VERBOSE=1`. Signal-quality varies; cross-check before citing._
+	- **[HIP-<N>](<hip_url>)**: [PR #<num>](<pr_url>) by [@<author>](https://github.com/<author>) `(<source-label> · <confidence>)`
+		- Source: <source-label>
+		- Keywords: <comma-separated matched_keywords, if Strategy 3>
+		- Category tiebreak: <category, if Strategy 3 used the category map>
+		- Reason: <per_source[primary_source].reason>
 </details>
 
 NOTE: Render rows sorted by `hip_id` ascending then `confidence` descending (medium before low). If the verbose mode is off (env var unset / `0`), omit the entire `Lower-Confidence Matches` toggle and any medium/low matches that would have rendered there.
@@ -193,14 +189,14 @@ NOTE: ```
 
 **Relevance:** <why this matters to the team; use the team profile as the lens - integration impact, SDK changes, partner-facing APIs, breaking changes, content opportunities>
 
-<details><summary>Notable PRs &amp; issues in this repo (top <N>)</summary>
+<details>
+<summary>Notable PRs & issues in this repo (top <N>)</summary>
 
 NOTE: The narrative above is the summary. This toggle is the at-a-glance list of the SAME repo's top items - keep it capped at 3-5 (merged/released first, then high-signal open PRs), with a trailing "+ N more" link to the repo's PR list. Do NOT dump every PR; that bloats the page and the chunked write.
 
-- **<bold lead: the user-visible change>** ([#<num>](<url>)) — <one-clause detail when non-obvious>
-- <next item, same shape>
-- [+ <N> more in this repo](https://github.com/<org>/<repo>/pulls)
-
+	- **<bold lead: the user-visible change>** ([#<num>](<url>)) — <one-clause detail when non-obvious>
+	- <next item, same shape>
+	- [+ <N> more in this repo](https://github.com/<org>/<repo>/pulls)
 </details>
 
 NOTE: Include the toggle only when the repo had MORE items than the narrative names; skip it for a repo with one or two changes (just cite them inline).
@@ -212,21 +208,20 @@ NOTE: Include the toggle only when the repo had MORE items than the narrative na
 ## 📂 Other Active Repos
 
 NOTE: Keep this as a `## ` H2 (the chunked write gives each H2 its own chunk; do not merge it into Priority Repos). The long tail of repos lives inside the toggle so it stays out of the main flow.
-<details><summary>Other active repos in <org-name> (<N>) — tap to expand</summary>
+<details>
+<summary>Other active repos in <org-name> (<N>) — tap to expand</summary>
 
 NOTE: Every repo with at least one PR/issue/release in the window. No silent drops. One sub-list per repo.
 NOTE: Sub-bullet format: bold the user-visible change, then link the PR/issue, then "—" + one-clause why-it-matters when non-obvious.
 NOTE: Order items within a repo: merged/released first, then open PRs by signal strength, then issues.
 NOTE: Cap each repo at the top 3-5 items; trailing routine work goes in a final "+ N more" line linking the repo's PR list.
-
-**[<repo-name>](https://github.com/<org>/<repo>)** — <count summary>
-
-- **<bold lead: the user-visible change>** ([#<num>](<url>)) — <one-clause why-it-matters when non-obvious>
-- <next item, same shape>
-
 NOTE: "<count summary>" examples: "1 merged, 3 open", "5 open PRs, 2 open issues", "[v0.155.0-rc1](url) released, 1 open PR".
 NOTE: For Mechanism A HIP annotations, sub-bullets that touch a HIP should include the linked `[HIP-N](url)` in the bold lead or follow with "(implements [HIP-N](url))". The `Linked HIPs:` annotation line that the underlying helpers emit includes the confidence label inline (e.g. `HIP-1137 (high)`); preserve that label: `(implements [HIP-1137](url), high)`.
 
+	**[<repo-name>](https://github.com/<org>/<repo>)** — <count summary>
+
+	- **<bold lead: the user-visible change>** ([#<num>](<url>)) — <one-clause why-it-matters when non-obvious>
+	- <next item, same shape>
 </details>
 
 ---
@@ -324,7 +319,16 @@ NOTE: " | Past-window run: keyword results reflect pages created in the window o
 ### Notion API hard constraints
 - Callout emoji: standard Unicode only (📊 ℹ️ 📈 ⚠️ 📌 🤝 🔑 ⭐ 🧩 📁 📂 🚀 📰 🔎). Never `:shortcode:` - Notion rejects them with a validation error.
 - Callout blocks must be single-line: `<callout icon="..." color="...">content</callout>` all on one line. Never put content on a new line after the opening tag; never put `</callout>` on its own line. The Notion MCP renderer treats each `\n` as a block boundary - multi-line callouts produce stray `</callout>` text blocks in the output.
-- Toggles: `<details><summary>label</summary>` ... `</details>`. The `<summary>` line and the `</details>` close each go on their own line; block content (bullets, paragraphs) sits between them. Use toggles for depth (full PR lists, the long tail of repos), never for the headline narrative a reader needs to see.
+- Toggles: `<details>` and `<summary>label</summary>` go on SEPARATE lines. Children MUST be tab-indented. `</details>` closes on its own line with no trailing content:
+  ```
+  <details>
+  <summary>label</summary>
+  	- child item (tab-indented)
+  	- child item
+  </details>
+  ```
+  Putting `<details><summary>` on the same line causes the Notion MCP to backslash-escape the `<` characters, rendering the entire toggle as literal text. Use toggles for depth (full PR lists, the long tail of repos), never for the headline narrative a reader needs to see.
+- Block-level tags (`<details>`, `<summary>`, `</details>`, `<callout>`, `</callout>`, `<columns>`, `<table>`, etc.) must NEVER be backslash-escaped. They are valid Notion Markdown block types and must appear as literal unescaped tags. Only escape `< >` with `\<` or `\>` in prose text where you mean a literal angle bracket.
 - Bold+code collision: `` **`name`** `` renders as `**** ` artifacts. Use `**[name](url)**` or `**name**` instead. Never combine bold and backtick.
 - No `\n` inside Mermaid node labels - Notion silently truncates after the newline.
 - The footer callout is ALWAYS the last block. No meta-sections after it.
