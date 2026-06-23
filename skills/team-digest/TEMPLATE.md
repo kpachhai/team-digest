@@ -266,12 +266,21 @@ NOTE: Omit the entire Industry News section when ALL categories returned zero it
 NOTE: Pages created within the window matching configured keywords. Each page ID appears at most once.
 NOTE: Write a 2-4 sentence plain-English narrative per page: what it is, which keywords matched, why it matters for the team.
 NOTE: Every page title is a link using the URL from the MCP response - never construct URLs from titles.
+NOTE:
+NOTE: HEADING MUST BE EXACTLY: # 🔎 Notion Keyword Monitor (H1, emoji included; never ## Keyword Monitor or ## 🔎 Keyword Monitor)
+NOTE:
+NOTE: NEVER use a table format here. The old format is WRONG and produces stray </table> rendering artifacts:
+NOTE: BAD: <table header-row="true"><tr><td>Page</td><td>Keywords Matched</td><td>Link</td></tr>...</table>
+NOTE: GOOD: The narrative format below — one entry block per matched page.
 
 **[<Page Title>](<notion-url from MCP>)**
-<2-4 sentence narrative: what this page is about and what it contains>
+<2-4 sentence narrative: what this page is about, what it contains, and what made it show up in this search>
 *Keywords matched: <keyword1>, <keyword2>*
-*Relevance: <team-profile-driven note - what action or awareness this warrants>*
+*Relevance: <why this matters to the team right now - which priority it touches, what decision or change it represents>*
 
+NOTE: A narrative that passes: "This ADR documents the proposed fix for a front-running vulnerability in the verifier connection flow. The author proposes moving the completeConnection call behind a time-lock so that an attacker can no longer substitute their address between submission and finalization. This lands in a week where relay security is a live topic across three open PRs." — specific, consequence-clear, no jargon without translation.
+NOTE: A narrative that fails: "This page matched the keywords relay and smart contracts." — raw, no context, useless to a skimmer.
+NOTE:
 NOTE: If zero keyword hits: "No keyword matches in this window."
 
 ---
@@ -327,7 +336,7 @@ NOTE: " | Past-window run: keyword results reflect pages created in the window o
   	- child item
   </details>
   ```
-  Putting `<details><summary>` on the same line causes the Notion MCP to backslash-escape the `<` characters, rendering the entire toggle as literal text. Use toggles for depth (full PR lists, the long tail of repos), never for the headline narrative a reader needs to see.
+  Putting `<details>` and `<summary>` on the same line causes the Notion MCP to backslash-escape the `<` characters, rendering the entire toggle as literal text. Use toggles for depth (full PR lists, the long tail of repos), never for the headline narrative a reader needs to see.
 - Block-level tags (`<details>`, `<summary>`, `</details>`, `<callout>`, `</callout>`, `<columns>`, `<table>`, etc.) must NEVER be backslash-escaped. They are valid Notion Markdown block types and must appear as literal unescaped tags. Only escape `< >` with `\<` or `\>` in prose text where you mean a literal angle bracket.
 - Bold+code collision: `` **`name`** `` renders as `**** ` artifacts. Use `**[name](url)**` or `**name**` instead. Never combine bold and backtick.
 - No `\n` inside Mermaid node labels - Notion silently truncates after the newline.

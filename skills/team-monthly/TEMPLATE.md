@@ -153,7 +153,8 @@ NOTE: Pages from the weeklies' Favorites Movement that saw multi-week activity. 
 
 NOTE: Navigation hub back into the weeklies (and via them, the dailies). Collapse it in a toggle so it stays out of the main flow. One line per weekly in the month, linked; note any missing weeks.
 
-<details><summary>Open the week-by-week index (<N> weeklies)</summary>
+<details>
+<summary>Open the week-by-week index (<N> weeklies)</summary>
 
 - <WEEK_LABEL> (<start> to <end>): [<weekly title>](<weekly-page-url>)
 
@@ -179,7 +180,7 @@ NOTE: Navigation hub back into the weeklies (and via them, the dailies). Collaps
 ### Notion API hard constraints (same as daily/weekly)
 - Callout emoji: standard Unicode only (🗓️ 📖 🧵 📊 📚 📁 🤝 🔎 📰 📌 ℹ️). Never `:shortcode:`.
 - Callout blocks single-line: `<callout ...>content</callout>` on one line. Each newline is a block boundary.
-- Toggles: `<details><summary>label</summary>` ... `</details>` for reference lists; never put a `## ` heading inside a toggle (the chunked write splits on `## `).
+- Toggles: `<details>` then `<summary>label</summary>` on separate lines, closed with `</details>`. Use for reference lists; never put a `## ` heading inside a toggle (the chunked write splits on `## `). Putting `<details>` and `<summary>` on the same line causes Notion to backslash-escape the `<` and render the toggle as literal text.
 - Bold+code collision: bolded inline-code renders as `****` artifacts. Use `**[name](url)**` or `**name**`.
 - No `\n` inside Mermaid node labels. Footer callout is ALWAYS last. No run-hygiene meta-sections.
 

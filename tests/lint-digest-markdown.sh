@@ -7,8 +7,9 @@
 #   #3 shortcode-emoji (templates DOCUMENT ":shortcode:" in their FORMAT RULES),
 #   #4 bold+code collision (templates document the **`code`** anti-pattern), and
 #   #5 footer-last (templates end with FORMAT RULES, not a footer callout).
-# In --template mode only the structural example checks (#1 callout single-line,
-# #2 mermaid \n) run.
+#   #6 section headings (templates document the wrong form as an anti-example),
+#   #7 Keyword Monitor table (templates reference table format in FORMAT RULES).
+# In --template mode only the structural checks #1, #2, #8, #9 run.
 set -uo pipefail
 TEMPLATE=0
 if [ "${1:-}" = "--template" ]; then TEMPLATE=1; shift; fi
@@ -50,6 +51,43 @@ if [ "$TEMPLATE" -eq 0 ]; then
     *"Auto-generated"*"</callout>"*) : ;;
     *) echo "FAIL: last block is not the auto-generated footer callout: $LASTBLOCK"; ERR=1 ;;
   esac
+fi
+
+# 6. Section headings must use the correct H-level. Skipped for templates.
+# "Notion Keyword Monitor" must be H1 (# ), never H2 or H3.
+if [ "$TEMPLATE" -eq 0 ]; then
+  if grep -qE '^#{2,}[[:space:]]+.*Keyword Monitor' "$F"; then
+    echo "FAIL: 'Notion Keyword Monitor' heading must be H1 (# 🔎 Notion Keyword Monitor) — found:"
+    grep -nE '^#{2,}[[:space:]]+.*Keyword Monitor' "$F"
+    ERR=1
+  fi
+fi
+
+# 7. Keyword Monitor section must not contain a <table> tag (narrative format required).
+# Skipped for templates (FORMAT RULES section documents the table anti-example).
+if [ "$TEMPLATE" -eq 0 ]; then
+  awk '
+    /^# .* Notion Keyword Monitor/ { in_km=1; next }
+    /^#[^#]/ { in_km=0 }
+    in_km && /<table/ { print "FAIL: <table> found inside Keyword Monitor section — use narrative paragraphs, not a table (line " NR "): " $0; e=1 }
+    END { exit e?1:0 }
+  ' "$F" || ERR=1
+fi
+
+# 8. Unbalanced </table> tags mean stray closers from old Keyword Monitor table format or a split table.
+_table_opens=$(grep -o '<table' "$F" | wc -l | tr -d ' ')
+_table_closes=$(grep -o '</table>' "$F" | wc -l | tr -d ' ')
+if [ "$_table_closes" -gt "$_table_opens" ]; then
+  echo "FAIL: unbalanced table tags: $_table_opens <table openers vs $_table_closes </table> closers (stray </table> — check Keyword Monitor uses narrative format, not a table)"
+  ERR=1
+fi
+
+# 9. <details><summary> must be on SEPARATE lines. The Notion MCP backslash-escapes
+#    the < when both are on the same line, rendering the toggle as literal text.
+if grep -qE '<details><summary>' "$F"; then
+  echo "FAIL: <details><summary> on the same line — put <details> and <summary> on separate lines:"
+  grep -nE '<details><summary>' "$F" | head
+  ERR=1
 fi
 
 [ "$ERR" -eq 0 ] && echo "OK: $F passes digest-markdown lint"

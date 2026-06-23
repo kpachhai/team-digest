@@ -765,6 +765,18 @@ For each unique page found:
 - List which keywords matched
 - Add a "relevance" note explaining why this matters for the team
 
+**Output format for the Keyword Monitor section (non-negotiable):** the section heading must be `# 🔎 Notion Keyword Monitor` (H1, with the emoji). Each matched page is one narrative block — NEVER a table with columns (Page / Keywords Matched / Link). The table format is the OLD format; it is wrong and produces stray `</table>` rendering artifacts. The correct format (from TEMPLATE.md) is:
+
+```
+**[<Page Title>](<notion-url from registry>)**
+<2-4 sentence narrative: what this page is about, what it contains, and what made it show up here>
+*Keywords matched: <keyword1>, <keyword2>*
+*Relevance: <why this matters to the team right now>*
+```
+
+A narrative that passes: specific, consequence-clear, no jargon without translation — a reader skimming in 30 seconds understands what the page is and whether to open it.
+A narrative that fails: "This page matched the keywords relay and smart contracts." — that is raw log output, not a digest.
+
 If Notion keyword scanning fails, note the failure and continue.
 
 ### Step 3.5: Scan Notion Favorites (with one-level child descent)
@@ -1019,13 +1031,16 @@ The full content (~15-25 KB) exceeds what a single `notion-update-page` call can
    - `properties`: `{}`
    - `content_updates`: `[{ "old_str": "\n\nDIGEST-SECTION-BREAK", "new_str": "\n\n[chunk N content]" }]`
 
-**Step 5.4: If any chunk call fails** (timeout, API error, anything non-2xx): the page exists at `$NEW_PAGE_URL` with partial content (all chunks up to the last successful one, plus the sentinel if the write was interrupted mid-loop). Tell the user:
+**Step 5.4: Chunk failure handling.**
+
+- **Transient 500 errors:** If a chunk call returns a `500 Internal server error`, run `bash -c 'sleep 5'` via the Bash tool, then retry that **same chunk exactly once** with identical parameters. If the retry succeeds, continue to the next chunk as normal. Count this as the one allowed retry for that chunk; a second 500 on the same chunk is a hard failure.
+- **All other failures, or a retry that also fails:** the page exists at `$NEW_PAGE_URL` with partial content (all chunks up to the last successful one, plus the sentinel if the write was interrupted mid-loop). Tell the user:
 
 > Page created but content upload was interrupted. The page exists at `$NEW_PAGE_URL`. Re-run with:
 > `bin/team-digest-run.sh <DATE_LABEL> --from-file <SAFETY_PATH>`
 > The `--from-file` path detects the `DIGEST-SECTION-BREAK` sentinel and restarts the chunked write from the beginning.
 
-Then STOP. Do NOT silently retry; do NOT write another safety file.
+Then **STOP immediately**. Do NOT retry further, do NOT write another safety file, do NOT emit further tool calls or text. In headless (`claude -p`) mode this means ending output now.
 
 **Step 5.5: On full success, print the Notion page URL.**
 
@@ -1053,6 +1068,7 @@ Print `Notion page: $NEW_PAGE_URL` so the user (or the cron log) has the link to
 - Each org with priority-repo activity has a top-level `# <org-name>` H1 (not H3), then `## 📁 Priority Repos` H2, then one `### [<repo>](url)` H3 per priority repo, each followed by a 2-4 paragraph narrative AND a `**Relevance:**` paragraph (and an optional `<details>` depth toggle).
 - Orgs with non-priority repos have a `## 📂 Other Active Repos` H2 whose long-tail repo list sits inside a `<details>` toggle — never a flat dump of every PR in the main flow. Keep this as a `## ` H2 so the chunked write gives it its own chunk.
 - Section anchors carry their fixed emoji (🔑 ⭐ 🧩 📁 📂 🚀 📰 🔎 📌 🤝); the `## 🔑 Executive Summary` heading keeps the words "Executive Summary" (the cascade matches on them).
+- The Keyword Monitor section heading is exactly `# 🔎 Notion Keyword Monitor` (H1, not `## Keyword Monitor`, not `## 🔎 Keyword Monitor`). The section uses narrative paragraph format — if a `<table>` tag appears anywhere inside this section, the format is wrong; rewrite as narrative blocks before writing to Notion.
 - If any of these is missing, fix the draft before writing.
 
 #### Executive Summary (mandatory first content block)

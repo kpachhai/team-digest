@@ -214,7 +214,8 @@ NOTE: If nothing is open/carried-over: omit the section entirely.
 
 NOTE: A reference list - collapse it in a toggle so it stays out of the main flow. One line per day in the window; note gaps explicitly. For range-scan coverage, a single multi-day page may cover several rows - link it on each day it covers, or list it once as "<start>..<end>".
 
-<details><summary>Open the day-by-day index (<N> entries)</summary>
+<details>
+<summary>Open the day-by-day index (<N> entries)</summary>
 
 - Monday, <date>: [<digest title>](<page-url>)
 - Tuesday, <date>: [<digest title>](<page-url>)
@@ -249,7 +250,7 @@ NOTE: A reference list - collapse it in a toggle so it stays out of the main flo
 ### Notion API hard constraints (same as daily)
 - Callout emoji: standard Unicode only (📈 📊 🔑 ⭐ 📁 🚀 🧩 🤝 🔎 📰 📌 🧵 🗓️ ℹ️ 📌). Never `:shortcode:`.
 - Callout blocks must be single-line: `<callout icon="..." color="...">content</callout>` all on one line. The Notion MCP renderer treats each `\n` as a block boundary - multi-line callouts produce stray `</callout>` text blocks.
-- Toggles: `<details><summary>label</summary>` ... `</details>`. Use for depth (the day-by-day index, long lists), never the headline narrative. A toggle must not contain a `## ` heading (the chunked write splits on `## ` and would break the toggle).
+- Toggles: `<details>` then `<summary>label</summary>` on separate lines, closed with `</details>`. Use for depth (the day-by-day index, long lists), never the headline narrative. Putting `<details>` and `<summary>` on the same line causes Notion to backslash-escape the `<` and render as literal text. A toggle must not contain a `## ` heading (the chunked write splits on `## ` and would break the toggle).
 - Bold+code collision: `` **`name`** `` = `` **** `` artifact. Use `**[name](url)**` or `**name**`.
 - No `\n` inside Mermaid node labels.
 - Footer callout is ALWAYS the last block.
