@@ -187,7 +187,25 @@ If the query returns zero overlapping pages, abort with a clear message: `No dig
 
 The weekly must not be built on an incomplete week. Verify that **every** day in `[$WEEK_START..$WEEK_END]` is covered by some daily page - whether that is 7 single-day dailies, one 7-day range page, or any mix. A range page covers all its days, so 2 pages can satisfy a 7-day week.
 
-Run the shared helper, feeding it one `start [end]` line per kept page from Step 2 (use `date:Date:start`, and `date:Date:end` when the page has one; omit the end for single-day dailies):
+Run the shared helper, feeding it one line per kept page from Step 2. The format per line is critical:
+
+- If `date:Date:end` is **null** (single-day page): `"<date:Date:start>"`
+- If `date:Date:end` is **not null** (range page): `"<date:Date:start> <date:Date:end>"`
+
+**Never drop `date:Date:end` for range pages.** Passing only the start date for a range page is a bug - it makes the helper count only 1 day covered instead of the full span. If in doubt, check the `date:Date:end` value in the Step 2 query result for each page before forming the line.
+
+Mixed example (two single-day pages + one range page):
+
+```bash
+printf '%s\n' \
+  "2026-06-08" \
+  "2026-06-09" \
+  "2026-06-10 2026-06-14" \
+  | bash ~/.claude/skills/team-digest/lib/coverage-gap.sh \
+      --window-start "$WEEK_START" --window-end "$WEEK_END"
+```
+
+All-range example (two range pages covering a split week):
 
 ```bash
 printf '%s\n' \
