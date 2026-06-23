@@ -71,7 +71,7 @@ Flow:
    - **No existing page found:** fall through to step 7 (create + chunked write).
    - **Existing page found AND its body matches the placeholder** (`Weekly digest content loading...` callout) OR **body contains `DIGEST-SECTION-BREAK`** (a previous chunked write was interrupted mid-way): SKIP create, jump to step 8 with `$NEW_PAGE_ID` set to the existing page's id. This is the placeholder/partial-recovery path.
    - **Existing page found AND its body has real content (no placeholder, no sentinel):** STOP with a duplicate-protection warning. Do not overwrite. Tell the user the week already has a digest and the file is preserved at `$FROM_FILE`.
-7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Weekly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $WEEK_START`, `date:Date:end: $WEEK_END`, `date:Date:is_datetime: 0`, `Digest Type: Weekly`, `Status: Auto`). Weekly pages always carry a `start..end` range so `/team-monthly` finds them by overlap. For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
+7. Call `notion-create-pages` with the placeholder body (`<callout icon="⏳" color="gray">Weekly digest content loading...</callout>`) and standard properties (`Digest Title`, `date:Date:start: $WEEK_END`, `date:Date:is_datetime: 0`, `Digest Type: Weekly`, `Status: Auto`). Use `$WEEK_END` (not `$WEEK_START`) as the sort anchor so the weekly page appears after the last daily in the Notion view. Do NOT set `date:Date:end`. For `Repos Active` and `Keywords Matched` (and `Partners Mentioned`, if the database has that column), use zero / empty-array defaults (the file header callout contains the actual counts inline). Capture `$NEW_PAGE_ID` and `$NEW_PAGE_URL` from the response. If this call fails, tell the user the source file is still at `$FROM_FILE` and they can retry.
 8. Upload the file content using the **CHUNKED-WRITE PROCEDURE** defined in Step 5.3 (using `$NEW_PAGE_ID`, `$NEW_PAGE_URL`, and `$FROM_FILE` as the source). The chunked write always starts with `replace_content` for chunk 1, so it safely overwrites any partial content or placeholder already on the page.
 9. On success, print the Notion page URL. Do NOT write another safety file (the source file already exists).
 10. On step 8 failure mid-chunk, tell the user the page exists at `$NEW_PAGE_URL` with partial content, the source file is still at `$FROM_FILE`, and they can re-run `--from-file` — the step 6 check will detect the `DIGEST-SECTION-BREAK` sentinel and route back to step 8 for a clean restart.
@@ -327,10 +327,9 @@ Call `notion-create-pages` with:
 - **Parent:** `{ "type": "data_source_id", "data_source_id": "<data_source_id discovered in Step 2>" }`
 - **Properties:**
   - `Digest Title`: `Team Weekly Digest - <WEEK_LABEL> (<WEEK_START> to <WEEK_END>)`
-  - `date:Date:start`: `<WEEK_START>`
-  - `date:Date:end`: `<WEEK_END>`
+  - `date:Date:start`: `<WEEK_END>` (sort anchor = last day of the week, so the page appears after all dailies in the Notion view)
   - `date:Date:is_datetime`: `0`
-  - `Digest Type`: `Weekly` (the page carries the full week as a `start..end` range so `/team-monthly` finds it by overlap)
+  - `Digest Type`: `Weekly`
   - `Repos Active`: total unique repos active across all 7 dailies (sum-of-uniques, not sum-of-dailies)
   - `Keywords Matched`: union of `Keywords Matched` across the week as a JSON array
   - `Partners Mentioned`: JSON array of distinct partner/company names from the week's Partner Momentum (Theme C); empty array if none. **Include ONLY if the database schema (from the Step 2 database fetch) has a `Partners Mentioned` property; OMIT it entirely otherwise** (older installs without the column reject unknown properties).
