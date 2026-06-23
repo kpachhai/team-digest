@@ -233,7 +233,7 @@ if [ -n "$GATE_ERRORS" ]; then
   exit 1
 fi
 if [ -z "$DRY_RUN" ]; then
-  if ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -q 'notion\.so/'; then
+  if ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -qE 'notion\.so/|app\.notion\.com/'; then
     echo "[gate] FAIL: no Notion page URL in run output - the write may not have happened" | tee -a "$LOG"
     exit 1
   fi

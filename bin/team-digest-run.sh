@@ -357,7 +357,7 @@ if [ -n "$DRY_RUN" ]; then
     echo "[gate] FAIL: dry-run produced no safety file under $DRY_DIR" | tee -a "$LOG"
     exit 1
   fi
-elif ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -q 'notion\.so/'; then
+elif ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -qE 'notion\.so/|app\.notion\.com/'; then
   echo "[gate] FAIL: no Notion page URL in run output - the digest write may not have happened" | tee -a "$LOG"
   exit 1
 fi
