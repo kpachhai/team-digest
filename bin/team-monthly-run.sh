@@ -13,6 +13,8 @@
 #   team-monthly-run.sh --dry-run                     # write safety file, skip Notion
 #   team-monthly-run.sh 2026-05 --dry-run             # month mode + dry run
 #   team-monthly-run.sh --from F --to T --dry-run     # custom range + dry run
+#   team-monthly-run.sh 2026-05 --allow-partial       # synthesize from available pages even if
+#                                                    # some weeks are missing (notes gaps in body)
 #   team-monthly-run.sh 2026-05 --from-file /tmp/team-digest-dry-runs/team-monthly-2026-05-v1.md
 #                                                    # upload saved safety file, skip synthesis
 #   team-monthly-run.sh --from F --to T --from-file /tmp/.../file.md
@@ -111,6 +113,7 @@ run_claude() {
 
 DATE_ARG=""
 DRY_RUN=""
+ALLOW_PARTIAL=""
 FROM=""
 TO=""
 FROM_FILE=""
@@ -119,6 +122,11 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run)
       DRY_RUN="--dry-run"
+      shift
+      ;;
+    --allow-partial)
+      ALLOW_PARTIAL="--allow-partial"
+      export TEAM_DIGEST_ALLOW_PARTIAL=1
       shift
       ;;
     --from)
@@ -192,12 +200,12 @@ PROMPT="/team-monthly"
 [ -n "$DATE_ARG" ] && PROMPT="$PROMPT $DATE_ARG"
 [ -n "$FROM" ] && [ -n "$TO" ] && PROMPT="$PROMPT --from $FROM --to $TO"
 [ -n "$DRY_RUN" ] && PROMPT="$PROMPT $DRY_RUN"
+[ -n "$ALLOW_PARTIAL" ] && PROMPT="$PROMPT $ALLOW_PARTIAL"
 [ -n "$FROM_FILE" ] && PROMPT="$PROMPT --from-file $FROM_FILE"
 
 echo "Running: $PROMPT" | tee -a "$LOG"
-# Byte offsets so the post-run gate inspects only THIS run's log output.
+# Byte offset so the post-run gate inspects only THIS run's log output.
 LOG_OFFSET=$(wc -c < "$LOG" 2>/dev/null || echo 0)
-RAW_OFFSET=$(wc -c < "$RAW_LOG" 2>/dev/null || echo 0)
 
 run_claude "$PROMPT"
 
@@ -233,7 +241,7 @@ if [ -n "$GATE_ERRORS" ]; then
   exit 1
 fi
 if [ -z "$DRY_RUN" ]; then
-  if ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -qE 'notion\.so/|app\.notion\.com/'; then
+  if ! printf '%s' "$NEW_LOG" | grep -qE 'notion\.so/|app\.notion\.com/'; then
     echo "[gate] FAIL: no Notion page URL in run output - the write may not have happened" | tee -a "$LOG"
     exit 1
   fi

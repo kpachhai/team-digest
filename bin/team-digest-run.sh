@@ -249,9 +249,8 @@ mkdir -p "$TEAM_DIGEST_MATCHES_DIR"
 PRE_RUN_REF=$(mktemp /tmp/team-digest-prerunref.XXXXXX)
 # mktemp already touches the file with mtime = now, which is what -newer wants.
 
-# Byte offsets so the post-run gate inspects only THIS run's log output.
+# Byte offset so the post-run gate inspects only THIS run's log output.
 LOG_OFFSET=$(wc -c < "$LOG" 2>/dev/null || echo 0)
-RAW_OFFSET=$(wc -c < "$RAW_LOG" 2>/dev/null || echo 0)
 
 run_claude "$PROMPT"
 
@@ -357,7 +356,7 @@ if [ -n "$DRY_RUN" ]; then
     echo "[gate] FAIL: dry-run produced no safety file under $DRY_DIR" | tee -a "$LOG"
     exit 1
   fi
-elif ! tail -c "+$((RAW_OFFSET + 1))" "$RAW_LOG" 2>/dev/null | grep -qE 'notion\.so/|app\.notion\.com/'; then
+elif ! printf '%s' "$NEW_LOG" | grep -qE 'notion\.so/|app\.notion\.com/'; then
   echo "[gate] FAIL: no Notion page URL in run output - the digest write may not have happened" | tee -a "$LOG"
   exit 1
 fi

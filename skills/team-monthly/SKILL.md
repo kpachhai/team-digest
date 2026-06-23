@@ -1,6 +1,6 @@
 ---
 name: team-monthly
-description: Team Monthly Digest - synthesizes a calendar month of Team Daily + Weekly Digests into a storyline-first monthly rollup, written to the same Notion database. Usage - /team-monthly [YYYY-MM | --from F --to T | --dry-run | --from-file <path> | config]
+description: Team Monthly Digest - synthesizes a calendar month of Team Daily + Weekly Digests into a storyline-first monthly rollup, written to the same Notion database. Usage - /team-monthly [YYYY-MM | --from F --to T | --dry-run | --allow-partial | --from-file <path> | config]
 user-invocable: true
 ---
 
@@ -20,6 +20,7 @@ This skill is the month-level "rollup" companion to `/team-digest` (daily) and `
 - `/team-monthly --from 2026-04-15 --to 2026-05-20` - synthesize an arbitrary date range (inclusive), parity with `/team-weekly`
 - `/team-monthly --dry-run` - run the full pipeline but write the markdown to a local file instead of creating a Notion page
 - `/team-monthly 2026-05 --dry-run` - month + dry run
+- `/team-monthly 2026-05 --allow-partial` - synthesize from available weekly/daily pages even if some weeks are missing; notes gaps in the digest body rather than aborting. Useful for past months where some weeks were never digested.
 - `/team-monthly --from-file /tmp/team-digest-dry-runs/team-monthly-2026-05-v1.md` - upload a previously saved safety file to Notion, skipping synthesis (token-efficient recovery after a timeout); a month arg or `--from`/`--to` must accompany this flag so the Notion properties can be computed
 - `/team-monthly config` - show the current config (shared with team-digest)
 
@@ -45,6 +46,7 @@ Parse the skill argument as zero or more of:
 - A `YYYY-MM` month or `YYYY-MM-DD` date → captured as `$DATE_ARG` (resolves to the calendar month containing it)
 - `--from YYYY-MM-DD --to YYYY-MM-DD` → captured as `$FROM` and `$TO` (arbitrary date range, inclusive)
 - The literal `--dry-run` → set `$DRY_RUN=1`
+- The literal `--allow-partial` → set `$ALLOW_PARTIAL=1` (equivalent to `TEAM_DIGEST_ALLOW_PARTIAL=1` in env; bypasses the Step 2.5 coverage gate and proceeds with whatever weekly/daily pages exist)
 - `--from-file <path>` → set `$FROM_FILE` to the path token that follows the flag; activates upload-only mode (see subcommand below)
 - The literal `config` → handle as a subcommand (below)
 
@@ -193,14 +195,14 @@ printf '%s\n' "2026-06-01 2026-06-28" "2026-06-29" "2026-06-30" \
 
 `eval` each helper's output. The month passes only if **both** checks report `MISSING_COUNT=0` (Check A is vacuously satisfied when `HAS_FULL_WEEK=0`). If either reports gaps:
 
-- **If `$DRY_RUN` is set, OR `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env:** proceed with a partial monthly. Note the missing weeks/days in the Week-by-Week Index so the gap is visible.
+- **If `$DRY_RUN` is set, OR `$ALLOW_PARTIAL` is set (from `--allow-partial` flag), OR `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env:** proceed with a partial monthly. Note the missing weeks/days in the Week-by-Week Index so the gap is visible.
 - **Otherwise (a normal scheduled/real run): ABORT before fetching any bodies or writing.** Print exactly this sentinel line so the headless wrapper logs a clean skip rather than a failure (use Check A's missing dates for a week gap, Check B's for a day gap; combine if both):
 
   ```
   [coverage] INCOMPLETE - month ${MONTH_NAME} missing coverage: <missing dates>. Skipping monthly synthesis - no page written.
   ```
 
-  Then add one guidance line: `Generate the missing weekly/daily windows via /team-weekly and /team-digest and re-run, or set TEAM_DIGEST_ALLOW_PARTIAL=1 to force a partial monthly.` STOP the run here - do NOT run Step 3 fetches, synthesize, write a safety file, or call Notion. Exit cleanly (this is an intentional skip, not an error).
+  Then add one guidance line: `Generate the missing weekly/daily windows via /team-weekly and /team-digest and re-run, or pass --allow-partial to synthesize from available pages.` STOP the run here - do NOT run Step 3 fetches, synthesize, write a safety file, or call Notion. Exit cleanly (this is an intentional skip, not an error).
 
 ### Step 3: Fetch the spine, then selectively deep-read dailies
 
@@ -381,4 +383,4 @@ bin/team-monthly-run.sh --dry-run                # write to /tmp/team-digest-dry
 bin/team-monthly-run.sh 2026-05 --dry-run        # both
 ```
 
-For automation: schedule `bin/team-monthly-run.sh` on the 1st of each month, AFTER that day's `/team-digest` and the prior week's `/team-weekly` have had a chance to run. The Step 2.5 coverage gate is authoritative: it requires a Weekly digest for every full in-month week (boundary days at the month edges are covered by dailies), and aborts cleanly (logged as `[gate] SKIP`) without writing a partial monthly if anything is missing. Coverage is measured from page date-ranges, so a single multi-week page satisfies its span. To force a partial monthly when some weeks are genuinely missing, set `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env.
+For automation: schedule `bin/team-monthly-run.sh` on the 1st of each month, AFTER that day's `/team-digest` and the prior week's `/team-weekly` have had a chance to run. The Step 2.5 coverage gate is authoritative: it requires a Weekly digest for every full in-month week (boundary days at the month edges are covered by dailies), and aborts cleanly (logged as `[gate] SKIP`) without writing a partial monthly if anything is missing. Coverage is measured from page date-ranges, so a single multi-week page satisfies its span. To synthesize from whatever pages exist (e.g. for past months where some weeks were never digested), pass `--allow-partial` to the bin script or the skill, or set `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env.

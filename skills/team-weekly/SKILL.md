@@ -1,6 +1,6 @@
 ---
 name: team-weekly
-description: Team Weekly Digest - synthesizes the past week (or any custom date range) of Team Daily Digests into a rollup summary, written to the same Notion database. Usage - /team-weekly [YYYY-MM-DD | --from F --to T | --dry-run | --from-file <path> | config]
+description: Team Weekly Digest - synthesizes the past week (or any custom date range) of Team Daily Digests into a rollup summary, written to the same Notion database. Usage - /team-weekly [YYYY-MM-DD | --from F --to T | --dry-run | --allow-partial | --from-file <path> | config]
 user-invocable: true
 ---
 
@@ -20,6 +20,7 @@ This skill is the "rollup" companion to `/team-digest`. It reads structured prop
 - `/team-weekly --dry-run` - run the full pipeline but write the markdown to a local file instead of creating a Notion page
 - `/team-weekly 2026-05-07 --dry-run` - the ISO-week mode + dry run
 - `/team-weekly --from 2026-04-25 --to 2026-05-03 --dry-run` - custom range + dry run
+- `/team-weekly 2026-05-07 --allow-partial` - synthesize with whatever daily pages exist even if some days are missing; notes gaps in the digest body rather than aborting. Useful for past weeks where some days were never digested.
 - `/team-weekly --from-file /tmp/team-digest-dry-runs/team-weekly-2026-W19-v1.md` - upload a previously saved safety file to Notion, skipping the full synthesis pipeline (token-efficient recovery after a timeout); a date, ISO-week arg, or `--from`/`--to` range must accompany this flag so the week window can be computed for Notion properties
 - `/team-weekly config` - show the current config (Notion IDs and team-digest reuse)
 
@@ -45,6 +46,7 @@ Parse the skill argument as zero or more of:
 - A `YYYY-MM-DD` date → captured as `$DATE_ARG` (snaps to the ISO week containing it)
 - `--from YYYY-MM-DD --to YYYY-MM-DD` → captured as `$FROM` and `$TO` (arbitrary date range, inclusive)
 - The literal `--dry-run` → set `$DRY_RUN=1`
+- The literal `--allow-partial` → set `$ALLOW_PARTIAL=1` (equivalent to `TEAM_DIGEST_ALLOW_PARTIAL=1` in env; bypasses the Step 2.5 coverage gate and proceeds with whatever daily pages exist)
 - `--from-file <path>` → set `$FROM_FILE` to the path token that follows the flag; activates upload-only mode (see subcommand below)
 - The literal `config` → handle as a subcommand (below)
 
@@ -165,19 +167,31 @@ Use it to frame the week within the month ("week three of the audit push") in th
 
 Use the `notion-query-data-sources` MCP tool against the `data_source_id` of the Team Daily Digest database. The `data_source_id` is derived at runtime by fetching the database with `notion-fetch` (same pattern as team-digest Step 0).
 
-**Filter the query by (overlap, not exact date):**
+**Filter the query (date overlap, no Digest Type filter):**
 
-- `Digest Type` is `Combined` (the value `/team-digest` writes for both single-day and range scans)
+- `date:Date:start >= $LOOKBACK_DATE` where `LOOKBACK_DATE` is 14 days before `$WEEK_START` (catches range digests that start before the week but overlap into it, without fetching the full history)
 - `date:Date:start <= $WEEK_END`
 
-**Sort by `date:Date:start` ascending** so results come back in chronological order (earliest first).
+Do NOT add a `Digest Type = 'Combined'` WHERE clause. A range digest page written by an older or differently-configured run may carry a null, blank, or non-standard type value. The Digest Type is only used for in-context partitioning (see below), not as a query gate.
 
-**Then keep only pages that overlap the week, IN CONTEXT:** a page overlaps when `coalesce(date:Date:end, date:Date:start) >= $WEEK_START`. A single-day digest has a null `date:Date:end`, so its start is used; a range scan (e.g., a 7-day Combined page) has an explicit end. Notion range filters over a nullable end are awkward, and the per-week result set is tiny, so this in-context overlap filter is both cheaper and clearer than a compound Notion filter.
+Compute `LOOKBACK_DATE` with:
+```bash
+LOOKBACK_DATE=$(python3 -c "from datetime import date, timedelta; d=date.fromisoformat('$WEEK_START'); print((d - timedelta(days=14)).isoformat())")
+```
+
+**Sort by `date:Date:start` descending** so the most recent pages come first. This is critical: ascending sort means the oldest pages fill the first result page, and recent pages that fall beyond the page-size limit are silently dropped.
+
+**Pagination:** check `has_more` in the response. If `true`, issue a follow-up query with the same filter using an offset or cursor (whichever the MCP supports) and collect all pages before proceeding. Do NOT stop at the first page if `has_more` is true - a multi-day range page starting Jun 11 in a database with many older pages will not appear in page 1 of an ascending-sorted, unbounded query.
+
+**Then keep only pages that overlap the week, IN CONTEXT:**
+
+1. **Exclude** any row whose `Digest Type` is `Weekly` or `Monthly` (those are rollup pages, not source pages).
+2. **Overlap check:** a page overlaps when `coalesce(date:Date:end, date:Date:start) >= $WEEK_START`. A single-day digest has a null `date:Date:end`, so its start is used; a range scan (e.g., a 4-day Combined page) has an explicit `date:Date:end` that may extend into or across the week.
 
 **Result handling:**
 
 - Each result has properties: `Digest Title`, `date:Date:start`, `date:Date:end`, `Digest Type`, `Repos Active`, `Keywords Matched`, `Status`, `url`. These are CHEAP - use them as the primary signal for the "Week at a Glance" stats.
-- The week may be covered by any mix of pages: up to 7 single-day dailies, OR one 7-day range scan, OR a blend (e.g., a 3-day range page + four dailies). A single range Combined page legitimately covers the whole week on its own.
+- The week may be covered by any mix of pages: up to 7 single-day dailies, OR one 7-day range scan, OR a blend (e.g., a 3-day range page + four single-day dailies). A single range Combined page legitimately covers the whole week on its own.
 - **Dedup:** if two pages cover the SAME span, keep the one with the latest `createdTime` (the re-run; older same-span pages are stale). If pages cover DIFFERENT but overlapping spans, keep BOTH and reconcile in synthesis - note the overlap rather than dropping signal.
 - If a day in the week is covered by no page at all, note the gap in the digest body (e.g., "No coverage for 2026-05-06 - run was missed or skipped.").
 
@@ -219,14 +233,14 @@ printf '%s\n' \
 
 If `MISSING_COUNT > 0`, the week has gaps (`$MISSING_DATES`):
 
-- **If `$DRY_RUN` is set, OR `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env:** proceed with a partial weekly. Note each missing day in the digest body (per Step 2's gap rule) so the gap is visible, not hidden.
+- **If `$DRY_RUN` is set, OR `$ALLOW_PARTIAL` is set (from `--allow-partial` flag), OR `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env:** proceed with a partial weekly. Note each missing day in the digest body (per Step 2's gap rule) so the gap is visible, not hidden.
 - **Otherwise (a normal scheduled/real run): ABORT before any synthesis or write.** Print exactly this sentinel line so the headless wrapper logs a clean skip rather than a failure:
 
   ```
   [coverage] INCOMPLETE - week ${WEEK_LABEL} (${WEEK_START}..${WEEK_END}) missing: ${MISSING_DATES}. Skipping weekly synthesis - no page written.
   ```
 
-  Then add one guidance line: `Generate the missing day(s) via /team-digest <date> (or a range) and re-run, or set TEAM_DIGEST_ALLOW_PARTIAL=1 to force a partial weekly.` STOP the run here - do NOT fetch bodies, synthesize, write a safety file, or call Notion. Exit cleanly (this is an intentional skip, not an error).
+  Then add one guidance line: `Generate the missing day(s) via /team-digest <date> (or a range) and re-run, or pass --allow-partial to synthesize from available days.` STOP the run here - do NOT fetch bodies, synthesize, write a safety file, or call Notion. Exit cleanly (this is an intentional skip, not an error).
 
 ### Step 3: Fetch each daily digest's content
 
@@ -467,4 +481,4 @@ bin/team-weekly-run.sh --dry-run                # write to /tmp/team-digest-dry-
 bin/team-weekly-run.sh 2026-05-07 --dry-run     # both
 ```
 
-For automation: schedule `bin/team-weekly-run.sh` on a Monday morning launchd/cron tick, AFTER the week's `/team-digest` runs have had a chance to complete. The Step 2.5 coverage gate is authoritative: if any day in the week is not covered by a daily/range page in Notion, the run aborts cleanly (logged as `[gate] SKIP`) without writing a partial weekly. Coverage is measured from page date-ranges, so a single range page covering the week satisfies the gate. To force a partial weekly when some days are genuinely missing, set `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env.
+For automation: schedule `bin/team-weekly-run.sh` on a Monday morning launchd/cron tick, AFTER the week's `/team-digest` runs have had a chance to complete. The Step 2.5 coverage gate is authoritative: if any day in the week is not covered by a daily/range page in Notion, the run aborts cleanly (logged as `[gate] SKIP`) without writing a partial weekly. Coverage is measured from page date-ranges, so a single range page covering the week satisfies the gate. To synthesize from whatever days exist (e.g. for past weeks where some days were never digested), pass `--allow-partial` to the bin script or the skill, or set `TEAM_DIGEST_ALLOW_PARTIAL=1` in the run env.
