@@ -1,0 +1,20 @@
+{
+  "_comment": "OS-level sandbox (macOS Seatbelt / Linux bubblewrap) for the HEADLESS team-digest cron runs. Loaded per-invocation via `claude -p --settings`; does NOT affect interactive Claude Code sessions. This is the real security boundary the --allowedTools scoping in the run wrappers cannot be (Claude Code Bash allow rules are not path-canonicalized, so a directory-prefix rule is a speed bump, not a boundary). Kernel-confines the run's filesystem writes to the pipeline's own scratch dirs so a prompt-injection payload in scanned third-party content cannot tamper with ~/.ssh, ~/.claude, or arbitrary files. Network is intentionally left ON here (the pipeline needs github.com + the Notion connector + the Anthropic API); closing network egress is the separate container/egress-allowlist step. Paths use ~ (expanded at runtime); NO machine-specific absolute paths, so this is reproducible on any machine. Requires a sandbox backend (always present on macOS; `bubblewrap` on Linux) - failIfUnavailable makes the run fail-closed rather than silently run unsandboxed.",
+  "sandbox": {
+    "enabled": true,
+    "failIfUnavailable": true,
+    "filesystem": {
+      "allowWrite": [
+        "/tmp/team-digest-dry-runs",
+        "/tmp/team-digest-dry-runs/**",
+        "/tmp/team-digest-matches-*",
+        "/tmp/team-digest-matches-*/**",
+        "/tmp/team-digest-prerunref.*"
+      ],
+      "denyRead": [
+        "~/.ssh/**",
+        "~/.aws/**"
+      ]
+    }
+  }
+}

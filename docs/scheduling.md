@@ -22,12 +22,14 @@ bin/team-digest-run.sh --help                 # usage
 For convenience, copy or symlink it to a directory on your `$PATH`:
 
 ```bash
-# Symlink (preferred - tracks repo updates automatically):
+# Symlink (preferred - tracks repo updates, and the headless sandbox config
+# next to the wrapper is always found):
 mkdir -p ~/.local/bin
 ln -sf "$(pwd)/bin/team-digest-run.sh" ~/.local/bin/team-digest-run.sh
 
-# Or copy (snapshot - won't auto-update with git pull):
-cp bin/team-digest-run.sh ~/.local/bin/team-digest-run.sh
+# Or copy (snapshot - won't auto-update with git pull). Copy the sandbox
+# config alongside it, or the run falls back to UNSANDBOXED (see Sandboxing):
+cp bin/team-digest-run.sh bin/sandbox-settings.json ~/.local/bin/
 ```
 
 After symlinking, you can invoke `team-digest-run.sh` from anywhere.
@@ -53,6 +55,21 @@ If `jq` isn't installed (`brew install jq`), the script falls back to printing r
 ### About the Notion MCP server name
 
 The `mcp__claude_ai_Notion__*` prefix in the script's allow-list matches the Notion connector exposed by Claude Code Desktop. If your MCP server is registered under a different name, run `claude mcp list` to find the actual server identifier and adjust the prefix in `bin/team-digest-run.sh`. Alternatively, replace `--allowedTools "$ALLOWED_TOOLS"` with `--permission-mode bypassPermissions` for a script you fully control - simpler, broader.
+
+### Sandboxing (security)
+
+The headless run ingests untrusted third-party text (public GitHub PR/issue/release bodies, RSS, team-editable Notion pages). A prompt-injection payload in that content could try to make the model run arbitrary shell commands, so two layers guard the run:
+
+1. **`--allowedTools` scoping** (in the wrapper) - the model may only invoke the pipeline's own `lib/` helpers plus `gh`/`mkdir`/`python3`/`eval`/`sleep` and write to the dry-run dir; bare `Bash`/`Write`/`Edit` are not granted. This is a *speed bump*, not a hard boundary: Claude Code's Bash allow-rules are not path-canonicalized.
+2. **OS-level sandbox** (`bin/sandbox-settings.json`, applied per-invocation via `claude -p --settings`) - the real boundary. Kernel-enforced (macOS Seatbelt / Linux bubblewrap) filesystem confinement: the run may only write to `/tmp/team-digest-*` scratch dirs, so an injection cannot tamper with `~/.ssh`, `~/.claude`, or arbitrary files. Interactive Claude Code sessions are unaffected.
+
+Requirements and caveats:
+
+- **The config must sit next to the wrapper.** The symlink install finds it automatically; a copy install must copy `sandbox-settings.json` too (see above). If it is missing, the wrapper prints a loud `UNSANDBOXED` warning and continues.
+- **Needs a sandbox backend.** Always present on macOS; on Linux install `bubblewrap`. `failIfUnavailable` makes the run fail rather than silently run unsandboxed.
+- **Network stays ON** (the pipeline needs github.com, the Notion connector, and the Anthropic API), so the sandbox alone does not stop a determined injection from exfiltrating over the network. To close that, run the job inside a container/VM whose egress is limited to those hosts.
+- `TEAM_DIGEST_NO_SANDBOX=1` disables the sandbox for debugging only.
+- After changing the allow-list or sandbox config, validate with `bin/team-digest-run.sh <date> --dry-run` (skips the Notion write) before trusting the next scheduled run.
 
 ## Local macOS launchd (recommended for daily automation)
 

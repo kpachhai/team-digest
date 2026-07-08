@@ -63,6 +63,34 @@ ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-create-pages"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-update-page"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-query-data-sources"
 
+# OS-level sandbox (kernel-enforced: macOS Seatbelt / Linux bubblewrap) - the
+# REAL boundary the --allowedTools scoping above cannot be (Claude Code Bash
+# allow rules are not path-canonicalized, so a directory-prefix rule is a speed
+# bump, not a boundary). It confines this run's filesystem writes to the
+# pipeline's own scratch dirs, so an injected payload in scanned third-party
+# content can't tamper with ~/.ssh, ~/.claude, or arbitrary files. The config
+# lives next to this script (committed, portable, ~ paths - reproducible on any
+# machine) and is applied per-invocation via --settings, so interactive Claude
+# Code sessions are unaffected. Set TEAM_DIGEST_NO_SANDBOX=1 to disable (debug).
+# Resolve this script's real dir following the ~/.local/bin symlink portably -
+# macOS /bin/bash is 3.2 and BSD readlink lacks -f, so walk the links by hand.
+sb_src="${BASH_SOURCE[0]}"
+while [ -L "$sb_src" ]; do
+  sb_dir="$(cd -P "$(dirname "$sb_src")" >/dev/null 2>&1 && pwd)"
+  sb_src="$(readlink "$sb_src")"
+  [ "${sb_src#/}" = "$sb_src" ] && sb_src="$sb_dir/$sb_src"
+done
+SANDBOX_SETTINGS="$(cd -P "$(dirname "$sb_src")" >/dev/null 2>&1 && pwd)/sandbox-settings.json"
+SANDBOX_ARGS=()
+if [ "${TEAM_DIGEST_NO_SANDBOX:-0}" = "1" ]; then
+  echo "WARNING: TEAM_DIGEST_NO_SANDBOX=1 - running UNSANDBOXED (filesystem not confined)." | tee -a "$LOG"
+elif [ -f "$SANDBOX_SETTINGS" ]; then
+  SANDBOX_ARGS=(--settings "$SANDBOX_SETTINGS")
+  echo "[sandbox] on: $SANDBOX_SETTINGS" >> "$LOG"
+else
+  echo "WARNING: sandbox settings not found at $SANDBOX_SETTINGS - running UNSANDBOXED. Redeploy the repo to restore the sandbox." | tee -a "$LOG"
+fi
+
 format_stream() {
   if command -v jq >/dev/null 2>&1; then
     jq -r --unbuffered '
@@ -99,6 +127,7 @@ run_claude() {
   claude -p "$prompt" \
     --model "$MODEL" \
     --allowedTools "$ALLOWED_TOOLS" \
+    ${SANDBOX_ARGS[@]+"${SANDBOX_ARGS[@]}"} \
     --output-format stream-json \
     --verbose \
     2>> "$LOG" | tee -a "$RAW_LOG" | format_stream | tee -a "$LOG"
