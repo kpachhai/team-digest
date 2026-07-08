@@ -44,10 +44,19 @@ mkdir -p "$(dirname "$LOG")" "$(dirname "$RAW_LOG")"
 echo "" >> "$LOG"
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG"
 
-# Allow-list the tools the skill needs. Notion MCP tools are required
-# for Step 2 (query data source), Step 3 (fetch each daily), and Step 5
-# (write the weekly page). Read is needed for --from-file mode.
-ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
+# Allow-list the tools the skill needs for this HEADLESS run. Bare
+# `Bash`/`Write`/`Edit` is unsafe (it auto-approves any shell command a
+# prompt-injection payload emits), so Bash is scoped to the command families
+# the skill runs - its own lib plus the shared team-digest lib (load-config,
+# coverage-gap) - Write is scoped to the safety/dry-run dir, and Edit is
+# dropped. Notion MCP tools cover Steps 2/3/5; Read covers --from-file.
+# NOTE: python3/eval stay allowed (inline in the skill) - defense-in-depth,
+# not a full sandbox. Validate changes with `--dry-run` before cron.
+ALLOWED_TOOLS="Read,Glob,Grep"
+ALLOWED_TOOLS+=",Write(/tmp/team-digest-dry-runs/**)"
+ALLOWED_TOOLS+=",Bash(bash ~/.claude/skills/team-weekly/lib/*)"
+ALLOWED_TOOLS+=",Bash(bash ~/.claude/skills/team-digest/lib/*)"
+ALLOWED_TOOLS+=",Bash(gh *),Bash(python3 *),Bash(eval *),Bash(mkdir *),Bash(sleep *),Bash(export *)"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-fetch"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-search"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-create-pages"

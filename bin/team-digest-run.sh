@@ -49,12 +49,20 @@ mkdir -p "$(dirname "$LOG")" "$(dirname "$RAW_LOG")"
 echo "" >> "$LOG"
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') ===" >> "$LOG"
 
-# Allow-list the tools the skill needs. Without these, `claude -p`
-# blocks on permission prompts and the run aborts. Notion MCP tools
-# are required for Step 1 (config fetch), Step 3 (keyword search),
-# Step 4 (partner search), and Step 5 (digest write). Read is needed
-# for --from-file mode to read the safety file.
-ALLOWED_TOOLS="Bash,Read,Write,Edit,Glob,Grep"
+# Allow-list the tools the skill needs for this HEADLESS run. It ingests
+# untrusted third-party text (public GitHub PR/issue/release bodies, RSS,
+# team-editable Notion pages), so bare `Bash`/`Write`/`Edit` is unsafe: it
+# auto-approves any shell command a prompt-injection payload emits (e.g. a
+# PAT-exfiltrating `curl`). So we scope Bash to the exact command families the
+# pipeline runs, scope Write to the safety/dry-run dir, and drop Edit. Notion
+# MCP tools cover Steps 1/3/4/5; Read covers --from-file.
+# NOTE: python3/eval stay allowed - the skill runs `eval "$(bash …)"` and
+# `… | python3 -c …` inline - so this is defense-in-depth, not a full sandbox.
+# Validate any change here with `bin/team-digest-run.sh --dry-run` before cron.
+ALLOWED_TOOLS="Read,Glob,Grep"
+ALLOWED_TOOLS+=",Write(/tmp/team-digest-dry-runs/**)"
+ALLOWED_TOOLS+=",Bash(bash ~/.claude/skills/team-digest/lib/*)"
+ALLOWED_TOOLS+=",Bash(gh *),Bash(python3 *),Bash(eval *),Bash(mkdir *),Bash(sleep *),Bash(export *)"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-fetch"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-search"
 ALLOWED_TOOLS+=",mcp__claude_ai_Notion__notion-create-pages"
