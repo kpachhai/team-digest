@@ -1033,7 +1033,7 @@ The full content (~15-25 KB) exceeds what a single `notion-update-page` call can
 
 **Step 5.4: Chunk failure handling.**
 
-- **Transient 500 errors:** If a chunk call returns a `500 Internal server error`, run `bash -c 'sleep 5'` via the Bash tool, then retry that **same chunk exactly once** with identical parameters. If the retry succeeds, continue to the next chunk as normal. Count this as the one allowed retry for that chunk; a second 500 on the same chunk is a hard failure.
+- **Transient 500 errors:** If a chunk call returns a `500 Internal server error`, run `sleep 5` via the Bash tool (plain `sleep`, not `bash -c 'sleep 5'` - the headless wrapper's allow-list covers `Bash(sleep *)` but not `bash -c`), then retry that **same chunk exactly once** with identical parameters. If the retry succeeds, continue to the next chunk as normal. Count this as the one allowed retry for that chunk; a second 500 on the same chunk is a hard failure.
 - **All other failures, or a retry that also fails:** the page exists at `$NEW_PAGE_URL` with partial content (all chunks up to the last successful one, plus the sentinel if the write was interrupted mid-loop). Tell the user:
 
 > Page created but content upload was interrupted. The page exists at `$NEW_PAGE_URL`. Re-run with:
