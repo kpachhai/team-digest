@@ -37,6 +37,24 @@ bash tests/lint-digest-markdown.sh --template <TEMPLATE.md>   # lint a skill TEM
 
 There is no build step. `tests/run-all.sh` runs the offline suite: unit tests for all 9 pure helpers (the 3 date-window resolvers, `extract-hip-refs`, `load-config`, `consolidate-matches`, `strategy4-gate`, `calibrate-hip-matches`, `coverage-gap`) plus the Notion-markdown linter. The 11 network fetch helpers and the three `SKILL.md` pipelines are NOT unit-tested (they need `gh`/network or run inside Claude against Notion MCP); validate those operationally with `--dry-run`. See [`tests/README.md`](tests/README.md) for coverage details, the testability env overrides, and the known gap the tests surfaced.
 
+## Deploying updates to another machine
+
+Every machine that runs team-digest is macOS. To pick up any change made in this repo (skills, wrappers, the headless security sandbox), a Claude session or a human on another machine runs exactly one idempotent command from the repo root - no manual steps:
+
+```bash
+git pull && ./update.sh
+```
+
+`update.sh` syncs skills/lib/config/profiles **and symlinks the headless wrappers** (`bin/*-run.sh`) into `~/.local/bin`. Because they are symlinks (not copies), each wrapper resolves its sibling `bin/sandbox-settings.json` from the repo, so the scoped `--allowedTools` and the OS-level sandbox go live for the existing launchd/cron job automatically - the plist already points at `~/.local/bin/<wrapper>` and needs no change. A prior copy-install is auto-converted to a symlink.
+
+Then validate once on that machine:
+
+```bash
+bin/team-digest-run.sh $(date -v-1d +%F) --dry-run   # gather + sandbox, skips the Notion write
+```
+
+Confirm the log shows `[sandbox] on: .../bin/sandbox-settings.json` (not an `UNSANDBOXED` warning), then let the next scheduled run exercise the Notion write under the sandbox. Security model, requirements, and the network-egress caveat live in `docs/scheduling.md` -> "Sandboxing (security)".
+
 ## Architecture
 
 ### File Layout
@@ -100,6 +118,7 @@ config.template.json   --(setup.sh)-->  config.json   --(setup/update.sh)-->  ~/
 profiles/*.template.md --(setup.sh)-->  profiles/*.md --(setup/update.sh)-->  ~/.config/team-digest/profiles/*.md
 skills/*/SKILL.md      --(setup/update.sh)-->                                  ~/.claude/skills/*/SKILL.md
 skills/*/lib/*.sh      --(setup/update.sh)-->                                  ~/.claude/skills/*/lib/*.sh
+bin/*-run.sh           --(update.sh symlink)-->                                ~/.local/bin/*-run.sh
 ```
 
 Skills read config from `~/.config/team-digest/config.json` at runtime. The config key must match the skill directory name (`team-digest` skill reads `config["team-digest"]`). The skill body invokes `lib/*.sh` helpers by absolute path at `~/.claude/skills/<name>/lib/<helper>.sh`.

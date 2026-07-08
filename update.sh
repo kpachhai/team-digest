@@ -201,9 +201,44 @@ for installed_skill in "$HOME"/.claude/skills/*/SKILL.md; do
 done
 
 # -------------------------------------------------------------------
+# 5c. Sync headless wrappers (bin/*-run.sh) to ~/.local/bin as SYMLINKS
+#
+# These are the entry points cron/launchd runs. We symlink (not copy) so that:
+#   (a) a future `git pull` updates them with no re-copy, and
+#   (b) each wrapper resolves its sibling bin/sandbox-settings.json (the OS-level
+#       sandbox config) from the repo automatically. A copy install would orphan
+#       that config and headless runs would fall back to UNSANDBOXED.
+# `ln -sfn` is idempotent and converts any prior copy-install into a symlink,
+# so the scoped --allowedTools + sandbox go live for the existing launchd job
+# with no manual step (the plist already points at ~/.local/bin/<wrapper>).
+# -------------------------------------------------------------------
+LOCAL_BIN="$HOME/.local/bin"
+mkdir -p "$LOCAL_BIN" "$HOME/.local/log"
+WRAPPERS=0
+for wrapper in "$SCRIPT_DIR"/bin/*-run.sh; do
+  [ -f "$wrapper" ] || continue
+  ln -sfn "$wrapper" "$LOCAL_BIN/$(basename "$wrapper")"
+  echo "[OK] Linked $(basename "$wrapper") -> $LOCAL_BIN/"
+  WRAPPERS=$((WRAPPERS + 1))
+done
+echo "Linked $WRAPPERS headless wrapper(s)."
+
+if [ -f "$SCRIPT_DIR/bin/sandbox-settings.json" ]; then
+  echo "[OK] Sandbox config present: bin/sandbox-settings.json (headless runs are kernel-confined)"
+else
+  echo "[WARN] bin/sandbox-settings.json missing - headless runs will be UNSANDBOXED"
+fi
+# macOS always has the Seatbelt backend; only Linux needs bubblewrap installed.
+if [ "$(uname -s)" = "Linux" ] && ! command -v bwrap >/dev/null 2>&1; then
+  echo "[WARN] Linux without 'bubblewrap': the sandbox fails closed (failIfUnavailable). Install it: sudo apt install bubblewrap"
+fi
+
+# -------------------------------------------------------------------
 # 6. Done
 # -------------------------------------------------------------------
 echo ""
 echo "=== Update Complete ==="
 echo ""
-echo "Skills are current. Restart Claude Code if a session is already open."
+echo "Skills + headless wrappers are current. Restart Claude Code if a session is already open."
+echo "Validate the sandbox once on this machine:"
+echo "  bin/team-digest-run.sh \$(date -v-1d +%F) --dry-run   # look for '[sandbox] on:' in the log, no UNSANDBOXED warning"
